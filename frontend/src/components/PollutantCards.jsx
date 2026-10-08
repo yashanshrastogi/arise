@@ -1,8 +1,8 @@
 import React from 'react';
 
 /**
- * Pollutant mini-cards — inspired by s3 screenshot (row of 4 clean cards)
- * and s4 zone signals.
+ * Pollutant mini-cards — Age-friendly design with plain English explanations
+ * so users aged 12 to 80 easily understand particulate types.
  */
 const STATUS_CONFIG = {
   Good:         { color: '#2EB872', bg: '#2EB87214' },
@@ -13,7 +13,7 @@ const STATUS_CONFIG = {
   Severe:       { color: '#8B1E3F', bg: '#8B1E3F14' },
 };
 
-function MiniRing({ pct, color, size = 36 }) {
+function MiniRing({ pct, color, size = 32 }) {
   const r = (size - 6) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (pct / 100) * circ;
@@ -48,33 +48,43 @@ export default function PollutantCards({ pollutants }) {
               p.dominant ? 'ring-2 ring-rose-500/50 shadow-md' : ''
             }`}
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-black t1 flex items-center gap-1">
-                <span>{p.name}</span>
-                {p.dominant && (
-                  <span
-                    className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase"
-                    style={{ background: '#E5484D', color: '#ffffff' }}
-                  >
-                    Dom
-                  </span>
-                )}
-              </span>
-              <MiniRing pct={p.pct} color={conf.color} size={30} />
-            </div>
-
             <div>
-              <div className="text-xl font-black t1 leading-tight">{p.value}</div>
-              <div className="flex items-center justify-between mt-1">
-                <span className="text-[10px] font-semibold tm">{p.unit}</span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-black t1 flex items-center gap-1">
+                  <span>{p.name}</span>
+                  {p.dominant && (
+                    <span
+                      className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase"
+                      style={{ background: '#E5484D', color: '#ffffff' }}
+                    >
+                      Dom
+                    </span>
+                  )}
+                </span>
+                <MiniRing pct={p.pct} color={conf.color} size={28} />
+              </div>
+
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-xl font-black t1 leading-tight">{p.value}</span>
+                <span className="text-[10px] font-bold tm">{p.unit}</span>
+              </div>
+
+              <div className="mt-1">
                 <span
-                  className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                  className="text-[9px] font-extrabold px-2 py-0.5 rounded-full"
                   style={{ color: conf.color, background: conf.bg }}
                 >
                   {p.status}
                 </span>
               </div>
             </div>
+
+            {/* Plain English explanation for broad age accessibility */}
+            {p.desc && (
+              <p className="text-[10px] font-medium tm mt-2 pt-2 border-t leading-tight line-clamp-2" style={{ borderColor: 'var(--border)' }}>
+                {p.desc}
+              </p>
+            )}
           </div>
         );
       })}

@@ -3,26 +3,30 @@ import mockData from './mockData.json';
 import mockDataModerate from './mockDataModerate.json';
 import AirMap from './components/AirMap';
 import AqiGauge from './components/AqiGauge';
+import WeatherCard from './components/WeatherCard';
 import ForecastChart from './components/ForecastChart';
 import AirFlowCard from './components/AirFlowCard';
 import WhyPanel from './components/WhyPanel';
 import SchoolCard from './components/SchoolCard';
+import MobilityCard from './components/MobilityCard';
 import PollutantCards from './components/PollutantCards';
 import AskArise from './components/AskArise';
 import Watchlist from './components/Watchlist';
+import UserProfileMenu from './components/UserProfileMenu';
 
 /**
- * Arise — Delhi-NCR Air Intelligence Dashboard
- * Faithfully inspired by the design references (s1, s2, s3, s4).
+ * Arise — Delhi-NCR Air & Weather Intelligence Platform
+ * Production Architecture: Air + Weather Integration, Compact/Expandable Map,
+ * Deterministic Environmental Logic, and Cognito-ready Google Auth.
  */
 
 const NAV_ITEMS = [
-  { id: 'today',      label: 'Home',           icon: '🏠' },
-  { id: 'map',        label: 'Air Maps',       icon: '🗺️' },
-  { id: 'forecast',   label: 'Forecast',       icon: '📈' },
-  { id: 'why',        label: 'Newsroom',       icon: '📰' },
-  { id: 'school',     label: 'Breathe Care',   icon: '🫁' },
-  { id: 'ask',        label: 'Ask Arise',      icon: '✦' },
+  { id: 'today',      label: 'Home',         icon: '🏠' },
+  { id: 'map',        label: 'Air Map',      icon: '🗺️' },
+  { id: 'weather',    label: 'Weather',      icon: '🌤️' },
+  { id: 'forecast',   label: 'Forecast',     icon: '📈' },
+  { id: 'mobility',   label: 'Corridors',    icon: '🚗' },
+  { id: 'ask',        label: 'Ask Arise',    icon: '✦' },
 ];
 
 export default function App() {
@@ -48,12 +52,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col transition-colors duration-200">
-      {/* ═══════════════ HEADER (Matching s1 / s2) ═══════════════ */}
+      {/* ═══════════════ HEADER ═══════════════ */}
       <header
-        className="sticky top-0 z-[2000] px-5 lg:px-8 py-3.5 border-b backdrop-blur-md transition-colors"
+        className="sticky top-0 z-[2000] px-4 sm:px-6 lg:px-8 py-3 border-b backdrop-blur-md transition-colors"
         style={{
           borderColor: 'var(--border)',
-          background: dark ? 'rgba(20, 28, 46, 0.88)' : 'rgba(255, 255, 255, 0.88)',
+          background: dark ? 'rgba(20, 28, 46, 0.90)' : 'rgba(255, 255, 255, 0.90)',
         }}
       >
         <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-4">
@@ -70,12 +74,12 @@ export default function App() {
                 </span>
               </div>
               <div className="text-[10px] font-bold tm mt-0.5">
-                Real-time Environmental Intelligence
+                Air + Weather Intelligence Platform
               </div>
             </div>
           </div>
 
-          {/* Nav Pills — matching s1 & s2 center header */}
+          {/* Navigation Pills */}
           <nav
             className="hidden md:flex items-center gap-1 p-1 rounded-2xl border"
             style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
@@ -84,7 +88,7 @@ export default function App() {
               <button
                 key={item.id}
                 onClick={() => scrollToSection(item.id)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
                   activeNav === item.id
                     ? 'bg-indigo text-white shadow-sm'
                     : 't3 hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]'
@@ -96,9 +100,9 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Right Header Controls */}
-          <div className="flex items-center gap-2.5">
-            {/* Demo Mode Toggle (Criterion 22) */}
+          {/* Right Header Controls: Demo Toggle, Dark Mode, Profile/Auth */}
+          <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Demo Mode Toggle */}
             <button
               onClick={() => setDemoMode(!demoMode)}
               id="btn-demo-mode"
@@ -116,6 +120,7 @@ export default function App() {
 
             {/* Dark/Light Mode Toggle */}
             <button
+              id="btn-theme-toggle"
               onClick={() => setDark(!dark)}
               aria-label="Toggle Theme"
               className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold border transition-colors hover:bg-[var(--surface-alt)]"
@@ -124,29 +129,8 @@ export default function App() {
               {dark ? '☀️' : '🌙'}
             </button>
 
-            {/* Notification Bell with alert dot */}
-            <div className="relative">
-              <button
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold border transition-colors hover:bg-[var(--surface-alt)]"
-                style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-              >
-                🔔
-              </button>
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-[var(--surface)] animate-ping" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-[var(--surface)]" />
-            </div>
-
-            {/* User Profile Pill — matching s1 */}
-            <div
-              className="hidden lg:flex items-center gap-2 pl-2 pr-3 py-1 rounded-2xl border"
-              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-            >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center text-xs font-extrabold shadow-sm">
-                YR
-              </div>
-              <span className="text-xs font-extrabold t1">Yashansh Rastogi</span>
-              <span className="text-[10px] tm">▾</span>
-            </div>
+            {/* User Profile & Google Authentication Component */}
+            <UserProfileMenu />
           </div>
         </div>
       </header>
@@ -154,24 +138,24 @@ export default function App() {
       {/* ═══════════════ MAIN CONTENT ═══════════════ */}
       <main className="flex-1 max-w-[1720px] mx-auto w-full p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
 
-        {/* ── FIRST VIEWPORT EXECUTIVE HIERARCHY: Location → AQI → Severity → Verdict → Reason → Action ── */}
+        {/* ── 1. FIRST VIEWPORT EXECUTIVE FLOW: Location → AQI → Severity → Verdict → Reason → Action ── */}
         <section
           id="today"
           className="w-full card p-4 lg:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border shadow-sm transition-all"
         >
-          {/* 1. Location */}
-          <div className="flex items-center gap-3 min-w-[210px]">
+          {/* Location */}
+          <div className="flex items-center gap-3 min-w-[200px]">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl bg-indigo/10 text-indigo flex-shrink-0">
               📍
             </div>
             <div>
-              <div className="text-[10px] font-black uppercase tracking-wider tm">Monitored Region</div>
+              <div className="text-[10px] font-black uppercase tracking-wider tm">Monitored Basin</div>
               <div className="text-base lg:text-lg font-black t1 leading-tight">{d.location}</div>
               <div className="text-[10px] font-bold t3 mt-0.5">{d.updated}</div>
             </div>
           </div>
 
-          {/* 2. AQI & Severity */}
+          {/* AQI & Severity */}
           <div className="flex items-center gap-3.5 px-4 md:border-x min-w-[170px]" style={{ borderColor: 'var(--border)' }}>
             <div
               className="text-3xl lg:text-4xl font-black tracking-tight"
@@ -196,7 +180,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3. Verdict */}
+          {/* Verdict */}
           <div className="flex items-center min-w-[130px]">
             <div
               className="w-full text-center px-4 py-2 rounded-xl text-xs font-black tracking-wider uppercase shadow-sm"
@@ -209,7 +193,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 4. Reason */}
+          {/* Reason */}
           <div className="flex-1 md:max-w-md px-2">
             <div className="text-[10px] font-black uppercase tracking-wider tm mb-0.5">Primary Reason</div>
             <p className="text-xs font-bold t1 leading-snug line-clamp-2">
@@ -217,7 +201,7 @@ export default function App() {
             </p>
           </div>
 
-          {/* 5. Action */}
+          {/* Recommended Action */}
           <div
             className="min-w-[240px] p-2.5 rounded-2xl border flex flex-col justify-center"
             style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
@@ -231,14 +215,20 @@ export default function App() {
           </div>
         </section>
 
-        {/* ── SECTION 1: MAP (Full Width, Majestic s1/s2 Experience) ── */}
+        {/* ── 2. COMPACT MAP CARD (Default ~320px with Expand / Layers / GPS) ── */}
         <section id="map" className="w-full">
-          <AirMap stations={d.stations} fires={d.fires} dark={dark} />
+          <AirMap
+            stations={d.stations}
+            fires={d.fires}
+            weather={d.weather}
+            traffic={d.traffic}
+            dark={dark}
+          />
         </section>
 
-        {/* ── SECTION 2: PRIMARY STATUS & FORECAST (Exact s1 Bottom Layout) ── */}
-        <section id="forecast" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Location & AQI Gauge + Verdict */}
+        {/* ── 3. PRIMARY STATUS & WEATHER INTELLIGENCE ── */}
+        <section id="weather" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+          {/* Card 1: AQI Gauge (4 cols) */}
           <div className="lg:col-span-4 flex flex-col">
             <AqiGauge
               aqi={d.aqi}
@@ -252,16 +242,13 @@ export default function App() {
             />
           </div>
 
-          {/* Right: Air Quality Forecast Chart */}
-          <div className="lg:col-span-8 flex flex-col">
-            <ForecastChart data={d.forecast} />
+          {/* Card 2: Weather Intelligence & Correlation (4 cols) */}
+          <div className="lg:col-span-4 flex flex-col">
+            <WeatherCard weather={d.weather} aqi={d.aqi} />
           </div>
-        </section>
 
-        {/* ── SECTION 3: INTELLIGENCE & EVIDENCE (Matching s2 & s4) ── */}
-        <section id="why" className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1: Air Flow Status (from s2) */}
-          <div className="flex flex-col">
+          {/* Card 3: Air Flow Dynamics & Compass (4 cols) */}
+          <div className="lg:col-span-4 flex flex-col">
             <AirFlowCard
               speed={demoMode ? "3.2" : "8.5"}
               unit="km/h"
@@ -269,25 +256,38 @@ export default function App() {
               degrees={demoMode ? 315 : 290}
             />
           </div>
+        </section>
 
-          {/* Card 2: Why is the air bad? Intelligence Brief */}
-          <div className="flex flex-col">
+        {/* ── 4. MULTI-METRIC FORECAST CHART (Full Width) ── */}
+        <section id="forecast" className="w-full">
+          <ForecastChart data={d.forecast} data7Day={d.forecast7Day} />
+        </section>
+
+        {/* ── 5. INTELLIGENCE, SCHOOL CARE & MOBILITY CORRIDORS ── */}
+        <section id="mobility" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Why is the air bad? */}
+          <div id="why" className="flex flex-col">
             <WhyPanel
               reasons={d.why}
               dominantPollutant={d.dominantPollutant}
             />
           </div>
 
-          {/* Card 3: School Safety & Action Protocol (from s4) */}
+          {/* Card 2: School Safety Protocol */}
           <div id="school" className="flex flex-col">
             <SchoolCard data={d.school} />
           </div>
+
+          {/* Card 3: Mobility & Smog Impact Corridors */}
+          <div className="flex flex-col">
+            <MobilityCard traffic={d.traffic} />
+          </div>
         </section>
 
-        {/* ── SECTION 4: POLLUTANTS BREAKDOWN (Matching s3 & s4) ── */}
+        {/* ── 6. POLLUTANTS BREAKDOWN ── */}
         <section className="w-full">
           <div className="flex items-center justify-between mb-3 px-1">
-            <h3 className="text-sm font-extrabold t1 uppercase tracking-wider">
+            <h3 className="text-sm font-black t1 uppercase tracking-wider">
               Pollutant Concentration Breakdown
             </h3>
             <span className="text-[11px] font-bold t3">
@@ -297,7 +297,7 @@ export default function App() {
           <PollutantCards pollutants={d.pollutants} />
         </section>
 
-        {/* ── SECTION 5: AI COPILOT & WATCHLIST (Matching PRODUCT.md) ── */}
+        {/* ── 7. AI COPILOT & PERSONAL WATCHLIST ── */}
         <section id="ask" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left: Ask Arise AI Assistant */}
           <div className="lg:col-span-8 flex flex-col">
@@ -310,10 +310,10 @@ export default function App() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">📍</span>
-                  <h3 className="text-sm font-extrabold t1">Monitored Locations</h3>
+                  <h3 className="text-sm font-black t1">Monitored Locations</h3>
                 </div>
                 <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                  All 3 In Red Zone
+                  {demoMode ? 'All 3 In Red Zone' : 'All 3 In Moderate Zone'}
                 </span>
               </div>
               <p className="text-[11px] font-medium t3 mb-4">
@@ -342,14 +342,14 @@ export default function App() {
         </section>
       </main>
 
-      {/* ═══════════════ HEALTH TIPS DRAWER / MODAL ═══════════════ */}
+      {/* ═══════════════ HEALTH TIPS MODAL ═══════════════ */}
       {healthTipsOpen && (
         <div className="fixed inset-0 z-[3000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="card max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🫁</span>
-                <h3 className="text-lg font-extrabold t1">Health &amp; Action Advisory</h3>
+                <h3 className="text-lg font-black t1">Health &amp; Action Advisory</h3>
               </div>
               <button
                 onClick={() => setHealthTipsOpen(false)}
@@ -361,14 +361,14 @@ export default function App() {
 
             <div className="space-y-3 text-xs font-semibold t2">
               <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400">
-                <strong>Current Status: Severe Risk (AQI 312)</strong><br />
-                Vulnerable groups (children, elderly, asthma patients) must remain strictly indoors.
+                <strong>Current Status: {d.status} (AQI {d.aqi})</strong><br />
+                Vulnerable groups (children, elderly, asthma patients) must limit outdoor exertion.
               </div>
               <ul className="list-disc list-inside space-y-1.5 pl-1 t1">
                 <li>Wear a certified N95 or FFP2 mask if transit is unavoidable.</li>
                 <li>Avoid early morning (6 AM – 9 AM) and night outdoor workouts.</li>
                 <li>Keep indoor air purifiers running with windows and vents sealed.</li>
-                <li>Utilize the 3 PM – 5 PM window for any critical outdoor errands.</li>
+                <li>Utilize the {d.bestWindow} window for critical outdoor tasks.</li>
               </ul>
             </div>
 
@@ -382,26 +382,25 @@ export default function App() {
         </div>
       )}
 
-      {/* ═══════════════ BOTTOM ACTION BAR (Matching s1 Bottom Toolbar) ═══════════════ */}
+      {/* ═══════════════ BOTTOM ACTION BAR ═══════════════ */}
       <footer
-        className="sticky bottom-0 z-[1500] px-5 lg:px-8 py-3 border-t backdrop-blur-md transition-colors"
+        className="sticky bottom-0 z-[1500] px-4 sm:px-6 lg:px-8 py-3 border-t backdrop-blur-md transition-colors"
         style={{
           borderColor: 'var(--border)',
           background: dark ? 'rgba(20, 28, 46, 0.92)' : 'rgba(255, 255, 255, 0.92)',
         }}
       >
         <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-4">
-          {/* Left Buttons: Watchlist, Alerts, Share */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => scrollToSection('ask')}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo text-white shadow-sm hover:scale-105 active:scale-95 transition-all"
             >
-              <span>✓</span>
-              <span>Watchlist</span>
+              <span>✦</span>
+              <span>Ask Arise</span>
             </button>
             <button
-              onClick={() => alert('Push Alerts are active for Delhi-NCR (AQI 312 Stagnation alert).')}
+              onClick={() => alert('Push Alerts active for Delhi-NCR.')}
               className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold border transition-colors hover:bg-[var(--surface-alt)]"
               style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
               title="Alert Notifications"
@@ -418,12 +417,10 @@ export default function App() {
             </button>
           </div>
 
-          {/* Center Attribution */}
           <div className="hidden md:block text-[11px] font-semibold t3">
-            Arise Intelligence Core · Real-time CPCB + Satellite Inversion Telemetry · Mock Mode
+            Arise Core · Real-time CPCB + Satellite Inversion Telemetry · {demoMode ? 'Saved Severe Event' : 'Moderate Day Simulation'}
           </div>
 
-          {/* Right Action: Health Tips Pill & Close */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setHealthTipsOpen(true)}

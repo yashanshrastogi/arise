@@ -15,37 +15,101 @@
     { "label": "Fire signal detected upwind", "detail": "Satellite fire signal detected in monitored regions of Punjab and Haryana.", "type": "fire" },
     { "label": "Low atmospheric dispersion", "detail": "Temperature inversion limiting vertical mixing. Boundary layer below 400m.", "type": "atmosphere" }
   ],
+  "weather": {
+    "temp": 28,
+    "feelsLike": 30,
+    "condition": "Hazy Sunshine",
+    "icon": "🌤️",
+    "humidity": 58,
+    "rainProb": 10,
+    "rainfall": "0.0 mm",
+    "cloudCover": 42,
+    "windSpeed": 3.2,
+    "windDirection": "NW",
+    "windDegrees": 315,
+    "visibility": 2.8,
+    "uvIndex": 5,
+    "sunrise": "06:18 AM",
+    "sunset": "05:58 PM",
+    "correlation": "Calm winds (3.2 km/h NW) & low boundary layer (<400m) are reducing particulate dispersion over the Delhi-NCR basin."
+  },
+  "traffic": {
+    "corridors": [
+      {
+        "id": "c1",
+        "name": "Delhi → Noida (DND Flyway)",
+        "status": "Heavy",
+        "delay": "+18 min",
+        "normalTime": "24 min",
+        "currentTime": "42 min",
+        "visibility": "2.2 km",
+        "smogImpact": "Severe haze on Yamuna riverfront",
+        "recommendation": "Leave 20 min earlier. Use car AC recirculation."
+      },
+      {
+        "id": "c2",
+        "name": "Delhi → Gurugram (NH-48)",
+        "status": "Moderate",
+        "delay": "+11 min",
+        "normalTime": "35 min",
+        "currentTime": "46 min",
+        "visibility": "2.8 km",
+        "smogImpact": "Low visibility near Dhaula Kuan",
+        "recommendation": "Allow 15 min buffer. Keep headlights on low beam."
+      },
+      {
+        "id": "c3",
+        "name": "Outer Ring Road (Nehru Place)",
+        "status": "Normal",
+        "delay": "+4 min",
+        "normalTime": "18 min",
+        "currentTime": "22 min",
+        "visibility": "3.1 km",
+        "smogImpact": "Moderate particulate haze",
+        "recommendation": "Standard transit window. No critical delay."
+      }
+    ]
+  },
   "pollutants": [
-    { "name": "PM2.5", "value": 142.5, "unit": "µg/m³", "aqi": 312, "status": "Severe", "pct": 95, "dominant": true },
-    { "name": "PM10",  "value": 210.3, "unit": "µg/m³", "aqi": 250, "status": "Poor",   "pct": 70, "dominant": false },
-    { "name": "NO₂",   "value": 45.1,  "unit": "µg/m³", "aqi": 45,  "status": "Good",   "pct": 22, "dominant": false },
-    { "name": "SO₂",   "value": 12.4,  "unit": "µg/m³", "aqi": 12,  "status": "Good",   "pct": 8,  "dominant": false },
-    { "name": "CO",    "value": 1.2,   "unit": "mg/m³", "aqi": 30,  "status": "Good",   "pct": 15, "dominant": false },
-    { "name": "O₃",    "value": 35.8,  "unit": "µg/m³", "aqi": 35,  "status": "Good",   "pct": 18, "dominant": false }
+    { "name": "PM2.5", "value": 142.5, "unit": "µg/m³", "aqi": 312, "status": "Severe", "pct": 95, "dominant": true, "desc": "Very fine particles that penetrate deep into the lungs (<2.5 µm)" },
+    { "name": "PM10",  "value": 210.3, "unit": "µg/m³", "aqi": 250, "status": "Poor",   "pct": 70, "dominant": false, "desc": "Coarse dust particles from roads, soil, and construction (<10 µm)" },
+    { "name": "NO₂",   "value": 45.1,  "unit": "µg/m³", "aqi": 45,  "status": "Good",   "pct": 22, "dominant": false, "desc": "Nitrogen Dioxide primarily emitted from vehicle exhaust" },
+    { "name": "SO₂",   "value": 12.4,  "unit": "µg/m³", "aqi": 12,  "status": "Good",   "pct": 8,  "dominant": false, "desc": "Sulfur Dioxide produced by industrial fuel burning" },
+    { "name": "CO",    "value": 1.2,   "unit": "mg/m³", "aqi": 30,  "status": "Good",   "pct": 15, "dominant": false, "desc": "Carbon Monoxide gas from incomplete combustion" },
+    { "name": "O₃",    "value": 35.8,  "unit": "µg/m³", "aqi": 35,  "status": "Good",   "pct": 18, "dominant": false, "desc": "Ground-level Ozone formed by sunlight reacting with emissions" }
   ],
   "forecast": [
-    { "time": "6 AM",  "aqi": 240, "past": true  },
-    { "time": "7 AM",  "aqi": 260, "past": true  },
-    { "time": "8 AM",  "aqi": 280, "past": true  },
-    { "time": "9 AM",  "aqi": 295, "past": true  },
-    { "time": "10 AM", "aqi": 312, "past": true  },
-    { "time": "11 AM", "aqi": 318, "past": false },
-    { "time": "12 PM", "aqi": 310, "past": false },
-    { "time": "1 PM",  "aqi": 295, "past": false },
-    { "time": "2 PM",  "aqi": 275, "past": false },
-    { "time": "3 PM",  "aqi": 250, "past": false, "bestWindow": true },
-    { "time": "4 PM",  "aqi": 245, "past": false, "bestWindow": true },
-    { "time": "5 PM",  "aqi": 255, "past": false, "bestWindow": true },
-    { "time": "6 PM",  "aqi": 280, "past": false },
-    { "time": "7 PM",  "aqi": 305, "past": false },
-    { "time": "8 PM",  "aqi": 320, "past": false }
+    { "time": "6 AM",  "aqi": 240, "temp": 23, "rainProb": 5,  "windSpeed": 2.4, "past": true  },
+    { "time": "7 AM",  "aqi": 260, "temp": 24, "rainProb": 5,  "windSpeed": 2.6, "past": true  },
+    { "time": "8 AM",  "aqi": 280, "temp": 25, "rainProb": 5,  "windSpeed": 2.8, "past": true  },
+    { "time": "9 AM",  "aqi": 295, "temp": 27, "rainProb": 10, "windSpeed": 3.0, "past": true  },
+    { "time": "10 AM", "aqi": 312, "temp": 28, "rainProb": 10, "windSpeed": 3.2, "past": true  },
+    { "time": "11 AM", "aqi": 318, "temp": 29, "rainProb": 10, "windSpeed": 3.5, "past": false },
+    { "time": "12 PM", "aqi": 310, "temp": 30, "rainProb": 10, "windSpeed": 3.8, "past": false },
+    { "time": "1 PM",  "aqi": 295, "temp": 31, "rainProb": 10, "windSpeed": 4.2, "past": false },
+    { "time": "2 PM",  "aqi": 275, "temp": 30, "rainProb": 10, "windSpeed": 4.6, "past": false },
+    { "time": "3 PM",  "aqi": 250, "temp": 29, "rainProb": 10, "windSpeed": 5.0, "past": false, "bestWindow": true },
+    { "time": "4 PM",  "aqi": 245, "temp": 28, "rainProb": 10, "windSpeed": 5.2, "past": false, "bestWindow": true },
+    { "time": "5 PM",  "aqi": 255, "temp": 27, "rainProb": 10, "windSpeed": 4.8, "past": false, "bestWindow": true },
+    { "time": "6 PM",  "aqi": 280, "temp": 26, "rainProb": 10, "windSpeed": 3.9, "past": false },
+    { "time": "7 PM",  "aqi": 305, "temp": 25, "rainProb": 10, "windSpeed": 3.3, "past": false },
+    { "time": "8 PM",  "aqi": 320, "temp": 24, "rainProb": 10, "windSpeed": 2.9, "past": false }
+  ],
+  "forecast7Day": [
+    { "day": "Today", "aqi": 312, "temp": 28, "rainProb": 10, "windSpeed": 3.2, "status": "Very Poor", "condition": "Haze" },
+    { "day": "Fri",   "aqi": 295, "temp": 29, "rainProb": 15, "windSpeed": 4.0, "status": "Poor",      "condition": "Haze" },
+    { "day": "Sat",   "aqi": 280, "temp": 29, "rainProb": 20, "windSpeed": 4.5, "status": "Poor",      "condition": "Haze" },
+    { "day": "Sun",   "aqi": 260, "temp": 28, "rainProb": 25, "windSpeed": 5.2, "status": "Poor",      "condition": "Partly Cloudy" },
+    { "day": "Mon",   "aqi": 240, "temp": 27, "rainProb": 30, "windSpeed": 6.0, "status": "Poor",      "condition": "Breezy" },
+    { "day": "Tue",   "aqi": 210, "temp": 27, "rainProb": 40, "windSpeed": 6.8, "status": "Poor",      "condition": "Passing Shower" },
+    { "day": "Wed",   "aqi": 185, "temp": 26, "rainProb": 20, "windSpeed": 5.5, "status": "Moderate",  "condition": "Clear Sun" }
   ],
   "stations": [
-    { "id": 1, "name": "ITO",           "lat": 28.6289, "lng": 77.2412, "aqi": 312, "pm25": 142.5, "pm10": 210.3 },
-    { "id": 2, "name": "RK Puram",      "lat": 28.5635, "lng": 77.1724, "aqi": 295, "pm25": 130.2, "pm10": 195.0 },
-    { "id": 3, "name": "Anand Vihar",   "lat": 28.6469, "lng": 77.3164, "aqi": 345, "pm25": 168.0, "pm10": 240.0 },
-    { "id": 4, "name": "Punjabi Bagh",  "lat": 28.6683, "lng": 77.1308, "aqi": 330, "pm25": 155.8, "pm10": 225.0 },
-    { "id": 5, "name": "Dwarka",        "lat": 28.5921, "lng": 77.0460, "aqi": 275, "pm25": 118.0, "pm10": 185.0 }
+    { "id": 1, "name": "ITO",           "lat": 28.6289, "lng": 77.2412, "aqi": 312, "pm25": 142.5, "pm10": 210.3, "temp": 28, "rain": 10, "wind": 3.2 },
+    { "id": 2, "name": "RK Puram",      "lat": 28.5635, "lng": 77.1724, "aqi": 295, "pm25": 130.2, "pm10": 195.0, "temp": 29, "rain": 10, "wind": 3.5 },
+    { "id": 3, "name": "Anand Vihar",   "lat": 28.6469, "lng": 77.3164, "aqi": 345, "pm25": 168.0, "pm10": 240.0, "temp": 28, "rain": 10, "wind": 2.5 },
+    { "id": 4, "name": "Punjabi Bagh",  "lat": 28.6683, "lng": 77.1308, "aqi": 330, "pm25": 155.8, "pm10": 225.0, "temp": 28, "rain": 10, "wind": 3.0 },
+    { "id": 5, "name": "Dwarka",        "lat": 28.5921, "lng": 77.0460, "aqi": 275, "pm25": 118.0, "pm10": 185.0, "temp": 29, "rain": 15, "wind": 4.1 }
   ],
   "fires": [
     { "id": 101, "lat": 29.52, "lng": 76.82, "intensity": "high" },
