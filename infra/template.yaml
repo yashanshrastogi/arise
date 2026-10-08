@@ -99,6 +99,8 @@ Resources:
       Environment:
         Variables:
           MODE: aws
+          STAGE: !Ref Stage
+          API_GATEWAY_BASE_PATH: !Sub "/${Stage}"
           DYNAMODB_TABLE_NAME: !Ref CacheTable
           OPENAQ_API_KEY: !Ref OpenAQAKey
           FIRMS_MAP_KEY: !Ref FirmsMapKey

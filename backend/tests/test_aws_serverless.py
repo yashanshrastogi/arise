@@ -12,12 +12,12 @@ import json
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone, timedelta
 
-from app.main_lambda import handler as api_lambda_handler
+from app.main_lambda import handler as api_lambda_handler, resolve_api_gateway_base_path
 from app.lambdas.ingestion import handler as ingestion_lambda_handler
 from app.cache.repository import AwsDynamoCacheRepository, CacheEntry
 
 
-def create_apigw_http_event(method: str, path: str, query_params: dict = None, body: dict = None):
+def create_apigw_http_event(method: str, path: str, query_params: dict = None, body: dict = None, stage: str = "prod"):
     """Generate API Gateway HTTP API payload format v2.0 event."""
     qs = "&".join(f"{k}={v}" for k, v in (query_params or {}).items())
     return {
@@ -40,7 +40,7 @@ def create_apigw_http_event(method: str, path: str, query_params: dict = None, b
                 "sourceIp": "127.0.0.1",
                 "userAgent": "AriseTestClient/1.0"
             },
-            "stage": "prod"
+            "stage": stage
         },
         "body": json.dumps(body) if body else None,
         "isBase64Encoded": False
@@ -61,13 +61,98 @@ class TestAwsServerlessPipeline(unittest.TestCase):
     """Validates Lambda handlers and Mangum proxy behavior."""
 
     def test_mangum_health_endpoint(self):
-        event = create_apigw_http_event("GET", "/health")
+        """Validates /health direct invocation (no stage prefix)."""
+        event = create_apigw_http_event("GET", "/health", stage="$default")
         ctx = create_mock_context()
         resp = api_lambda_handler(event, ctx)
         self.assertEqual(resp.get("statusCode"), 200)
         body = json.loads(resp.get("body", "{}"))
         self.assertEqual(body.get("status"), "healthy")
         self.assertEqual(body.get("service"), "Arise API")
+
+    def test_mangum_with_stage_prefix_prod_health(self):
+        """
+        Regression Test:
+        Validates API Gateway HTTP API v2 named stage 'prod' routing.
+        In AWS, requests to https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod/health
+        arrive with rawPath: '/prod/health' and requestContext.stage: 'prod'.
+        Mangum must strip '/prod' so FastAPI /health endpoint responds 200 OK instead of 404.
+        """
+        event = create_apigw_http_event("GET", "/prod/health", stage="prod")
+        ctx = create_mock_context()
+        resp = api_lambda_handler(event, ctx)
+        self.assertEqual(resp.get("statusCode"), 200)
+        body = json.loads(resp.get("body", "{}"))
+        self.assertEqual(body.get("status"), "healthy")
+        self.assertEqual(body.get("service"), "Arise API")
+
+    def test_mangum_with_stage_prefix_prod_environment(self):
+        """
+        Regression Test:
+        GET /prod/environment with stage='prod' must route cleanly to /environment.
+        """
+        event = create_apigw_http_event(
+            "GET",
+            "/prod/environment",
+            query_params={"lat": "28.6139", "lon": "77.2090", "demo": "true"},
+            stage="prod"
+        )
+        ctx = create_mock_context()
+        resp = api_lambda_handler(event, ctx)
+        self.assertEqual(resp.get("statusCode"), 200)
+        body = json.loads(resp.get("body", "{}"))
+        self.assertIn("aqi", body)
+        self.assertIn("verdict", body)
+
+    def test_mangum_with_stage_prefix_prod_verdict(self):
+        """
+        Regression Test:
+        GET /prod/verdict with stage='prod' must route cleanly to /verdict.
+        """
+        event = create_apigw_http_event(
+            "GET",
+            "/prod/verdict",
+            query_params={"lat": "28.6139", "lon": "77.2090", "demo": "true"},
+            stage="prod"
+        )
+        ctx = create_mock_context()
+        resp = api_lambda_handler(event, ctx)
+        self.assertEqual(resp.get("statusCode"), 200)
+        body = json.loads(resp.get("body", "{}"))
+        self.assertIn("verdict", body)
+        self.assertIn("aqi", body)
+
+    def test_resolve_api_gateway_base_path_helper(self):
+        """
+        Test helper function for resolving API gateway base path dynamically.
+        """
+        # Event with stage prefix in rawPath
+        evt_prod = {
+            "rawPath": "/prod/health",
+            "requestContext": {"stage": "prod", "http": {"path": "/prod/health"}}
+        }
+        self.assertEqual(resolve_api_gateway_base_path(evt_prod), "/prod")
+
+        # Event with different stage prefix
+        evt_staging = {
+            "rawPath": "/staging/health",
+            "requestContext": {"stage": "staging", "http": {"path": "/staging/health"}}
+        }
+        self.assertEqual(resolve_api_gateway_base_path(evt_staging), "/staging")
+
+        # Event with $default stage
+        evt_default = {
+            "rawPath": "/health",
+            "requestContext": {"stage": "$default", "http": {"path": "/health"}}
+        }
+        self.assertEqual(resolve_api_gateway_base_path(evt_default), "/")
+
+        # Event without stage in rawPath
+        evt_no_prefix = {
+            "rawPath": "/health",
+            "requestContext": {"stage": "prod", "http": {"path": "/health"}}
+        }
+        self.assertEqual(resolve_api_gateway_base_path(evt_no_prefix), "/")
 
     def test_mangum_environment_endpoint(self):
         event = create_apigw_http_event(

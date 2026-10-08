@@ -36,6 +36,8 @@ class Settings(BaseModel):
     DEMO_MODE_DEFAULT: bool = False
     CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,*"
     POWERTOOLS_SERVICE_NAME: str = "arise-api"
+    STAGE: Optional[str] = None
+    API_GATEWAY_BASE_PATH: Optional[str] = None
     
     # AI / LLM Integration
     LLM_PROVIDER: Literal["local", "ollama", "bedrock"] = "local"
@@ -111,6 +113,8 @@ def get_settings() -> Settings:
         DEMO_MODE_DEFAULT=os.getenv("DEMO_MODE_DEFAULT", "false").lower() in ("true", "1", "yes"),
         CORS_ORIGINS=os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,*"),
         POWERTOOLS_SERVICE_NAME=os.getenv("POWERTOOLS_SERVICE_NAME", "arise-api"),
+        STAGE=os.getenv("STAGE"),
+        API_GATEWAY_BASE_PATH=os.getenv("API_GATEWAY_BASE_PATH"),
         LLM_PROVIDER=os.getenv("LLM_PROVIDER", "local"),
         BEDROCK_MODEL_ID=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0"),
         OLLAMA_HOST=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
