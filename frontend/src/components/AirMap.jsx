@@ -170,6 +170,7 @@ export default function AirMap({
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [layerDrawerOpen, setLayerDrawerOpen] = useState(false);
+  const layerDrawerRef = useRef(null);
   const [selectedStationName, setSelectedStationName] = useState('Delhi-NCR');
 
   // Expanded map state (Modern ride/delivery pattern)
@@ -225,6 +226,21 @@ export default function AirMap({
     };
   }, [isExpanded]);
 
+  // Close layer drawer on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (layerDrawerRef.current && !layerDrawerRef.current.contains(e.target)) {
+        setLayerDrawerOpen(false);
+      }
+    };
+    if (layerDrawerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [layerDrawerOpen]);
+
   // 1. Initialize Google Maps with POI suppression & clickableIcons: false
   useEffect(() => {
     if (!apiKey || apiKey.trim() === '') return;
@@ -267,6 +283,7 @@ export default function AirMap({
 
         // Map Click Listener — Environmental Inspector (Never Google Places)
         map.addListener('click', (e) => {
+          setLayerDrawerOpen(false);
           if (!e.latLng) return;
           const lat = e.latLng.lat();
           const lng = e.latLng.lng();
@@ -885,10 +902,10 @@ export default function AirMap({
         )}
 
         {/* ── 1. Floating Structured Layer Selector (Top-Left) ── */}
-        <div className="absolute top-3 left-3 z-[15] max-w-[240px]">
+        <div ref={layerDrawerRef} className="absolute top-3 left-3 z-[25] max-w-[225px]">
           <div className="glass rounded-2xl shadow-xl p-2.5 border transition-all" style={{ borderColor: 'var(--border)' }}>
             <div
-              className="flex items-center justify-between cursor-pointer select-none mb-1 px-1"
+              className="flex items-center justify-between cursor-pointer select-none px-1"
               onClick={() => setLayerDrawerOpen(!layerDrawerOpen)}
             >
               <div className="flex items-center gap-1.5 text-xs font-black t1">
@@ -902,7 +919,7 @@ export default function AirMap({
             </div>
 
             {layerDrawerOpen && (
-              <div className="flex flex-col gap-2 pt-2 border-t mt-1" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex flex-col gap-1.5 pt-2 border-t mt-1.5 max-h-[calc(100vh-140px)] sm:max-h-[250px] overflow-y-auto pr-0.5" style={{ borderColor: 'var(--border)' }}>
                 {/* Section A: Environment Primary Layers */}
                 <div>
                   <div className="text-[9px] font-extrabold t3 uppercase tracking-wider mb-1">
@@ -917,7 +934,7 @@ export default function AirMap({
                       <button
                         key={p.id}
                         onClick={() => setPrimaryLayer(p.id)}
-                        className={`py-1 px-1.5 rounded-lg text-[11px] font-black transition-all text-center ${
+                        className={`py-1 px-1 rounded-lg text-[10.5px] font-black transition-all text-center ${
                           primaryLayer === p.id
                             ? 'bg-indigo text-white shadow-sm'
                             : 'bg-[var(--surface-alt)] t2 hover:text-[var(--text-primary)]'
@@ -944,7 +961,7 @@ export default function AirMap({
                       <button
                         key={w.id}
                         onClick={() => setPrimaryLayer(w.id)}
-                        className={`py-1 px-1.5 rounded-lg text-[10px] font-black transition-all text-center ${
+                        className={`py-1 px-1 rounded-lg text-[10px] font-black transition-all text-center ${
                           primaryLayer === w.id
                             ? 'bg-indigo text-white shadow-sm'
                             : 'bg-[var(--surface-alt)] t2 hover:text-[var(--text-primary)]'
@@ -957,7 +974,7 @@ export default function AirMap({
                 </div>
 
                 {/* Section C: Additive Signals / Overlays */}
-                <div className="pt-1.5 border-t space-y-1" style={{ borderColor: 'var(--border)' }}>
+                <div className="pt-1 border-t space-y-0.5" style={{ borderColor: 'var(--border)' }}>
                   <div className="text-[9px] font-extrabold t3 uppercase tracking-wider mb-0.5">
                     Signal Overlays
                   </div>
@@ -969,7 +986,7 @@ export default function AirMap({
                     <button
                       key={s.key}
                       onClick={() => toggleSignal(s.key)}
-                      className="w-full flex items-center justify-between px-2 py-1 rounded-lg text-[10px] font-black transition-all text-left"
+                      className="w-full flex items-center justify-between px-2 py-0.5 rounded-lg text-[9.5px] font-black transition-all text-left"
                       style={{ background: signals[s.key] ? 'var(--surface-alt)' : 'transparent' }}
                     >
                       <span className="flex items-center gap-1.5 t1">
@@ -1010,9 +1027,11 @@ export default function AirMap({
           </div>
         </div>
 
-        {/* ── 3. Floating Dynamic Legend (Bottom-Left) ── */}
-        <div className="absolute bottom-3 left-3 z-[15]">
-          <div className="glass rounded-2xl px-3 py-2 shadow-lg border flex flex-col gap-1 min-w-[170px]" style={{ borderColor: 'var(--border)' }}>
+        {/* ── 3. Floating Dynamic Legend (Bottom-Center, Non-overlapping) ── */}
+        <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-[15] pointer-events-auto transition-opacity duration-200 ${
+          layerDrawerOpen ? 'hidden md:flex' : 'flex'
+        }`}>
+          <div className="glass rounded-2xl px-3.5 py-1.5 shadow-lg border flex flex-col gap-1 min-w-[170px]" style={{ borderColor: 'var(--border)' }}>
             <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-wider">
               <span className="text-emerald-600 dark:text-emerald-400">{legend.left}</span>
               <span className="text-rose-600 dark:text-rose-400">{legend.right}</span>
