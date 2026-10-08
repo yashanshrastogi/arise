@@ -8,6 +8,8 @@ class VerdictOutput(BaseModel):
     verdict: str = Field(description="GO | BE_SMART | CUT_BACK | STAY_IN")
     headline: str
     recommendation: str
+    aqi: int = 0
+    category: str = "Good"
     why: List[Dict[str, str]] = Field(default_factory=list)
     do: List[str] = Field(default_factory=list)
     best_window: Optional[str] = None
@@ -170,6 +172,8 @@ def evaluate_environment(
         verdict=effective_verdict,
         headline=headline,
         recommendation=recommendation,
+        aqi=snapshot.aqi,
+        category=snapshot.aqi_category,
         why=why_items,
         do=do_actions,
         best_window=snapshot.best_window or "3 PM – 5 PM",

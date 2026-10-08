@@ -9,57 +9,61 @@ class AQIResult(BaseModel):
     dominant_pollutant: str
     sub_indices: Dict[str, int]
     color: str
+    is_cpcb_compliant: bool = True
+    pollutants_monitored: int = 0
 
 
 # CPCB India Official Breakpoints: (B_lo, B_hi, I_lo, I_hi)
+# Breakpoints are contiguous without gaps so all real numbers are handled correctly.
+# Source: Central Pollution Control Board (CPCB) National Air Quality Index (NAQI) guidelines.
 CPCB_BREAKPOINTS = {
     "PM2.5": [
         (0.0, 30.0, 0, 50),
-        (30.1, 60.0, 51, 100),
-        (60.1, 90.0, 101, 200),
-        (90.1, 120.0, 201, 300),
-        (120.1, 250.0, 301, 400),
-        (250.1, 500.0, 401, 500),
+        (30.0, 60.0, 51, 100),
+        (60.0, 90.0, 101, 200),
+        (90.0, 120.0, 201, 300),
+        (120.0, 250.0, 301, 400),
+        (250.0, 500.0, 401, 500),
     ],
     "PM10": [
         (0.0, 50.0, 0, 50),
-        (50.1, 100.0, 51, 100),
-        (100.1, 250.0, 101, 200),
-        (250.1, 350.0, 201, 300),
-        (350.1, 430.0, 301, 400),
-        (430.1, 600.0, 401, 500),
+        (50.0, 100.0, 51, 100),
+        (100.0, 250.0, 101, 200),
+        (250.0, 350.0, 201, 300),
+        (350.0, 430.0, 301, 400),
+        (430.0, 600.0, 401, 500),
     ],
     "NO2": [
         (0.0, 40.0, 0, 50),
-        (40.1, 80.0, 51, 100),
-        (80.1, 180.0, 101, 200),
-        (180.1, 280.0, 201, 300),
-        (280.1, 400.0, 301, 400),
-        (400.1, 600.0, 401, 500),
+        (40.0, 80.0, 51, 100),
+        (80.0, 180.0, 101, 200),
+        (180.0, 280.0, 201, 300),
+        (280.0, 400.0, 301, 400),
+        (400.0, 600.0, 401, 500),
     ],
     "SO2": [
         (0.0, 40.0, 0, 50),
-        (40.1, 80.0, 51, 100),
-        (80.1, 380.0, 101, 200),
-        (380.1, 800.0, 201, 300),
-        (800.1, 1600.0, 301, 400),
-        (1600.1, 2000.0, 401, 500),
+        (40.0, 80.0, 51, 100),
+        (80.0, 380.0, 101, 200),
+        (380.0, 800.0, 201, 300),
+        (800.0, 1600.0, 301, 400),
+        (1600.0, 2000.0, 401, 500),
     ],
     "CO": [
         (0.0, 1.0, 0, 50),
-        (1.01, 2.0, 51, 100),
-        (2.01, 10.0, 101, 200),
-        (10.01, 17.0, 201, 300),
-        (17.01, 34.0, 301, 400),
-        (34.01, 50.0, 401, 500),
+        (1.0, 2.0, 51, 100),
+        (2.0, 10.0, 101, 200),
+        (10.0, 17.0, 201, 300),
+        (17.0, 34.0, 301, 400),
+        (34.0, 50.0, 401, 500),
     ],
     "O3": [
         (0.0, 50.0, 0, 50),
-        (50.1, 100.0, 51, 100),
-        (100.1, 168.0, 101, 200),
-        (168.1, 208.0, 201, 300),
-        (208.1, 748.0, 301, 400),
-        (748.1, 1000.0, 401, 500),
+        (50.0, 100.0, 51, 100),
+        (100.0, 168.0, 101, 200),
+        (168.0, 208.0, 201, 300),
+        (208.0, 748.0, 301, 400),
+        (748.0, 1000.0, 401, 500),
     ],
 }
 
@@ -76,14 +80,14 @@ CATEGORY_MAP = [
 def calculate_sub_index(pollutant: str, concentration: float) -> Optional[int]:
     """Calculate single pollutant sub-index using CPCB linear interpolation."""
     pol_key = pollutant.strip().upper()
-    if pol_key == "PM2.5" or pol_key == "PM25":
+    if pol_key in ("PM2.5", "PM25"):
         pol_key = "PM2.5"
 
     breakpoints = CPCB_BREAKPOINTS.get(pol_key)
     if not breakpoints or concentration < 0:
         return None
 
-    # Find matching bucket
+    # Find matching bucket with contiguous interval bounds
     for b_lo, b_hi, i_lo, i_hi in breakpoints:
         if b_lo <= concentration <= b_hi:
             val = ((i_hi - i_lo) / (b_hi - b_lo)) * (concentration - b_lo) + i_lo
@@ -110,6 +114,7 @@ def calculate_aqi(pollutants: Dict[str, float]) -> AQIResult:
     """
     Compute official CPCB AQI from dictionary of pollutant concentrations.
     AQI is the maximum of individual sub-indices.
+    Enforces CPCB completeness rule: Minimum 3 pollutants with at least one PM (PM2.5 or PM10).
     """
     sub_indices: Dict[str, int] = {}
     for pol, val in pollutants.items():
@@ -124,8 +129,14 @@ def calculate_aqi(pollutants: Dict[str, float]) -> AQIResult:
             category="Good",
             dominant_pollutant="None",
             sub_indices={},
-            color="#2EB872"
+            color="#2EB872",
+            is_cpcb_compliant=False,
+            pollutants_monitored=0,
         )
+
+    # Check CPCB completeness criterion
+    has_pm = ("PM2.5" in sub_indices or "PM10" in sub_indices)
+    is_compliant = (len(sub_indices) >= 3 and has_pm)
 
     # Dominant pollutant is the one causing the highest sub-index
     dominant_pol = max(sub_indices, key=sub_indices.get)
@@ -137,5 +148,7 @@ def calculate_aqi(pollutants: Dict[str, float]) -> AQIResult:
         category=category,
         dominant_pollutant=dominant_pol,
         sub_indices=sub_indices,
-        color=color
+        color=color,
+        is_cpcb_compliant=is_compliant,
+        pollutants_monitored=len(sub_indices),
     )

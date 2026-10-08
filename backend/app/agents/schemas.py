@@ -15,6 +15,8 @@ class AskAriseVerdictResponse(BaseModel):
     verdict: Literal["GO", "BE_SMART", "CUT_BACK", "STAY_IN"] = Field(
         description="Authoritative deterministic verdict (GO, BE_SMART, CUT_BACK, STAY_IN)."
     )
+    aqi: Optional[int] = Field(default=None, description="Authoritative AQI value.")
+    category: Optional[str] = Field(default=None, description="Authoritative AQI category.")
     headline: str = Field(
         description="Clear, concise one-sentence plain English answer to the user's question."
     )

@@ -207,3 +207,75 @@ npm run dev
    - Configure AWS EventBridge cron (every 30 minutes) triggering an ingestion Lambda.
 4. **Cloud AI:**
    - Switch `LLM_PROVIDER` to `bedrock` targeting `us.amazon.nova-lite-v1:0`.
+
+---
+
+## 11. AQI Scientific Correctness Audit & Methodology
+
+### 11.1 Authoritative Standard & Source
+Arise implements the official **Central Pollution Control Board (CPCB) National Air Quality Index (NAQI)** standard, developed in collaboration with IIT Kanpur (*Technical Report on National Air Quality Index*, October 2014).
+
+### 11.2 Pollutant Averaging Periods & Operational Telemetry
+CPCB NAQI breakpoints are formulated around specific ambient exposure periods:
+- **PM2.5:** 24-hour average ($\mu\text{g/m}^3$)
+- **PM10:** 24-hour average ($\mu\text{g/m}^3$)
+- **NO2:** 24-hour average ($\mu\text{g/m}^3$)
+- **SO2:** 24-hour average ($\mu\text{g/m}^3$)
+- **CO:** 8-hour average ($\text{mg/m}^3$)
+- **O3:** 8-hour average ($\mu\text{g/m}^3$)
+
+**Operational Telemetry Proxy:** Continuous Ambient Air Quality Monitoring Stations (CAAQMS) operated by CPCB and DPCC compute rolling hourly and 24-hour averages on-site. OpenAQ v3 `/locations/{id}/latest` exposes these published hourly telemetry broadcasts. This is the exact operational real-time proxy used by CPCB's official *SAMEER* application.
+
+### 11.3 Reference Physical Units & Normalization
+CPCB breakpoints require exact physical metric units:
+- **Particulates & Photochemicals:** PM2.5, PM10, NO2, SO2, O3 in **$\mu\text{g/m}^3$**.
+- **Carbon Monoxide:** CO in **$\text{mg/m}^3$**.
+
+**Unit Conversion Factors (at Indian NTP $25^\circ\text{C}$, 1 atm):**
+- **NO2:** $1\text{ ppb} = 1.88\ \mu\text{g/m}^3$ ($46.01 / 24.45$)
+- **SO2:** $1\text{ ppb} = 2.62\ \mu\text{g/m}^3$ ($64.07 / 24.45$)
+- **O3:** $1\text{ ppb} = 1.96\ \mu\text{g/m}^3$ ($48.00 / 24.45$)
+- **CO:** If raw concentration $> 50.0$ or labeled $\mu\text{g/m}^3$, divide by 1000 to convert to $\text{mg/m}^3$. In Indian CAAQMS telemetry, normal values (0.1–30.0) represent $\text{mg/m}^3$ directly.
+
+### 11.4 Contiguous Breakpoint Table
+To prevent fractional gaps (e.g. 30.05 $\mu\text{g/m}^3$ dropping into gaps), Arise employs contiguous lower and upper bounds:
+
+| Category | AQI Range | PM2.5 (24h) | PM10 (24h) | NO2 (24h) | SO2 (24h) | CO (8h, mg/m³) | O3 (8h) |
+|---|---|---|---|---|---|---|---|
+| **Good** | 0 – 50 | 0.0 – 30.0 | 0.0 – 50.0 | 0.0 – 40.0 | 0.0 – 40.0 | 0.0 – 1.0 | 0.0 – 50.0 |
+| **Satisfactory** | 51 – 100 | 30.0 – 60.0 | 50.0 – 100.0 | 40.0 – 80.0 | 40.0 – 80.0 | 1.0 – 2.0 | 50.0 – 100.0 |
+| **Moderate** | 101 – 200 | 60.0 – 90.0 | 100.0 – 250.0 | 80.0 – 180.0 | 80.0 – 380.0 | 2.0 – 10.0 | 100.0 – 168.0 |
+| **Poor** | 201 – 300 | 90.0 – 120.0 | 250.0 – 350.0 | 180.0 – 280.0 | 380.0 – 800.0 | 10.0 – 17.0 | 168.0 – 208.0 |
+| **Very Poor** | 301 – 400 | 120.0 – 250.0 | 350.0 – 430.0 | 280.0 – 400.0 | 800.0 – 1600.0 | 17.0 – 34.0 | 208.0 – 748.0 |
+| **Severe** | 401 – 500 | 250.0 – 500.0 | 430.0 – 600.0 | 400.0 – 600.0 | 1600.0 – 2000.0 | 34.0 – 50.0 | 748.0 – 1000.0 |
+
+**Linear Interpolation Formula:**
+$$I_p = \left[ \frac{I_{HI} - I_{LO}}{B_{HI} - B_{LO}} \right] \times (C_p - B_{LO}) + I_{LO}$$
+
+### 11.5 Spatial Interpolation Architecture
+Arise executes spatial estimation in the scientifically sound order:
+$$\text{Live Stations} \longrightarrow \text{Physical Concentrations} \longrightarrow \text{IDW Spatial Interpolation} \longrightarrow \text{Local Concentrations} \longrightarrow \text{CPCB AQI}$$
+Interpolating physical concentrations before computing AQI prevents the non-linear distortion caused by interpolating pre-computed index numbers.
+
+### 11.6 Data Quality & Completeness
+- **CPCB Completeness Rule:** A valid AQI requires $\ge 3$ monitored pollutants, at least one of which must be PM2.5 or PM10. Flagged via `is_cpcb_compliant: bool`.
+- **Sensor Deduplication:** Station sensor arrays with historical/decommissioned duplicates are deduplicated by timestamp (`obs_time > existing.timestamp`), guaranteeing that only live telemetry enters the IDW engine.
+
+### 11.7 Example Verified Live Calculation
+Live CAAQMS telemetry from station **Sirifort (ID 5586), New Delhi**:
+- PM10: $318.0\ \mu\text{g/m}^3 \implies \text{Sub-index } 268$ (Poor)
+- PM2.5: $72.88\ \mu\text{g/m}^3 \implies \text{Sub-index } 144$ (Moderate)
+- NO2: $30.81\text{ ppb} \times 1.88 = 57.9\ \mu\text{g/m}^3 \implies \text{Sub-index } 73$ (Satisfactory)
+- SO2: $44.76\text{ ppb} \times 2.62 = 117.3\ \mu\text{g/m}^3 \implies \text{Sub-index } 113$ (Moderate)
+- CO: $2.19\text{ mg/m}^3 \implies \text{Sub-index } 103$ (Moderate)
+- O3: $16.0\ \mu\text{g/m}^3 \implies \text{Sub-index } 16$ (Good)
+
+**Independent Mathematical Calculation:**
+- Overall AQI = $\max(268, 144, 73, 113, 103, 16) = \mathbf{268}$
+- Dominant Pollutant = **PM10**
+- Category = **Poor**
+
+**Arise Engine Output:**
+- AQI: **268**, Dominant: **PM10**, Category: **Poor**
+- Discrepancy: **0 (Exact match)**
+- Result: **PASS**

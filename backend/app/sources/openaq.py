@@ -80,17 +80,38 @@ class OpenAQProvider(BaseAirQualityProvider):
                     if p_name and val is not None and val >= 0:
                         try:
                             raw_val = float(val)
-                            unit_str = meta.get("unit", "µg/m³")
+                            unit_raw = meta.get("unit", "µg/m³").strip().lower()
 
-                            # Convert CO to mg/m³ for CPCB Indian standard compliance
-                            if p_name == "CO":
-                                if unit_str in ("µg/m³", "ug/m3") or raw_val > 50.0:
+                            # Unit Normalizations according to CPCB NAAQS Reference:
+                            # NO2, SO2, O3, PM2.5, PM10 require µg/m³; CO requires mg/m³.
+                            # Standard reference at 25°C, 1 atm (Indian CPCB standard)
+                            if p_name == "NO2":
+                                if "ppb" in unit_raw:
+                                    raw_val = round(raw_val * 1.88, 2)
+                                elif "ppm" in unit_raw:
+                                    raw_val = round(raw_val * 1880.0, 2)
+                                unit_str = "µg/m³"
+                            elif p_name == "SO2":
+                                if "ppb" in unit_raw:
+                                    raw_val = round(raw_val * 2.62, 2)
+                                elif "ppm" in unit_raw:
+                                    raw_val = round(raw_val * 2620.0, 2)
+                                unit_str = "µg/m³"
+                            elif p_name == "O3":
+                                if "ppb" in unit_raw:
+                                    raw_val = round(raw_val * 1.96, 2)
+                                elif "ppm" in unit_raw:
+                                    raw_val = round(raw_val * 1960.0, 2)
+                                unit_str = "µg/m³"
+                            elif p_name == "CO":
+                                if unit_raw in ("µg/m³", "ug/m3") or raw_val > 50.0:
                                     raw_val = round(raw_val / 1000.0, 2)
-                                elif unit_str == "ppb":
-                                    raw_val = round((raw_val / 1000.0) * 1.15, 2)
-                                elif unit_str == "ppm":
+                                elif unit_raw == "ppm":
                                     raw_val = round(raw_val * 1.15, 2)
+                                # In Indian CAAQMS OpenAQ feeds, CO values 0.1-30 are already mg/m³
                                 unit_str = "mg/m³"
+                            else:
+                                unit_str = "µg/m³"
 
                             # Plausibility checks (reject impossible sensor glitches)
                             if p_name == "PM2.5" and (raw_val < 0 or raw_val > 1000.0):
@@ -102,11 +123,19 @@ class OpenAQProvider(BaseAirQualityProvider):
                             if p_name in ("NO2", "SO2", "O3") and (raw_val < 0 or raw_val > 1000.0):
                                 continue
 
+                            ts_to_use = obs_time or now_iso
+
+                            # Timestamp-based sensor deduplication: Always retain the freshest observation
+                            if p_name in pollutants:
+                                existing_ts = pollutants[p_name].timestamp
+                                if ts_to_use <= existing_ts:
+                                    continue
+
                             m = AirMeasurement(
                                 pollutant=p_name,
                                 value=round(raw_val, 1),
                                 unit=unit_str,
-                                timestamp=obs_time or now_iso,
+                                timestamp=ts_to_use,
                                 station_id=loc_id,
                                 station_name=name,
                                 latitude=st_lat,
@@ -114,7 +143,7 @@ class OpenAQProvider(BaseAirQualityProvider):
                                 source="OpenAQ",
                                 quality="valid"
                             )
-                            pollutants[m.pollutant] = m
+                            pollutants[p_name] = m
                         except Exception:
                             pass
         except Exception as e:
@@ -188,10 +217,17 @@ class OpenAQProvider(BaseAirQualityProvider):
                     logger.info("OpenAQ API returned 0 locations for coordinates.")
                     return self._get_stale_or_empty(cache_key)
 
+                # Sort candidates so stations reporting the most recent telemetry are fetched first
+                def _extract_last_dt(l: dict) -> str:
+                    dt = l.get("datetimeLast", {})
+                    return dt.get("utc") if isinstance(dt, dict) else (str(dt) if dt else "")
+
+                sorted_locs = sorted(results, key=_extract_last_dt, reverse=True)
+
                 # Fetch latest observations in parallel across candidate stations
                 tasks = [
                     self._fetch_single_station_latest(client, loc, now_iso)
-                    for loc in results
+                    for loc in sorted_locs[:8]
                 ]
                 gathered = await asyncio.gather(*tasks)
                 stations = [s for s in gathered if s is not None]

@@ -184,6 +184,8 @@ def _generate_grounded_fallback_response(
     return AskAriseVerdictResponse(
         verdict=verdict,
         headline=headline,
+        aqi=aqi,
+        category=category,
         why=why,
         do=do,
         best_window=best_window,
