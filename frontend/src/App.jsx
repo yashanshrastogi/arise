@@ -414,7 +414,10 @@ export default function App() {
               </p>
 
               <div className="space-y-2">
-                <Watchlist items={d.watchlist} />
+                <Watchlist
+                  items={d.watchlist}
+                  onSelect={(lat, lon, name) => setSelectedCoords({ lat, lon, name })}
+                />
               </div>
             </div>
 
