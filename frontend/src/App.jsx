@@ -394,7 +394,11 @@ export default function App() {
         <section id="ask" className="grid grid-cols-1 lg:grid-cols-12 gap-6 scroll-mt-24">
           {/* Left: Ask Arise AI Assistant */}
           <div className="lg:col-span-8 flex flex-col">
-            <AskArise replies={d.chatReplies} />
+            <AskArise
+              lat={selectedCoords.lat}
+              lon={selectedCoords.lon}
+              demo={demoMode}
+            />
           </div>
 
           {/* Right: Personal Watchlist & Alerts */}

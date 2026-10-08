@@ -1,0 +1,47 @@
+"""
+Canonical Pydantic schemas for Strands Ask Arise Agent.
+Enforces structured output validation conforming to Phase 2 requirements.
+"""
+
+from typing import List, Literal, Optional
+from pydantic import BaseModel, Field
+
+
+class AskAriseVerdictResponse(BaseModel):
+    """
+    Structured output schema for Ask Arise environmental copilot.
+    The LLM/agent must return this exact structure, grounded strictly in tool data.
+    """
+    verdict: Literal["GO", "BE_SMART", "CUT_BACK", "STAY_IN"] = Field(
+        description="Authoritative deterministic verdict (GO, BE_SMART, CUT_BACK, STAY_IN)."
+    )
+    headline: str = Field(
+        description="Clear, concise one-sentence plain English answer to the user's question."
+    )
+    why: List[str] = Field(
+        default_factory=list,
+        description="Bulleted environmental reasons grounded in air, weather, or satellite telemetry."
+    )
+    do: List[str] = Field(
+        default_factory=list,
+        description="Actionable precautions or activity guidance (not medical advice)."
+    )
+    best_window: str = Field(
+        description="Forecast-derived best outdoor window (e.g. '3 PM – 5 PM') or 'No recommended outdoor window'."
+    )
+    recheck_at: str = Field(
+        description="Time to recheck air quality (e.g. '4:00 PM')."
+    )
+    sources: List[str] = Field(
+        default_factory=list,
+        description="Telemetry sources backing this explanation (e.g., CPCB, OpenAQ, Open-Meteo, NASA FIRMS)."
+    )
+
+
+class AskAriseRequest(BaseModel):
+    """User query request payload."""
+    question: str = Field(..., min_length=1, max_length=1000)
+    lat: float = Field(default=28.6139, ge=-90.0, le=90.0)
+    lon: float = Field(default=77.2090, ge=-180.0, le=180.0)
+    persona: str = Field(default="General Public")
+    demo: bool = Field(default=False)

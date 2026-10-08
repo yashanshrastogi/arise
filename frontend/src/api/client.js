@@ -91,3 +91,22 @@ export async function comparePlaces(places, demo = false) {
   }
   return null;
 }
+
+export async function askAriseChat({ question, lat = 28.6139, lon = 77.2090, persona = 'General Public', demo = false } = {}) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, lat, lon, persona, demo }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    console.warn(`Backend /chat returned status ${res.status}`);
+  } catch (err) {
+    console.warn('Failed to post /chat, falling back:', err.message);
+  }
+  return null;
+}
+

@@ -13,6 +13,7 @@ from app.api.routes.fire import router as fire_router
 from app.api.routes.environment import router as environment_router
 from app.api.routes.verdict import router as verdict_router
 from app.api.routes.compare import router as compare_router
+from app.api.routes.chat import router as chat_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("arise.api")
@@ -59,3 +60,4 @@ app.include_router(fire_router)
 app.include_router(environment_router)
 app.include_router(verdict_router)
 app.include_router(compare_router)
+app.include_router(chat_router)
