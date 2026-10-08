@@ -29,10 +29,13 @@ class Settings(BaseModel):
     # Caching & Timeouts
     CACHE_TTL_SECONDS: int = Field(default=1800, ge=1, le=86400)
     CACHE_DIR: str = "data/cache"
+    DYNAMODB_TABLE_NAME: str = "arise-cache"
     API_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0.0, le=60.0)
     
-    # Operational Flags
+    # Operational & Observability Flags
     DEMO_MODE_DEFAULT: bool = False
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,*"
+    POWERTOOLS_SERVICE_NAME: str = "arise-api"
     
     # AI / LLM Integration
     LLM_PROVIDER: Literal["local", "ollama", "bedrock"] = "local"
@@ -103,8 +106,11 @@ def get_settings() -> Settings:
         CPCB_API_KEY=os.getenv("CPCB_API_KEY") or None,
         CACHE_TTL_SECONDS=int(os.getenv("CACHE_TTL_SECONDS", "1800")),
         CACHE_DIR=os.getenv("CACHE_DIR", "data/cache"),
+        DYNAMODB_TABLE_NAME=os.getenv("DYNAMODB_TABLE_NAME", "arise-cache"),
         API_TIMEOUT_SECONDS=float(os.getenv("API_TIMEOUT_SECONDS", "10.0")),
         DEMO_MODE_DEFAULT=os.getenv("DEMO_MODE_DEFAULT", "false").lower() in ("true", "1", "yes"),
+        CORS_ORIGINS=os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,*"),
+        POWERTOOLS_SERVICE_NAME=os.getenv("POWERTOOLS_SERVICE_NAME", "arise-api"),
         LLM_PROVIDER=os.getenv("LLM_PROVIDER", "local"),
         BEDROCK_MODEL_ID=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0"),
         OLLAMA_HOST=os.getenv("OLLAMA_HOST", "http://localhost:11434"),

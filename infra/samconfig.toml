@@ -1,0 +1,30 @@
+# AWS SAM configuration file for Arise Phase 3
+version = 0.1
+
+[default]
+[default.build]
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate]
+[default.validate.parameters]
+lint = true
+
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "arise-production"
+s3_prefix = "arise-production"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Stage=\"prod\"",
+    "CorsOrigins=\"http://localhost:5173,*\""
+]
+
+[default.local_start_api]
+[default.local_start_api.parameters]
+port = 8000
+host = "127.0.0.1"
+warm_containers = "EAGER"

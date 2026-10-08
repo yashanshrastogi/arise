@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Arise - Delhi-NCR Environmental Intelligence Platform
+  Phase 3 Serverless Infrastructure: FastAPI API Gateway, DynamoDB Cache,
+  Scheduled Telemetry Ingestion via EventBridge Scheduler, and Bedrock AI Integration.
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+    Tracing: Active
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: arise
+        POWERTOOLS_LOG_LEVEL: INFO
+
+Parameters:
+  Stage:
+    Type: String
+    Default: prod
+    Description: Deployment stage environment (prod, dev, staging).
+
+  OpenAQAKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional OpenAQ v3 API key for elevated rate limits.
+
+  FirmsMapKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional NASA FIRMS MAP_KEY for satellite fire detection.
+
+  CorsOrigins:
+    Type: String
+    Default: "http://localhost:5173,*"
+    Description: Allowed CORS origins separated by comma.
+
+Resources:
+  # ==============================================================
+  # 1. DynamoDB Cache Table (with epoch TTL for cleanup)
+  # ==============================================================
+  CacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "arise-cache-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl_epoch
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: Arise
+        - Key: Stage
+          Value: !Ref Stage
+
+  # ==============================================================
+  # 2. HTTP API Gateway (FastAPI Proxy)
+  # ==============================================================
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Stage
+      CorsConfiguration:
+        AllowOrigins:
+          - "http://localhost:5173"
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+          - X-Request-ID
+        MaxAge: 300
+
+  # ==============================================================
+  # 3. Main API Lambda (FastAPI + Mangum Adapter)
+  # ==============================================================
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: app.main_lambda.handler
+      Description: Core Arise FastAPI serverless backend adapter.
+      Environment:
+        Variables:
+          MODE: aws
+          DYNAMODB_TABLE_NAME: !Ref CacheTable
+          OPENAQ_API_KEY: !Ref OpenAQAKey
+          FIRMS_MAP_KEY: !Ref FirmsMapKey
+          CORS_ORIGINS: !Ref CorsOrigins
+          LLM_PROVIDER: bedrock
+          BEDROCK_MODEL_ID: us.amazon.nova-lite-v1:0
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CacheTable
+        - Statement:
+            - Sid: BedrockInvokePolicy
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "arn:aws:bedrock:*::foundation-model/*"
+      Events:
+        ProxyRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+        RootRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /
+            Method: ANY
+
+  # ==============================================================
+  # 4. Scheduled Telemetry Ingestion Lambda
+  # ==============================================================
+  IngestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend
+      Handler: app.lambdas.ingestion.handler
+      Timeout: 60
+      MemorySize: 512
+      Description: Scheduled telemetry ingestion pipeline for OpenAQ, Open-Meteo, and FIRMS.
+      Environment:
+        Variables:
+          MODE: aws
+          DYNAMODB_TABLE_NAME: !Ref CacheTable
+          OPENAQ_API_KEY: !Ref OpenAQAKey
+          FIRMS_MAP_KEY: !Ref FirmsMapKey
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CacheTable
+
+  # ==============================================================
+  # 5. EventBridge Scheduler IAM Execution Role
+  # ==============================================================
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeIngestionLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt IngestionFunction.Arn
+
+  # ==============================================================
+  # 6. EventBridge Scheduler Schedule (Every 30 Minutes)
+  # ==============================================================
+  IngestionSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "arise-ingestion-schedule-${Stage}"
+      Description: Ingests real-time environmental telemetry every 30 minutes into DynamoDB.
+      ScheduleExpression: "rate(30 minutes)"
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: !GetAtt IngestionFunction.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+          MaximumEventAgeInSeconds: 300
+
+Outputs:
+  ApiGatewayUrl:
+    Description: HTTP API Gateway endpoint base URL for frontend integration.
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
+
+  CacheTableName:
+    Description: DynamoDB Cache Table name.
+    Value: !Ref CacheTable
+
+  ApiFunctionArn:
+    Description: Primary API Lambda Function ARN.
+    Value: !GetAtt ApiFunction.Arn
+
+  IngestionFunctionArn:
+    Description: Ingestion Lambda Function ARN.
+    Value: !GetAtt IngestionFunction.Arn
+
+  IngestionScheduleName:
+    Description: EventBridge Scheduler schedule name.
+    Value: !Ref IngestionSchedule
