@@ -1,7 +1,15 @@
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional, Literal
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+# Load .env from backend directory and project root
+load_dotenv()
+_backend_dir = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_backend_dir / ".env")
+load_dotenv(_backend_dir.parent / ".env")
 
 
 class Settings(BaseModel):

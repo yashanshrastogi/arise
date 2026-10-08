@@ -65,8 +65,10 @@ export default function PollutantCards({ pollutants }) {
               </div>
 
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-xl font-black t1 leading-tight">{p.value}</span>
-                <span className="text-[10px] font-bold tm">{p.unit}</span>
+                <span className="text-xl font-black t1 leading-tight">
+                  {p.value !== undefined && p.value !== null ? p.value : 'Unavailable'}
+                </span>
+                {p.value !== undefined && p.value !== null && <span className="text-[10px] font-bold tm">{p.unit}</span>}
               </div>
 
               <div className="mt-1">

@@ -33,7 +33,7 @@ const NAV_ITEMS = [
 export default function App() {
   const [dark, setDark] = useState(false);
   const [activeNav, setActiveNav] = useState('today');
-  const [demoMode, setDemoMode] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
   const [healthTipsOpen, setHealthTipsOpen] = useState(false);
   const [selectedCoords, setSelectedCoords] = useState({ lat: 28.6139, lon: 77.2090, name: 'Delhi-NCR Central' });
   const [envData, setEnvData] = useState(null);
@@ -57,7 +57,7 @@ export default function App() {
         });
         if (active && payload) {
           setEnvData(payload);
-          setLiveStatus(payload.is_demo ? 'demo' : (payload.data_status || 'live'));
+          setLiveStatus((payload.isDemo || payload.is_demo) ? 'demo' : (payload.isStale ? 'stale' : 'live'));
         } else if (active) {
           setLiveStatus(demoMode ? 'demo' : 'offline');
         }
@@ -196,15 +196,15 @@ export default function App() {
               id="btn-demo-mode"
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all hover:scale-105 active:scale-95"
               style={{
-                background: demoMode ? '#E5484D18' : '#2EB87218',
-                borderColor: demoMode ? '#E5484D50' : '#2EB87250',
-                color: demoMode ? '#E5484D' : '#2EB872',
+                background: demoMode ? '#F28C2818' : (d?.isStale ? '#F5C54218' : '#2EB87218'),
+                borderColor: demoMode ? '#F28C2850' : (d?.isStale ? '#F5C54250' : '#2EB87250'),
+                color: demoMode ? '#F28C28' : (d?.isStale ? '#D97706' : '#2EB872'),
               }}
               title="Toggle Live Telemetry vs Demo Scenario"
             >
-              <span className={`w-2 h-2 rounded-full ${demoMode ? 'bg-[#E5484D] animate-ping' : 'bg-[#2EB872]'}`} />
+              <span className={`w-2 h-2 rounded-full ${demoMode ? 'bg-[#F28C28]' : (d?.isStale ? 'bg-[#F5C542]' : 'bg-[#2EB872] animate-pulse')}`} />
               <span>
-                {loadingEnv ? 'Refreshing...' : demoMode ? 'Demo: Bad Air (AQI 312)' : (liveStatus === 'live' ? 'Live Telemetry (CPCB/OpenAQ)' : 'Live Mode (AQI 128)')}
+                {loadingEnv ? 'Refreshing...' : demoMode ? 'Demo: Severe Event' : (d?.isStale ? `Stale Cache (AQI ${d.aqi})` : `Live Telemetry (AQI ${d.aqi})`)}
               </span>
             </button>
 

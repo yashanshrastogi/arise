@@ -19,6 +19,7 @@ def compute_best_outdoor_window(points: List[ForecastPoint]) -> Tuple[str, List[
     Data-driven best outdoor window calculator.
     Evaluates forecast points for the lowest combined environmental risk (AQI + weather).
     Tags winning points with best_window=True and returns summary text.
+    Never hardcodes fixed hours.
     """
     if not points:
         return "No recommended outdoor window", points
@@ -28,8 +29,6 @@ def compute_best_outdoor_window(points: List[ForecastPoint]) -> Tuple[str, List[
     if not future_points:
         future_points = points
 
-    # Score each point: Lower score is better
-    # Risk factors: AQI (primary weight), rain > 40%, wind extremes
     best_candidate_idx = -1
     lowest_risk = 999999.0
 
@@ -40,7 +39,7 @@ def compute_best_outdoor_window(points: List[ForecastPoint]) -> Tuple[str, List[
         avg_aqi = sum(p.aqi or 250 for p in window) / window_size
         avg_rain = sum(p.rain_probability for p in window) / window_size
         
-        # Risk score formula
+        # Risk score formula: AQI + rain penalty
         risk_score = avg_aqi + (avg_rain * 1.5)
         if risk_score < lowest_risk:
             lowest_risk = risk_score
@@ -54,8 +53,8 @@ def compute_best_outdoor_window(points: List[ForecastPoint]) -> Tuple[str, List[
         if (
             best_candidate_idx != -1
             and not p_copy.past
+            and p in future_points
             and future_points.index(p) in range(best_candidate_idx, best_candidate_idx + window_size)
-            if p in future_points else False
         ):
             p_copy.best_window = True
             window_labels.append(p_copy.time_label)
@@ -67,8 +66,10 @@ def compute_best_outdoor_window(points: List[ForecastPoint]) -> Tuple[str, List[
         window_str = f"{window_labels[0]} – {window_labels[-1]}"
     elif lowest_risk >= 350:
         window_str = "No recommended outdoor window"
+    elif window_labels:
+        window_str = f"{window_labels[0]} – {window_labels[-1]}"
     else:
-        window_str = "3 PM – 5 PM"
+        window_str = "No recommended outdoor window"
 
     return window_str, updated_points
 
@@ -121,16 +122,10 @@ class ForecastService:
             for p in tagged_points
         ]
 
-        # 7-Day outlook
-        seven_day_data = [
-            {"day": "Today", "aqi": current_aqi, "temp": 28, "rainProb": 10, "windSpeed": 3.2, "status": "Very Poor", "condition": "Haze"},
-            {"day": "Tomorrow", "aqi": max(50, current_aqi - 15), "temp": 29, "rainProb": 15, "windSpeed": 4.0, "status": "Poor", "condition": "Haze"},
-            {"day": "Sat", "aqi": max(50, current_aqi - 30), "temp": 29, "rainProb": 20, "windSpeed": 4.5, "status": "Poor", "condition": "Haze"},
-            {"day": "Sun", "aqi": max(50, current_aqi - 50), "temp": 28, "rainProb": 25, "windSpeed": 5.2, "status": "Poor", "condition": "Partly Cloudy"},
-            {"day": "Mon", "aqi": max(50, current_aqi - 70), "temp": 27, "rainProb": 30, "windSpeed": 6.0, "status": "Poor", "condition": "Breezy"},
-            {"day": "Tue", "aqi": max(50, current_aqi - 100), "temp": 27, "rainProb": 40, "windSpeed": 6.8, "status": "Moderate", "condition": "Passing Shower"},
-            {"day": "Wed", "aqi": max(50, current_aqi - 125), "temp": 26, "rainProb": 20, "windSpeed": 5.5, "status": "Moderate", "condition": "Clear Sun"},
-        ]
+        # 7-Day outlook from real Open-Meteo daily data
+        seven_day_data = await self.weather_provider.get_7day_outlook(
+            lat, lon, current_aqi=current_aqi, force_demo=force_demo
+        )
 
         return {
             "hourly": hourly_chart_data,

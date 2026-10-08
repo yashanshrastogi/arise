@@ -60,26 +60,40 @@ class EnvironmentService:
         pollutants_map: Dict[str, AirMeasurement] = {}
         for pol, val in pollutant_values.items():
             unit = "mg/m³" if pol == "CO" else "µg/m³"
+            sub_idx = aqi_result.sub_indices.get(pol)
             pollutants_map[pol] = AirMeasurement(
                 pollutant=pol,
-                value=val,
+                value=round(val, 1),
                 unit=unit,
                 timestamp=now_iso,
                 source=stations[0].source if stations else "DEMO",
-                quality="valid"
+                quality="valid",
+                aqi_sub_index=sub_idx
             )
 
         # 4. Meteorology
-        weather = await self.weather_provider.get_current_weather(lat, lon, force_demo=force_demo)
+        try:
+            weather = await self.weather_provider.get_current_weather(lat, lon, force_demo=force_demo)
+        except Exception as e:
+            logger.warning(f"Error from weather provider: {e}")
+            weather = None
 
         # 5. Forecast & Best Window
-        forecast_bundle = await self.forecast_service.get_forecast(
-            lat, lon, current_aqi=aqi_result.aqi, force_demo=force_demo
-        )
-        best_window = forecast_bundle.get("bestWindow", "3 PM – 5 PM")
+        try:
+            forecast_bundle = await self.forecast_service.get_forecast(
+                lat, lon, current_aqi=aqi_result.aqi, force_demo=force_demo
+            )
+            best_window = forecast_bundle.get("bestWindow", "No recommended outdoor window")
+        except Exception as e:
+            logger.warning(f"Error from forecast service: {e}")
+            best_window = "No recommended outdoor window"
 
         # 6. Satellite Fire Signals
-        fire_signals = await self.fire_provider.get_regional_fire_signals(lat, lon, force_demo=force_demo)
+        try:
+            fire_signals = await self.fire_provider.get_regional_fire_signals(lat, lon, force_demo=force_demo)
+        except Exception as e:
+            logger.warning(f"Error from fire provider: {e}")
+            fire_signals = []
 
         # 7. Intermediate Snapshot
         snapshot = EnvironmentalSnapshot(
@@ -97,6 +111,7 @@ class EnvironmentService:
             best_window=best_window,
             recheck_at="4:00 PM",
             is_demo=force_demo or any(s.source == "DEMO" for s in stations),
+            is_stale=any(s.is_stale for s in stations) or (weather.is_stale if weather else False),
             data_quality="reliable" if estimation.estimation_quality in ("high", "exact_match") else "degraded"
         )
 
@@ -126,12 +141,13 @@ class EnvironmentService:
         for name in ["PM2.5", "PM10", "NO2", "SO2", "CO", "O3"]:
             m = snapshot.pollutants.get(name)
             if m:
-                cat, _ = get_aqi_category(m.aqi_sub_index or snapshot.aqi)
+                sub_val = m.aqi_sub_index if m.aqi_sub_index is not None else 50
+                cat, _ = get_aqi_category(sub_val)
                 pollutants_ui.append({
                     "name": "NO₂" if name == "NO2" else ("SO₂" if name == "SO2" else ("O₃" if name == "O3" else name)),
                     "value": m.value,
                     "unit": m.unit,
-                    "aqi": m.aqi_sub_index or (snapshot.aqi if name == snapshot.dominant_pollutant else 50),
+                    "aqi": sub_val,
                     "status": cat,
                     "pct": min(100, int((m.value / 150.0) * 100)) if name == "PM2.5" else min(100, int((m.value / 250.0) * 100)),
                     "dominant": (name == snapshot.dominant_pollutant),
@@ -193,6 +209,7 @@ class EnvironmentService:
             "confidence": "High" if snapshot.data_quality == "reliable" else "Moderate",
             "isDemo": snapshot.is_demo,
             "isStale": snapshot.is_stale,
+            "sources": snapshot.sources,
             "why": snapshot.why_factors,
             "weather": weather_dict,
             "pollutants": pollutants_ui,

@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from strands import tool
 
 from app.services.environment import EnvironmentService
+from app.services.forecast import ForecastService
 from app.services.compare_places import ComparePlacesService
 
 
@@ -22,7 +23,7 @@ def _run_async(coro):
     if loop and loop.is_running():
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, coro).result(timeout=10.0)
+            return pool.submit(asyncio.run, coro).result(timeout=15.0)
     else:
         return asyncio.run(coro)
 
@@ -59,18 +60,20 @@ def get_forecast(lat: float = 28.6139, lon: float = 77.2090, demo: bool = False)
     Retrieve forecast timeline and lowest-risk outdoor activity window.
     """
     env_svc = EnvironmentService()
+    fc_svc = ForecastService()
     snapshot = _run_async(env_svc.get_environmental_snapshot(lat=lat, lon=lon, force_demo=demo))
+    bundle = _run_async(fc_svc.get_forecast(lat=lat, lon=lon, current_aqi=snapshot.aqi, force_demo=demo))
     return {
-        "best_window": snapshot.best_window or "3 PM – 5 PM",
+        "best_window": bundle.get("bestWindow", snapshot.best_window or "No recommended outdoor window"),
         "recheck_at": snapshot.recheck_at or "4:00 PM",
         "forecast_points": [
             {
-                "hour": pt.timestamp.strftime("%I %p"),
-                "aqi": pt.aqi,
-                "temp": pt.temperature,
-                "rain_prob": pt.rain_probability,
+                "hour": pt.get("time"),
+                "aqi": pt.get("aqi"),
+                "temp": pt.get("temp"),
+                "rain_prob": pt.get("rainProb"),
             }
-            for pt in snapshot.forecast[:8]
+            for pt in bundle.get("hourly", [])[:8]
         ],
     }
 
