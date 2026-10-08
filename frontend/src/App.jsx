@@ -108,14 +108,27 @@ export default function App() {
               e.preventDefault();
               scrollToSection('today');
             }}
-            className="flex items-center select-none cursor-pointer group"
+            className="flex items-center gap-3 select-none cursor-pointer group flex-shrink-0"
             title="Arise · Delhi-NCR Air & Weather Intelligence Platform"
           >
             <img
-              src={dark ? "/logo-dark.png" : "/logo.png"}
-              alt="Arise · Air & Weather Intelligence Platform"
-              className="h-10 sm:h-11 w-auto object-contain transition-transform group-hover:scale-[1.02]"
+              src="/icon.png"
+              alt="Arise Icon"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-contain shadow-md shadow-indigo-500/20 transition-transform group-hover:scale-105"
             />
+            <div className="flex flex-col justify-center">
+              <div className="flex items-center gap-2 leading-none">
+                <span className="text-xl sm:text-2xl font-black tracking-tight t1">
+                  Arise
+                </span>
+                <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo/10 text-indigo border border-indigo/20">
+                  Delhi-NCR
+                </span>
+              </div>
+              <div className="text-[11px] sm:text-xs font-semibold tm mt-1 tracking-normal">
+                Air &amp; Weather Intelligence Platform
+              </div>
+            </div>
           </a>
 
           {/* Navigation Pills */}
