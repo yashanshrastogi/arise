@@ -619,7 +619,7 @@ export default function AirMap({
                 Thermal Anomaly (${f.intensity.toUpperCase()})
               </div>
               <div style="font-size: 10px; font-weight: 600; color: #64748b; margin-top: 4px; line-height: 1.35;">
-                Detected upwind in agricultural belt. Smoke drift transported downwind towards Delhi-NCR basin under current calm surface winds.
+                Detected in monitored upwind region. Satellite fire signals reflect thermal activity; environmental causation is evaluated with wind dispersion telemetry.
               </div>
               <div style="font-size: 9px; font-weight: 700; color: #94a3b8; margin-top: 4px;">
                 Lat: ${f.lat.toFixed(2)}, Lng: ${f.lng.toFixed(2)} · NASA FIRMS

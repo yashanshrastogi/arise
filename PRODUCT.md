@@ -6,7 +6,7 @@ Not "what is the AQI" but "should I go out, what should my kid/school do, and wh
 Child/Parent, Elderly/Asthma, Outdoor worker, Athlete, School admin. Non-technical. Desktop Chrome first.
 ## Screens
 1. Today: AQI gauge + big verdict banner (GO / BE_SMART / CUT_BACK / STAY_IN) + one-sentence action + best time window + "recheck at".
-2. Map: Leaflet map, GPS pin, station bubbles (PM2.5/PM10), AQI colour zone, fire hotspot layer, layer toggles (eye icons), search + "Use my location".
+2. Map: Google Maps JavaScript API with custom clean styling, GPS pin, station bubbles (PM2.5/PM10), AQI colour zone, fire hotspot layer, layer toggles, search + "Use my location".
 3. Forecast: hourly chart, solid past / dashed future, scrub tooltip, green "best window" band.
 4. Why panel: pollutant cards (status word, colour dot, value, mini ring); dominant pollutant highlighted; fire-signal line.
 5. Ask Arise (AI chat): side panel, one-tap chips, answers rendered as verdict cards with sources + timestamps.

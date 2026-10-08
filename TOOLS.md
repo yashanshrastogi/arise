@@ -2,7 +2,7 @@
 - OS: WSL2 Ubuntu 24.04. Project root: ~/arise (never use /mnt/c).
 - Python 3.12.3 in ~/arise/.venv. Always `source .venv/bin/activate` first.
 - Installed in .venv: strands-agents, fastapi, boto3, uvicorn, httpx, python-dotenv, awscli-local.
-- Node 24.21 (nvm), npm 11. Frontend = React + Vite + Tailwind + Leaflet + Recharts.
+- Node 24.21 (nvm), npm 11. Frontend = React + Vite + Tailwind + Google Maps JavaScript API + Recharts.
 - Docker works without sudo. AWS CLI 2.37, SAM CLI 1.167, lstk 1.3 (LocalStack), Ollama 0.40.
 - No AWS credentials configured yet. Region for AWS = us-east-1.
 ## Rules
