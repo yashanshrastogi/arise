@@ -19,8 +19,8 @@ export default function MapCard({ data }) {
       <div className="flex-1 w-full h-full relative z-0">
         <MapContainer center={[28.6139, 77.2090]} zoom={11} scrollWheelZoom={false} className="w-full h-full z-0">
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           {data.stations.map(st => (
              <CircleMarker 

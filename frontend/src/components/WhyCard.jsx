@@ -1,21 +1,42 @@
 import React from 'react';
-import { Info } from 'lucide-react';
+import { Target, Activity, Flame, CloudOff } from 'lucide-react';
 
 export default function WhyCard({ details }) {
+  // Mapping icons/colors to the specific intelligence lines for a more dashboard feel
+  const getIntelligenceConfig = (idx) => {
+    switch(idx) {
+      case 0: return { icon: <Target size={16} />, color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-500/10" };
+      case 1: return { icon: <Activity size={16} />, color: "text-orange-500", bg: "bg-orange-50 dark:bg-orange-500/10" };
+      case 2: return { icon: <Flame size={16} />, color: "text-red-500", bg: "bg-red-50 dark:bg-red-500/10" };
+      case 3: return { icon: <CloudOff size={16} />, color: "text-slate-500", bg: "bg-slate-100 dark:bg-slate-500/10" };
+      default: return { icon: <Target size={16} />, color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-500/10" };
+    }
+  };
+
   return (
-    <div className="bg-card text-card-foreground p-6 rounded-[24px] shadow-sm border border-border">
-      <div className="flex items-center gap-2 mb-4">
-         <Info size={18} className="text-indigo-500" />
-         <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Intelligence Brief</h2>
+    <div className="bg-card text-card-foreground p-8 rounded-[32px] shadow-sm border border-border">
+      <div className="flex items-center gap-3 mb-6 border-b border-border pb-4">
+         <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
+           <Activity size={18} className="text-slate-600 dark:text-slate-300" />
+         </div>
+         <div>
+           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Intelligence Brief</h2>
+           <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-200">Environmental Factors</h3>
+         </div>
       </div>
-      <h3 className="text-xl font-bold mb-4">Why is the air bad?</h3>
-      <div className="space-y-3">
-        {details.map((detail, idx) => (
-          <div key={idx} className="flex gap-3 items-start">
-             <div className="mt-1 w-2 h-2 rounded-full bg-orange-500 flex-shrink-0"></div>
-             <p className="text-sm font-medium leading-relaxed">{detail}</p>
-          </div>
-        ))}
+      
+      <div className="space-y-4">
+        {details.map((detail, idx) => {
+          const config = getIntelligenceConfig(idx);
+          return (
+            <div key={idx} className="flex gap-4 items-center group">
+               <div className={`p-3 rounded-xl ${config.bg} ${config.color} shrink-0 transition-transform group-hover:scale-105`}>
+                 {config.icon}
+               </div>
+               <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 leading-snug">{detail}</p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

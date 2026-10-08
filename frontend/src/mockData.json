@@ -44,7 +44,7 @@
   "whyDetails": [
     "PM2.5 is currently dominant",
     "Regional pollution conditions are unfavorable",
-    "Fire activity detected in monitored upwind regions",
+    "Fire signal detected in monitored upwind regions",
     "Atmospheric conditions may limit dispersion"
   ],
   "chatReplies": [

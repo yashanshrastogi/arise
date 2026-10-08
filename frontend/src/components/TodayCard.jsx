@@ -1,45 +1,53 @@
 import React from 'react';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { Clock, AlertTriangle, Wind } from 'lucide-react';
 
 export default function TodayCard({ data }) {
   return (
-    <div className="bg-card text-card-foreground rounded-[24px] p-6 shadow-sm border border-border flex flex-col justify-between">
-      <div>
-        <div className="flex justify-between items-start mb-6">
+    <div className="bg-card text-card-foreground rounded-[32px] p-8 shadow-sm border border-border flex flex-col justify-between relative overflow-hidden">
+      {/* Background aesthetic gradient */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-red-aqi/5 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
+      
+      <div className="z-10">
+        <div className="flex justify-between items-start mb-8">
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Delhi-NCR</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-5xl font-bold tracking-tight">{data.aqi}</span>
-              <div className="bg-red-aqi/10 text-red-aqi px-3 py-1 rounded-full text-sm font-semibold">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Delhi-NCR</h2>
+            <div className="flex items-baseline gap-3">
+              <span className="text-7xl font-black tracking-tighter text-slate-800 dark:text-slate-100">{data.aqi}</span>
+              <div className="bg-red-aqi/15 text-red-aqi px-4 py-1.5 rounded-full text-sm font-bold tracking-wide uppercase">
                 {data.status}
               </div>
             </div>
           </div>
-          <div className="w-16 h-16 rounded-full border-4 border-red-aqi flex items-center justify-center">
-             <span className="font-bold text-lg text-red-aqi">AQI</span>
-          </div>
         </div>
 
-        <div className="bg-red-aqi text-white rounded-2xl p-4 mb-6">
-          <h1 className="text-3xl font-black mb-1">{data.verdict}</h1>
-          <p className="text-white/90 font-medium">{data.recommendation}</p>
+        <div className="bg-gradient-to-br from-red-aqi to-[#8B1E3F] text-white rounded-[24px] p-6 mb-8 shadow-lg shadow-red-aqi/20">
+          <h1 className="text-4xl font-black mb-3 tracking-tight">{data.verdict}</h1>
+          <p className="text-white/95 font-medium text-lg leading-snug">{data.recommendation}</p>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase mb-1">Why?</h3>
-            <p className="text-sm font-medium">{data.why}</p>
+        <div className="space-y-6">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
+            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <AlertTriangle size={14} className="text-orange-500" />
+              Primary Reason
+            </h3>
+            <p className="text-base font-semibold leading-relaxed text-slate-700 dark:text-slate-300">
+              {data.why}
+            </p>
           </div>
-          <div className="flex justify-between border-t border-border pt-4 mt-2">
-             <div>
-                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-1 flex items-center gap-1">
-                  <Clock size={14} /> Best Window
+          
+          <div className="grid grid-cols-2 gap-4 pt-2">
+             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
+                <h3 className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1.5">
+                  <Clock size={14} className="text-green-aqi" /> Best Window
                 </h3>
-                <p className="font-medium text-sm text-green-aqi">{data.bestWindow}</p>
+                <p className="font-bold text-base text-slate-800 dark:text-slate-200">{data.bestWindow}</p>
              </div>
-             <div>
-                <h3 className="text-xs font-semibold text-slate-500 uppercase mb-1">Recheck</h3>
-                <p className="font-medium text-sm">{data.recheckAt}</p>
+             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
+                <h3 className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1.5">
+                  <Wind size={14} className="text-indigo-500" /> Dominant
+                </h3>
+                <p className="font-bold text-base text-slate-800 dark:text-slate-200">{data.dominantPollutant}</p>
              </div>
           </div>
         </div>
