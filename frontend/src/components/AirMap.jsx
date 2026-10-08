@@ -160,6 +160,7 @@ export default function AirMap({
   dark = false,
   weather = null,
   traffic = null,
+  onLocationSelect = null,
 }) {
   const mapRef = useRef(null);
   const googleMapInstance = useRef(null);
@@ -288,6 +289,10 @@ export default function AirMap({
           const lat = e.latLng.lat();
           const lng = e.latLng.lng();
 
+          if (onLocationSelect) {
+            onLocationSelect(lat, lng, `${lat.toFixed(3)}°, ${lng.toFixed(3)}°`);
+          }
+
           // Compute nearest station or regional estimation
           let nearestSt = stations[0];
           let minDist = 999;
@@ -392,6 +397,9 @@ export default function AirMap({
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
           setUserLocation({ lat, lng });
+          if (onLocationSelect) {
+            onLocationSelect(lat, lng, 'Device Location');
+          }
           if (googleMapInstance.current) {
             googleMapInstance.current.panTo({ lat, lng });
             googleMapInstance.current.setZoom(12);
@@ -430,6 +438,9 @@ export default function AirMap({
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setUserLocation({ lat, lng });
+        if (onLocationSelect) {
+          onLocationSelect(lat, lng, 'Device Location');
+        }
 
         if (googleMapInstance.current) {
           googleMapInstance.current.panTo({ lat, lng });
@@ -560,6 +571,9 @@ export default function AirMap({
 
         marker.addListener('click', () => {
           setSelectedStationName(st.name);
+          if (onLocationSelect) {
+            onLocationSelect(st.lat, st.lng, st.name);
+          }
           infoWindow.setContent(`
             <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 8px; min-width: 170px;">
               <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">

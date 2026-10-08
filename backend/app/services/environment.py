@@ -168,12 +168,15 @@ class EnvironmentService:
 
         # Weather dict
         weather_dict = snapshot.weather.model_dump() if snapshot.weather else {}
+        weather_dict["temp"] = snapshot.weather.temperature if snapshot.weather else 28
         weather_dict["feelsLike"] = snapshot.weather.feels_like if snapshot.weather else 30
         weather_dict["windSpeed"] = snapshot.weather.wind_speed if snapshot.weather else 3.2
         weather_dict["windDirection"] = snapshot.weather.wind_direction if snapshot.weather else "NW"
+        weather_dict["windDegrees"] = snapshot.weather.wind_degrees if snapshot.weather else 315
         weather_dict["rainProb"] = snapshot.weather.rain_probability if snapshot.weather else 10
         weather_dict["cloudCover"] = snapshot.weather.cloud_cover if snapshot.weather else 40
         weather_dict["condition"] = snapshot.weather.condition_text if snapshot.weather else "Hazy Sunshine"
+        weather_dict["icon"] = "🌤️"
         weather_dict["correlation"] = snapshot.weather.correlation_text if snapshot.weather else "Calm winds limiting dispersion."
 
         return {
@@ -181,7 +184,8 @@ class EnvironmentService:
             "updated": "Live Telemetry" if not snapshot.is_demo else "Saved Severe Event (Demo)",
             "aqi": snapshot.aqi,
             "status": snapshot.aqi_category,
-            "verdict": snapshot.verdict or "STAY IN",
+            "verdict": (snapshot.verdict or "STAY IN").replace("_", " "),
+            "verdictCode": snapshot.verdict or "STAY_IN",
             "recommendation": snapshot.recommendation or "Outdoor exposure should be minimized today.",
             "bestWindow": snapshot.best_window or "3 PM – 5 PM",
             "recheckAt": snapshot.recheck_at or "4:00 PM",

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import mockData from './mockData.json';
 import mockDataModerate from './mockDataModerate.json';
+import { fetchEnvironment } from './api/client';
 import AirMap from './components/AirMap';
 import AqiGauge from './components/AqiGauge';
 import WeatherCard from './components/WeatherCard';
@@ -34,13 +35,45 @@ export default function App() {
   const [activeNav, setActiveNav] = useState('today');
   const [demoMode, setDemoMode] = useState(true);
   const [healthTipsOpen, setHealthTipsOpen] = useState(false);
+  const [selectedCoords, setSelectedCoords] = useState({ lat: 28.6139, lon: 77.2090, name: 'Delhi-NCR Central' });
+  const [envData, setEnvData] = useState(null);
+  const [loadingEnv, setLoadingEnv] = useState(false);
+  const [liveStatus, setLiveStatus] = useState('demo');
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
 
-  // Demo mode toggle: dynamically loads the saved very-bad-air day or live moderate day
-  const d = demoMode ? mockData : mockDataModerate;
+  // Load environmental intelligence snapshot from backend
+  useEffect(() => {
+    let active = true;
+    async function loadData() {
+      setLoadingEnv(true);
+      try {
+        const payload = await fetchEnvironment({
+          lat: selectedCoords.lat,
+          lon: selectedCoords.lon,
+          demo: demoMode,
+        });
+        if (active && payload) {
+          setEnvData(payload);
+          setLiveStatus(payload.is_demo ? 'demo' : (payload.data_status || 'live'));
+        } else if (active) {
+          setLiveStatus(demoMode ? 'demo' : 'offline');
+        }
+      } catch (err) {
+        if (active) setLiveStatus(demoMode ? 'demo' : 'offline');
+      } finally {
+        if (active) setLoadingEnv(false);
+      }
+    }
+    loadData();
+    return () => { active = false; };
+  }, [selectedCoords.lat, selectedCoords.lon, demoMode]);
+
+  // Merge live backend data with fallback state
+  const fallbackData = demoMode ? mockData : mockDataModerate;
+  const d = envData ? { ...fallbackData, ...envData } : fallbackData;
 
   // Smooth scroll to section with dynamic sticky header offset calculation
   const scrollToSection = (id) => {
@@ -154,9 +187,12 @@ export default function App() {
 
           {/* Right Header Controls: Demo Toggle, Dark Mode, Profile/Auth */}
           <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Demo Mode Toggle */}
+            {/* Demo / Live Status Pill & Toggle */}
             <button
-              onClick={() => setDemoMode(!demoMode)}
+              onClick={() => {
+                setDemoMode(!demoMode);
+                setEnvData(null);
+              }}
               id="btn-demo-mode"
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all hover:scale-105 active:scale-95"
               style={{
@@ -164,10 +200,12 @@ export default function App() {
                 borderColor: demoMode ? '#E5484D50' : '#2EB87250',
                 color: demoMode ? '#E5484D' : '#2EB872',
               }}
-              title="Toggle Demo Mode: Saved Very-Bad Day (AQI 312) vs Live Moderate Day (AQI 128)"
+              title="Toggle Live Telemetry vs Demo Scenario"
             >
               <span className={`w-2 h-2 rounded-full ${demoMode ? 'bg-[#E5484D] animate-ping' : 'bg-[#2EB872]'}`} />
-              <span>{demoMode ? 'Demo: Bad Air (AQI 312)' : 'Live: Moderate (AQI 128)'}</span>
+              <span>
+                {loadingEnv ? 'Refreshing...' : demoMode ? 'Demo: Bad Air (AQI 312)' : (liveStatus === 'live' ? 'Live Telemetry (CPCB/OpenAQ)' : 'Live Mode (AQI 128)')}
+              </span>
             </button>
 
             {/* Dark/Light Mode Toggle */}
@@ -275,6 +313,9 @@ export default function App() {
             weather={d.weather}
             traffic={d.traffic}
             dark={dark}
+            onLocationSelect={(lat, lon, name) => {
+              setSelectedCoords({ lat, lon, name: name || 'Selected Point' });
+            }}
           />
         </section>
 
@@ -302,10 +343,10 @@ export default function App() {
           {/* Card 3: Air Flow Dynamics & Compass (4 cols) */}
           <div className="lg:col-span-4 flex flex-col">
             <AirFlowCard
-              speed={demoMode ? "3.2" : "8.5"}
+              speed={d.weather?.windSpeed != null ? String(d.weather.windSpeed) : (demoMode ? "3.2" : "8.5")}
               unit="km/h"
-              direction={demoMode ? "NW" : "WNW"}
-              degrees={demoMode ? 315 : 290}
+              direction={d.weather?.windDirection || (demoMode ? "NW" : "WNW")}
+              degrees={d.weather?.windDegrees || (demoMode ? 315 : 290)}
             />
           </div>
         </section>

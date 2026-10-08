@@ -22,7 +22,8 @@ class OpenAQProvider(BaseAirQualityProvider):
     def __init__(self, api_key: Optional[str] = None, timeout: float = 10.0):
         settings = get_settings()
         self.api_key = api_key or settings.OPENAQ_API_KEY
-        self.timeout = timeout or settings.API_TIMEOUT_SECONDS
+        base_to = timeout or settings.API_TIMEOUT_SECONDS
+        self.timeout = min(base_to, 3.5) if not self.api_key else base_to
 
     def _get_headers(self) -> Dict[str, str]:
         headers = {
