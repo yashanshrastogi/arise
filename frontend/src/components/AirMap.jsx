@@ -849,9 +849,11 @@ export default function AirMap({
       {isExpanded && (
         <div className="flex items-center justify-between pb-3 px-2 z-[2600]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo text-white flex items-center justify-center font-black text-sm shadow-md">
-              A
-            </div>
+            <img
+              src="/icon.png"
+              alt="Arise Icon"
+              className="w-8 h-8 rounded-xl object-contain shadow-md"
+            />
             <div>
               <div className="text-sm font-black text-white flex items-center gap-2">
                 <span>Arise Spatial Intelligence Explorer</span>

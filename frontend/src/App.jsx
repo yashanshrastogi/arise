@@ -102,22 +102,21 @@ export default function App() {
       >
         <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-4">
           {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] flex items-center justify-center text-white font-black text-lg shadow-md shadow-indigo-500/25">
-              A
-            </div>
-            <div>
-              <div className="text-xl font-black t1 tracking-tight leading-none flex items-center gap-2">
-                <span>Arise</span>
-                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo/10 text-indigo">
-                  Delhi-NCR
-                </span>
-              </div>
-              <div className="text-[10px] font-bold tm mt-0.5">
-                Air + Weather Intelligence Platform
-              </div>
-            </div>
-          </div>
+          <a
+            href="#today"
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToSection('today');
+            }}
+            className="flex items-center select-none cursor-pointer group"
+            title="Arise · Delhi-NCR Air & Weather Intelligence Platform"
+          >
+            <img
+              src={dark ? "/logo-dark.png" : "/logo.png"}
+              alt="Arise · Air & Weather Intelligence Platform"
+              className="h-10 sm:h-11 w-auto object-contain transition-transform group-hover:scale-[1.02]"
+            />
+          </a>
 
           {/* Navigation Pills */}
           <nav
