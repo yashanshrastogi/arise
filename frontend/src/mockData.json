@@ -1,0 +1,69 @@
+{
+  "today": {
+    "aqi": 312,
+    "status": "Very Poor",
+    "verdict": "STAY IN",
+    "recommendation": "Outdoor exposure should be minimized today.",
+    "why": "Regional pollution conditions are unfavorable and fire activity detected in monitored upwind regions.",
+    "bestWindow": "3:00 PM - 5:00 PM",
+    "recheckAt": "4:00 PM",
+    "dominantPollutant": "PM2.5"
+  },
+  "pollutants": {
+    "pm25": { "name": "PM2.5", "value": 142.5, "unit": "µg/m³", "status": "Severe", "aqi": 312 },
+    "pm10": { "name": "PM10", "value": 210.3, "unit": "µg/m³", "status": "Poor", "aqi": 250 },
+    "no2": { "name": "NO2", "value": 45.1, "unit": "µg/m³", "status": "Good", "aqi": 45 },
+    "so2": { "name": "SO2", "value": 12.4, "unit": "µg/m³", "status": "Good", "aqi": 12 },
+    "co": { "name": "CO", "value": 1.2, "unit": "mg/m³", "status": "Good", "aqi": 30 },
+    "o3": { "name": "O3", "value": 35.8, "unit": "µg/m³", "status": "Good", "aqi": 35 }
+  },
+  "forecast": [
+    { "time": "08:00", "aqi": 280, "isFuture": false },
+    { "time": "09:00", "aqi": 295, "isFuture": false },
+    { "time": "10:00", "aqi": 312, "isFuture": false },
+    { "time": "11:00", "aqi": 315, "isFuture": true },
+    { "time": "12:00", "aqi": 305, "isFuture": true },
+    { "time": "13:00", "aqi": 290, "isFuture": true },
+    { "time": "14:00", "aqi": 270, "isFuture": true },
+    { "time": "15:00", "aqi": 250, "isFuture": true },
+    { "time": "16:00", "aqi": 245, "isFuture": true },
+    { "time": "17:00", "aqi": 260, "isFuture": true },
+    { "time": "18:00", "aqi": 285, "isFuture": true }
+  ],
+  "school": {
+    "action": "CANCEL",
+    "indoorPm25": 45.2,
+    "indoorCo2": 850,
+    "ventilation": "Recirculating"
+  },
+  "watchlist": [
+    { "name": "Home", "aqi": 312, "status": "Very Poor" },
+    { "name": "School", "aqi": 315, "status": "Very Poor" },
+    { "name": "Office", "aqi": 295, "status": "Poor" }
+  ],
+  "whyDetails": [
+    "PM2.5 is currently dominant",
+    "Regional pollution conditions are unfavorable",
+    "Fire activity detected in monitored upwind regions",
+    "Atmospheric conditions may limit dispersion"
+  ],
+  "chatReplies": [
+    {
+      "verdict": "Not recommended",
+      "text": "Based on current AQI of 312 (Very Poor), outdoor exercise is strongly discouraged. Consider indoor alternatives.",
+      "sources": ["CPCB", "Arise Intelligence"],
+      "timestamp": "10:15 AM"
+    }
+  ],
+  "mapData": {
+    "stations": [
+      { "id": 1, "name": "Delhi ITO", "lat": 28.627, "lng": 77.24, "aqi": 312, "pm25": 142.5 },
+      { "id": 2, "name": "RK Puram", "lat": 28.567, "lng": 77.17, "aqi": 295, "pm25": 130.2 },
+      { "id": 3, "name": "Punjabi Bagh", "lat": 28.67, "lng": 77.13, "aqi": 330, "pm25": 155.8 }
+    ],
+    "fires": [
+      { "id": 101, "lat": 29.5, "lng": 76.8, "intensity": "high" },
+      { "id": 102, "lat": 29.8, "lng": 76.5, "intensity": "medium" }
+    ]
+  }
+}

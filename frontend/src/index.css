@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --color-indigo-500: #5B4BDB;
+  --color-green-aqi: #2EB872;
+  --color-lime-aqi: #9BD34A;
+  --color-yellow-aqi: #F5C542;
+  --color-orange-aqi: #F28C28;
+  --color-red-aqi: #E5484D;
+  --color-purple-aqi: #8B1E3F;
+}
+
+@layer base {
+  :root {
+    --background: #f4f7f6;
+    --foreground: #1e293b;
+    --card: #ffffff;
+    --card-foreground: #1e293b;
+    --border: #e2e8f0;
+    --ring: #5B4BDB;
+  }
+  
+  .dark {
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card: #1e293b;
+    --card-foreground: #f1f5f9;
+    --border: #334155;
+    --ring: #5B4BDB;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-panel {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 1rem;
+}
