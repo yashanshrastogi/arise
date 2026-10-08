@@ -152,7 +152,7 @@ export default function App() {
 
         {/* ── SECTION 1: MAP (Full Width, Majestic s1/s2 Experience) ── */}
         <section id="map" className="w-full">
-          <AirMap stations={d.stations} fires={d.fires} />
+          <AirMap stations={d.stations} fires={d.fires} dark={dark} />
         </section>
 
         {/* ── SECTION 2: PRIMARY STATUS & FORECAST (Exact s1 Bottom Layout) ── */}

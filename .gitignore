@@ -5,3 +5,4 @@ __pycache__/
 .aws-sam/
 dist/
 *.pyc
+.env.local
