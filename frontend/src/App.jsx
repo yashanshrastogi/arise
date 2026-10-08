@@ -42,13 +42,53 @@ export default function App() {
   // Demo mode toggle: dynamically loads the saved very-bad-air day or live moderate day
   const d = demoMode ? mockData : mockDataModerate;
 
+  // Smooth scroll to section with dynamic sticky header offset calculation
   const scrollToSection = (id) => {
     setActiveNav(id);
+    if (id === 'today') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     const el = document.getElementById(id);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const header = document.querySelector('header');
+      const headerHeight = header ? header.offsetHeight : 64;
+      const elementTop = el.getBoundingClientRect().top + window.pageYOffset;
+      window.scrollTo({
+        top: elementTop - headerHeight - 16,
+        behavior: 'smooth',
+      });
     }
   };
+
+  // Scroll spy: synchronize top navigation active pills with scroll position
+  useEffect(() => {
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const scrollPosition = window.pageYOffset + 140;
+          const sectionIds = ['today', 'map', 'weather', 'forecast', 'mobility', 'ask'];
+
+          for (let i = sectionIds.length - 1; i >= 0; i--) {
+            const el = document.getElementById(sectionIds[i]);
+            if (el) {
+              const top = el.offsetTop;
+              if (scrollPosition >= top) {
+                setActiveNav(sectionIds[i]);
+                break;
+              }
+            }
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col transition-colors duration-200">
@@ -141,7 +181,7 @@ export default function App() {
         {/* ── 1. FIRST VIEWPORT EXECUTIVE FLOW: Location → AQI → Severity → Verdict → Reason → Action ── */}
         <section
           id="today"
-          className="w-full card p-4 lg:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border shadow-sm transition-all"
+          className="w-full card p-4 lg:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border shadow-sm transition-all scroll-mt-24"
         >
           {/* Location */}
           <div className="flex items-center gap-3 min-w-[200px]">
@@ -216,7 +256,7 @@ export default function App() {
         </section>
 
         {/* ── 2. COMPACT MAP CARD (Default ~320px with Expand / Layers / GPS) ── */}
-        <section id="map" className="w-full">
+        <section id="map" className="w-full scroll-mt-24">
           <AirMap
             stations={d.stations}
             fires={d.fires}
@@ -227,7 +267,7 @@ export default function App() {
         </section>
 
         {/* ── 3. PRIMARY STATUS & WEATHER INTELLIGENCE ── */}
-        <section id="weather" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+        <section id="weather" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 scroll-mt-24">
           {/* Card 1: AQI Gauge (4 cols) */}
           <div className="lg:col-span-4 flex flex-col">
             <AqiGauge
@@ -259,12 +299,12 @@ export default function App() {
         </section>
 
         {/* ── 4. MULTI-METRIC FORECAST CHART (Full Width) ── */}
-        <section id="forecast" className="w-full">
+        <section id="forecast" className="w-full scroll-mt-24">
           <ForecastChart data={d.forecast} data7Day={d.forecast7Day} />
         </section>
 
         {/* ── 5. INTELLIGENCE, SCHOOL CARE & MOBILITY CORRIDORS ── */}
-        <section id="mobility" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <section id="mobility" className="grid grid-cols-1 md:grid-cols-3 gap-6 scroll-mt-24">
           {/* Card 1: Why is the air bad? */}
           <div id="why" className="flex flex-col">
             <WhyPanel
@@ -298,7 +338,7 @@ export default function App() {
         </section>
 
         {/* ── 7. AI COPILOT & PERSONAL WATCHLIST ── */}
-        <section id="ask" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <section id="ask" className="grid grid-cols-1 lg:grid-cols-12 gap-6 scroll-mt-24">
           {/* Left: Ask Arise AI Assistant */}
           <div className="lg:col-span-8 flex flex-col">
             <AskArise replies={d.chatReplies} />
