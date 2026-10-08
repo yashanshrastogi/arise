@@ -1,30 +1,83 @@
 import React from 'react';
 
-const colorMap = {
-  Good: 'bg-green-aqi text-white shadow-green-aqi/20',
-  Satisfactory: 'bg-lime-aqi text-slate-900 shadow-lime-aqi/20',
-  Moderate: 'bg-yellow-aqi text-slate-900 shadow-yellow-aqi/20',
-  Poor: 'bg-orange-aqi text-white shadow-orange-aqi/20',
-  Severe: 'bg-red-aqi text-white shadow-red-aqi/20'
+/**
+ * Pollutant mini-cards — inspired by s3 screenshot (row of 4 clean cards)
+ * and s4 zone signals.
+ */
+const STATUS_CONFIG = {
+  Good:         { color: '#2EB872', bg: '#2EB87214' },
+  Satisfactory: { color: '#9BD34A', bg: '#9BD34A14' },
+  Moderate:     { color: '#F5C542', bg: '#F5C54214' },
+  Poor:         { color: '#F28C28', bg: '#F28C2814' },
+  'Very Poor':  { color: '#E5484D', bg: '#E5484D14' },
+  Severe:       { color: '#8B1E3F', bg: '#8B1E3F14' },
 };
 
-export default function PollutantCards({ data }) {
-  const pollutants = Object.values(data);
+function MiniRing({ pct, color, size = 36 }) {
+  const r = (size - 6) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (pct / 100) * circ;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-      {pollutants.map(p => (
-        <div key={p.name} className="bg-card text-card-foreground p-5 rounded-[24px] shadow-sm border border-border flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-center mb-3">
-            <span className="font-bold text-xs text-slate-700 dark:text-slate-400 tracking-wide uppercase">{p.name}</span>
-            <div className={`w-3 h-3 rounded-full ${colorMap[p.status] ? colorMap[p.status].split(' ')[0] : 'bg-slate-400'}`}></div>
+    <svg width={size} height={size} className="flex-shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={3} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={3}
+        strokeLinecap="round"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </svg>
+  );
+}
+
+export default function PollutantCards({ pollutants }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {pollutants.map(p => {
+        const conf = STATUS_CONFIG[p.status] || { color: '#6b7280', bg: '#6b728014' };
+        return (
+          <div
+            key={p.name}
+            className={`card p-3.5 flex flex-col justify-between transition-all hover:scale-[1.02] ${
+              p.dominant ? 'ring-2 ring-rose-500/50 shadow-md' : ''
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-black t1 flex items-center gap-1">
+                <span>{p.name}</span>
+                {p.dominant && (
+                  <span
+                    className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase"
+                    style={{ background: '#E5484D', color: '#ffffff' }}
+                  >
+                    Dom
+                  </span>
+                )}
+              </span>
+              <MiniRing pct={p.pct} color={conf.color} size={30} />
+            </div>
+
+            <div>
+              <div className="text-xl font-black t1 leading-tight">{p.value}</div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] font-semibold tm">{p.unit}</span>
+                <span
+                  className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                  style={{ color: conf.color, background: conf.bg }}
+                >
+                  {p.status}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="mb-2">
-            <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">{p.value}</span>
-            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 ml-1 uppercase tracking-wider">{p.unit}</span>
-          </div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-500">{p.status}</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

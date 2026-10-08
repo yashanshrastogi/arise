@@ -1,69 +1,77 @@
 {
-  "today": {
-    "aqi": 312,
-    "status": "Very Poor",
-    "verdict": "STAY IN",
-    "recommendation": "Outdoor exposure should be minimized today.",
-    "why": "Regional pollution conditions are unfavorable and fire activity detected in monitored upwind regions.",
-    "bestWindow": "3:00 PM - 5:00 PM",
-    "recheckAt": "4:00 PM",
-    "dominantPollutant": "PM2.5"
-  },
-  "pollutants": {
-    "pm25": { "name": "PM2.5", "value": 142.5, "unit": "µg/m³", "status": "Severe", "aqi": 312 },
-    "pm10": { "name": "PM10", "value": 210.3, "unit": "µg/m³", "status": "Poor", "aqi": 250 },
-    "no2": { "name": "NO2", "value": 45.1, "unit": "µg/m³", "status": "Good", "aqi": 45 },
-    "so2": { "name": "SO2", "value": 12.4, "unit": "µg/m³", "status": "Good", "aqi": 12 },
-    "co": { "name": "CO", "value": 1.2, "unit": "mg/m³", "status": "Good", "aqi": 30 },
-    "o3": { "name": "O3", "value": 35.8, "unit": "µg/m³", "status": "Good", "aqi": 35 }
-  },
+  "location": "Delhi-NCR",
+  "updated": "10:02 AM, 8 Oct 2026",
+  "aqi": 312,
+  "status": "Very Poor",
+  "verdict": "STAY IN",
+  "recommendation": "Outdoor exposure should be minimized today. Keep windows closed and use air purifiers if available.",
+  "bestWindow": "3 PM – 5 PM",
+  "recheckAt": "4:00 PM",
+  "dominantPollutant": "PM2.5",
+  "confidence": "High",
+  "why": [
+    { "label": "PM2.5 is dominant", "detail": "Fine particulate concentration at 142.5 µg/m³, 9.5× the WHO guideline.", "type": "pollutant" },
+    { "label": "Regional pollution unfavorable", "detail": "Wind stagnation across the Indo-Gangetic Plain has trapped pollutants since yesterday.", "type": "weather" },
+    { "label": "Fire signal detected upwind", "detail": "Satellite fire signal detected in monitored regions of Punjab and Haryana.", "type": "fire" },
+    { "label": "Low atmospheric dispersion", "detail": "Temperature inversion limiting vertical mixing. Boundary layer below 400m.", "type": "atmosphere" }
+  ],
+  "pollutants": [
+    { "name": "PM2.5", "value": 142.5, "unit": "µg/m³", "aqi": 312, "status": "Severe", "pct": 95, "dominant": true },
+    { "name": "PM10",  "value": 210.3, "unit": "µg/m³", "aqi": 250, "status": "Poor",   "pct": 70, "dominant": false },
+    { "name": "NO₂",   "value": 45.1,  "unit": "µg/m³", "aqi": 45,  "status": "Good",   "pct": 22, "dominant": false },
+    { "name": "SO₂",   "value": 12.4,  "unit": "µg/m³", "aqi": 12,  "status": "Good",   "pct": 8,  "dominant": false },
+    { "name": "CO",    "value": 1.2,   "unit": "mg/m³", "aqi": 30,  "status": "Good",   "pct": 15, "dominant": false },
+    { "name": "O₃",    "value": 35.8,  "unit": "µg/m³", "aqi": 35,  "status": "Good",   "pct": 18, "dominant": false }
+  ],
   "forecast": [
-    { "time": "08:00", "aqi": 280, "isFuture": false },
-    { "time": "09:00", "aqi": 295, "isFuture": false },
-    { "time": "10:00", "aqi": 312, "isFuture": false },
-    { "time": "11:00", "aqi": 315, "isFuture": true },
-    { "time": "12:00", "aqi": 305, "isFuture": true },
-    { "time": "13:00", "aqi": 290, "isFuture": true },
-    { "time": "14:00", "aqi": 270, "isFuture": true },
-    { "time": "15:00", "aqi": 250, "isFuture": true },
-    { "time": "16:00", "aqi": 245, "isFuture": true },
-    { "time": "17:00", "aqi": 260, "isFuture": true },
-    { "time": "18:00", "aqi": 285, "isFuture": true }
+    { "time": "6 AM",  "aqi": 240, "past": true  },
+    { "time": "7 AM",  "aqi": 260, "past": true  },
+    { "time": "8 AM",  "aqi": 280, "past": true  },
+    { "time": "9 AM",  "aqi": 295, "past": true  },
+    { "time": "10 AM", "aqi": 312, "past": true  },
+    { "time": "11 AM", "aqi": 318, "past": false },
+    { "time": "12 PM", "aqi": 310, "past": false },
+    { "time": "1 PM",  "aqi": 295, "past": false },
+    { "time": "2 PM",  "aqi": 275, "past": false },
+    { "time": "3 PM",  "aqi": 250, "past": false, "bestWindow": true },
+    { "time": "4 PM",  "aqi": 245, "past": false, "bestWindow": true },
+    { "time": "5 PM",  "aqi": 255, "past": false, "bestWindow": true },
+    { "time": "6 PM",  "aqi": 280, "past": false },
+    { "time": "7 PM",  "aqi": 305, "past": false },
+    { "time": "8 PM",  "aqi": 320, "past": false }
+  ],
+  "stations": [
+    { "id": 1, "name": "ITO",           "lat": 28.6289, "lng": 77.2412, "aqi": 312, "pm25": 142.5, "pm10": 210.3 },
+    { "id": 2, "name": "RK Puram",      "lat": 28.5635, "lng": 77.1724, "aqi": 295, "pm25": 130.2, "pm10": 195.0 },
+    { "id": 3, "name": "Anand Vihar",   "lat": 28.6469, "lng": 77.3164, "aqi": 345, "pm25": 168.0, "pm10": 240.0 },
+    { "id": 4, "name": "Punjabi Bagh",  "lat": 28.6683, "lng": 77.1308, "aqi": 330, "pm25": 155.8, "pm10": 225.0 },
+    { "id": 5, "name": "Dwarka",        "lat": 28.5921, "lng": 77.0460, "aqi": 275, "pm25": 118.0, "pm10": 185.0 }
+  ],
+  "fires": [
+    { "id": 101, "lat": 29.52, "lng": 76.82, "intensity": "high" },
+    { "id": 102, "lat": 29.81, "lng": 76.48, "intensity": "medium" },
+    { "id": 103, "lat": 30.10, "lng": 76.15, "intensity": "high" },
+    { "id": 104, "lat": 29.20, "lng": 77.05, "intensity": "low" }
   ],
   "school": {
     "action": "CANCEL",
+    "question": "Should outdoor school activity continue?",
     "indoorPm25": 45.2,
     "indoorCo2": 850,
     "ventilation": "Recirculating"
   },
   "watchlist": [
-    { "name": "Home", "aqi": 312, "status": "Very Poor" },
-    { "name": "School", "aqi": 315, "status": "Very Poor" },
-    { "name": "Office", "aqi": 295, "status": "Poor" }
-  ],
-  "whyDetails": [
-    "PM2.5 is currently dominant",
-    "Regional pollution conditions are unfavorable",
-    "Fire signal detected in monitored upwind regions",
-    "Atmospheric conditions may limit dispersion"
+    { "name": "Home",   "location": "Saket",        "aqi": 312, "status": "Very Poor" },
+    { "name": "School", "location": "Vasant Kunj",  "aqi": 320, "status": "Very Poor" },
+    { "name": "Office", "location": "Connaught Pl.", "aqi": 295, "status": "Poor" }
   ],
   "chatReplies": [
     {
-      "verdict": "Not recommended",
-      "text": "Based on current AQI of 312 (Very Poor), outdoor exercise is strongly discouraged. Consider indoor alternatives.",
-      "sources": ["CPCB", "Arise Intelligence"],
+      "question": "Is it safe to exercise outdoors?",
+      "verdict": "STAY IN",
+      "text": "With AQI at 312, outdoor exercise is strongly discouraged for all groups. Consider indoor alternatives like yoga or gym workouts. If you must go out, the best window is 3–5 PM when AQI may dip to ~245.",
+      "sources": ["CPCB Delhi", "Arise Forecast"],
       "timestamp": "10:15 AM"
     }
-  ],
-  "mapData": {
-    "stations": [
-      { "id": 1, "name": "Delhi ITO", "lat": 28.627, "lng": 77.24, "aqi": 312, "pm25": 142.5 },
-      { "id": 2, "name": "RK Puram", "lat": 28.567, "lng": 77.17, "aqi": 295, "pm25": 130.2 },
-      { "id": 3, "name": "Punjabi Bagh", "lat": 28.67, "lng": 77.13, "aqi": 330, "pm25": 155.8 }
-    ],
-    "fires": [
-      { "id": 101, "lat": 29.5, "lng": 76.8, "intensity": "high" },
-      { "id": 102, "lat": 29.8, "lng": 76.5, "intensity": "medium" }
-    ]
-  }
+  ]
 }

@@ -1,43 +1,91 @@
 import React from 'react';
-import { ShieldAlert } from 'lucide-react';
+
+/**
+ * School Safety decision card — inspired by s4 remediation workflow.
+ * Clear GO / MODIFY / CANCEL verdict with indoor telemetry indicators.
+ */
+const ACTIONS = [
+  { key: 'GO',     color: '#2EB872', label: 'Go',     icon: '✓' },
+  { key: 'MODIFY', color: '#F28C28', label: 'Modify', icon: '⚠' },
+  { key: 'CANCEL', color: '#E5484D', label: 'Cancel', icon: '✕' },
+];
 
 export default function SchoolCard({ data }) {
   return (
-    <div className="bg-card text-card-foreground p-8 rounded-[32px] shadow-sm border border-border">
-      <div className="flex items-center gap-3 mb-6 border-b border-border pb-4">
-         <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-           <ShieldAlert size={18} className="text-red-600 dark:text-red-500" />
-         </div>
-         <div>
-           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-400">School Safety</h2>
-           <h3 className="text-lg font-black tracking-tight text-slate-900 dark:text-slate-100">Outdoor Activity</h3>
-         </div>
-      </div>
-      
-      <div className="flex gap-3 mb-8">
-        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'GO' ? 'bg-green-aqi text-white shadow-md shadow-green-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-700/50 dark:text-slate-500'}`}>GO</div>
-        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'MODIFY' ? 'bg-orange-aqi text-white shadow-md shadow-orange-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-700/50 dark:text-slate-500'}`}>MODIFY</div>
-        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'CANCEL' ? 'bg-red-aqi text-white shadow-md shadow-red-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-700/50 dark:text-slate-500'}`}>CANCEL</div>
+    <div className="card p-5 h-full flex flex-col justify-between">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-sm font-extrabold t1">School Safety Protocol</h3>
+          <p className="text-[11px] font-semibold t3 mt-0.5">{data.question}</p>
+        </div>
+        <span className="text-2xl">🏫</span>
       </div>
 
-      <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-5 bg-slate-50 dark:bg-slate-800/30 relative">
-        <span className="absolute -top-3 left-6 bg-slate-200 dark:bg-slate-700 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full text-slate-700 dark:text-slate-300 shadow-sm border border-slate-300 dark:border-slate-600">Demo data</span>
-        <div className="grid grid-cols-2 gap-6 mt-3">
-           <div>
-              <div className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-bold tracking-wider mb-1">Indoor PM2.5</div>
-              <div className="font-black text-xl text-slate-900 dark:text-slate-100">{data.indoorPm25} <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">µg/m³</span></div>
-           </div>
-           <div>
-              <div className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-bold tracking-wider mb-1">Indoor CO2</div>
-              <div className="font-black text-xl text-slate-900 dark:text-slate-100">{data.indoorCo2} <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">ppm</span></div>
-           </div>
-           <div className="col-span-2 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <div className="text-[10px] text-slate-700 dark:text-slate-400 uppercase font-bold tracking-wider mb-1">Ventilation Status</div>
-              <div className="font-bold text-sm text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400 animate-pulse"></div>
-                 {data.ventilation}
-              </div>
-           </div>
+      {/* Decision Action Buttons */}
+      <div className="grid grid-cols-3 gap-2 my-2">
+        {ACTIONS.map(a => {
+          const isActive = data.action === a.key;
+          return (
+            <button
+              key={a.key}
+              className={`py-2.5 px-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                isActive ? 'shadow-md scale-100' : 'opacity-60 hover:opacity-100'
+              }`}
+              style={{
+                background: isActive ? a.color : 'var(--surface-alt)',
+                color: isActive ? '#ffffff' : 'var(--text-tertiary)',
+                border: `1.5px solid ${isActive ? a.color : 'var(--border)'}`,
+              }}
+            >
+              <span>{a.icon}</span>
+              <span>{a.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Action Directive */}
+      <div
+        className="p-3 rounded-2xl my-2 text-xs font-bold"
+        style={{
+          background: '#E5484D14',
+          border: '1px solid #E5484D35',
+          color: '#E5484D',
+        }}
+      >
+        🚨 Outdoor sports, morning assemblies, and recess suspended. Move all activities to filtered indoor rooms.
+      </div>
+
+      {/* Indoor Metrics (Demo Data) */}
+      <div
+        className="rounded-2xl p-3.5 relative"
+        style={{ background: 'var(--surface-alt)', border: '1px solid var(--border)' }}
+      >
+        <span
+          className="absolute -top-2.5 right-3 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full"
+          style={{ background: 'var(--border)', color: 'var(--text-tertiary)' }}
+        >
+          Demo Indoor Sensor
+        </span>
+        <div className="grid grid-cols-3 gap-2 mt-1">
+          <div>
+            <div className="text-[10px] font-bold t3 uppercase">Indoor PM2.5</div>
+            <div className="text-base font-black t1 mt-0.5">
+              {data.indoorPm25} <span className="text-[10px] font-semibold tm">µg/m³</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold t3 uppercase">Indoor CO₂</div>
+            <div className="text-base font-black t1 mt-0.5">
+              {data.indoorCo2} <span className="text-[10px] font-semibold tm">ppm</span>
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold t3 uppercase">Air Filtration</div>
+            <div className="text-xs font-black text-indigo mt-1">
+              {data.ventilation}
+            </div>
+          </div>
         </div>
       </div>
     </div>

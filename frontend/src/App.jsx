@@ -1,82 +1,360 @@
 import React, { useState, useEffect } from 'react';
-import TodayCard from './components/TodayCard';
-import MapCard from './components/MapCard';
-import ForecastCard from './components/ForecastCard';
-import WhyCard from './components/WhyCard';
-import SchoolCard from './components/SchoolCard';
-import AskArise from './components/AskArise';
-import PollutantCards from './components/PollutantCards';
-import Watchlist from './components/Watchlist';
 import mockData from './mockData.json';
-import { Moon, Sun, ToggleLeft, ToggleRight } from 'lucide-react';
+import AirMap from './components/AirMap';
+import AqiGauge from './components/AqiGauge';
+import ForecastChart from './components/ForecastChart';
+import AirFlowCard from './components/AirFlowCard';
+import WhyPanel from './components/WhyPanel';
+import SchoolCard from './components/SchoolCard';
+import PollutantCards from './components/PollutantCards';
+import AskArise from './components/AskArise';
+import Watchlist from './components/Watchlist';
+
+/**
+ * Arise — Delhi-NCR Air Intelligence Dashboard
+ * Faithfully inspired by the design references (s1, s2, s3, s4).
+ */
+
+const NAV_ITEMS = [
+  { id: 'today',      label: 'Home',           icon: '🏠' },
+  { id: 'map',        label: 'Air Maps',       icon: '🗺️' },
+  { id: 'forecast',   label: 'Forecast',       icon: '📈' },
+  { id: 'why',        label: 'Newsroom',       icon: '📰' },
+  { id: 'school',     label: 'Breathe Care',   icon: '🫁' },
+  { id: 'ask',        label: 'Ask Arise',      icon: '✦' },
+];
 
 export default function App() {
-  const [darkMode, setDarkMode] = useState(false);
+  const [dark, setDark] = useState(false);
+  const [activeNav, setActiveNav] = useState('today');
   const [demoMode, setDemoMode] = useState(true);
+  const [healthTipsOpen, setHealthTipsOpen] = useState(false);
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+    document.documentElement.classList.toggle('dark', dark);
+  }, [dark]);
+
+  const d = mockData;
+
+  const scrollToSection = (id) => {
+    setActiveNav(id);
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [darkMode]);
+  };
 
   return (
-    <div className="min-h-screen p-4 md:p-8 flex flex-col gap-8 max-w-[1600px] mx-auto">
-      {/* Header */}
-      <header className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-3">
-           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-sm">A</div>
-           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Arise</h1>
-        </div>
-        
-        <div className="hidden md:flex flex-1 mx-12">
-          <Watchlist data={mockData.watchlist} />
-        </div>
+    <div className="min-h-screen flex flex-col transition-colors duration-200">
+      {/* ═══════════════ HEADER (Matching s1 / s2) ═══════════════ */}
+      <header
+        className="sticky top-0 z-[2000] px-5 lg:px-8 py-3.5 border-b backdrop-blur-md transition-colors"
+        style={{
+          borderColor: 'var(--border)',
+          background: dark ? 'rgba(20, 28, 46, 0.88)' : 'rgba(255, 255, 255, 0.88)',
+        }}
+      >
+        <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-4">
+          {/* Logo & Brand */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#4F46E5] to-[#7C3AED] flex items-center justify-center text-white font-black text-lg shadow-md shadow-indigo-500/25">
+              A
+            </div>
+            <div>
+              <div className="text-xl font-black t1 tracking-tight leading-none flex items-center gap-2">
+                <span>Arise</span>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo/10 text-indigo">
+                  Delhi-NCR
+                </span>
+              </div>
+              <div className="text-[10px] font-bold tm mt-0.5">
+                Real-time Environmental Intelligence
+              </div>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-4">
-           <button 
-             onClick={() => setDemoMode(!demoMode)} 
-             className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-orange-600 dark:text-orange-500"
-           >
-             {demoMode ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-             Demo Mode
-           </button>
-           <button 
-             onClick={() => setDarkMode(!darkMode)}
-             className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-           >
-             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-           </button>
+          {/* Nav Pills — matching s1 & s2 center header */}
+          <nav
+            className="hidden md:flex items-center gap-1 p-1 rounded-2xl border"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+          >
+            {NAV_ITEMS.map(item => (
+              <button
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all ${
+                  activeNav === item.id
+                    ? 'bg-indigo text-white shadow-sm'
+                    : 't3 hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]'
+                }`}
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          {/* Right Header Controls */}
+          <div className="flex items-center gap-2.5">
+            {/* Demo Badge */}
+            <button
+              onClick={() => setDemoMode(!demoMode)}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
+              style={{
+                background: demoMode ? '#F28C2815' : 'var(--surface-alt)',
+                borderColor: demoMode ? '#F28C2850' : 'var(--border)',
+                color: demoMode ? '#F28C28' : 'var(--text-tertiary)',
+              }}
+            >
+              <span className={`w-2 h-2 rounded-full ${demoMode ? 'bg-[#F28C28] animate-pulse' : 'bg-gray-400'}`} />
+              <span>Mock Live</span>
+            </button>
+
+            {/* Dark/Light Mode Toggle */}
+            <button
+              onClick={() => setDark(!dark)}
+              aria-label="Toggle Theme"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold border transition-colors hover:bg-[var(--surface-alt)]"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+            >
+              {dark ? '☀️' : '🌙'}
+            </button>
+
+            {/* Notification Bell with alert dot */}
+            <div className="relative">
+              <button
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold border transition-colors hover:bg-[var(--surface-alt)]"
+                style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+              >
+                🔔
+              </button>
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-[var(--surface)] animate-ping" />
+              <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-[var(--surface)]" />
+            </div>
+
+            {/* User Profile Pill — matching s1 */}
+            <div
+              className="hidden lg:flex items-center gap-2 pl-2 pr-3 py-1 rounded-2xl border"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white flex items-center justify-center text-xs font-extrabold shadow-sm">
+                YR
+              </div>
+              <span className="text-xs font-extrabold t1">Yashansh Rastogi</span>
+              <span className="text-[10px] tm">▾</span>
+            </div>
+          </div>
         </div>
       </header>
 
-      {/* Main Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        
-        {/* Left Column (Today & Intelligence) */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
-          <TodayCard data={mockData.today} />
-          <WhyCard details={mockData.whyDetails} />
-          <SchoolCard data={mockData.school} />
-        </div>
+      {/* ═══════════════ MAIN CONTENT ═══════════════ */}
+      <main className="flex-1 max-w-[1720px] mx-auto w-full p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
 
-        {/* Center Column (Map & Pollutants) */}
-        <div className="lg:col-span-8 flex flex-col gap-6">
-          <PollutantCards data={mockData.pollutants} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-             <div className="lg:col-span-1 min-h-[500px]">
-                <MapCard data={mockData.mapData} />
-             </div>
-             <div className="lg:col-span-1 flex flex-col gap-6">
-                <ForecastCard data={mockData.forecast} />
-                <AskArise replies={mockData.chatReplies} />
-             </div>
+        {/* ── SECTION 1: MAP (Full Width, Majestic s1/s2 Experience) ── */}
+        <section id="map" className="w-full">
+          <AirMap stations={d.stations} fires={d.fires} />
+        </section>
+
+        {/* ── SECTION 2: PRIMARY STATUS & FORECAST (Exact s1 Bottom Layout) ── */}
+        <section id="forecast" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left: Location & AQI Gauge + Verdict */}
+          <div className="lg:col-span-4 flex flex-col">
+            <AqiGauge
+              aqi={d.aqi}
+              status={d.status}
+              location={d.location}
+              country="India"
+              verdict={d.verdict}
+              recommendation={d.recommendation}
+              bestWindow={d.bestWindow}
+              recheckAt={d.recheckAt}
+            />
+          </div>
+
+          {/* Right: Air Quality Forecast Chart */}
+          <div className="lg:col-span-8 flex flex-col">
+            <ForecastChart data={d.forecast} />
+          </div>
+        </section>
+
+        {/* ── SECTION 3: INTELLIGENCE & EVIDENCE (Matching s2 & s4) ── */}
+        <section id="why" className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Air Flow Status (from s2) */}
+          <div className="flex flex-col">
+            <AirFlowCard
+              speed="3.2"
+              unit="km/h"
+              direction="NW"
+              degrees={315}
+            />
+          </div>
+
+          {/* Card 2: Why is the air bad? Intelligence Brief */}
+          <div className="flex flex-col">
+            <WhyPanel
+              reasons={d.why}
+              dominantPollutant={d.dominantPollutant}
+            />
+          </div>
+
+          {/* Card 3: School Safety & Action Protocol (from s4) */}
+          <div id="school" className="flex flex-col">
+            <SchoolCard data={d.school} />
+          </div>
+        </section>
+
+        {/* ── SECTION 4: POLLUTANTS BREAKDOWN (Matching s3 & s4) ── */}
+        <section className="w-full">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h3 className="text-sm font-extrabold t1 uppercase tracking-wider">
+              Pollutant Concentration Breakdown
+            </h3>
+            <span className="text-[11px] font-bold t3">
+              Standardized to CPCB / WHO Reference Thresholds
+            </span>
+          </div>
+          <PollutantCards pollutants={d.pollutants} />
+        </section>
+
+        {/* ── SECTION 5: AI COPILOT & WATCHLIST (Matching PRODUCT.md) ── */}
+        <section id="ask" className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left: Ask Arise AI Assistant */}
+          <div className="lg:col-span-8 flex flex-col">
+            <AskArise replies={d.chatReplies} />
+          </div>
+
+          {/* Right: Personal Watchlist & Alerts */}
+          <div className="lg:col-span-4 flex flex-col justify-between card p-5">
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📍</span>
+                  <h3 className="text-sm font-extrabold t1">Monitored Locations</h3>
+                </div>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                  All 3 In Red Zone
+                </span>
+              </div>
+              <p className="text-[11px] font-medium t3 mb-4">
+                Personalized tracking for family transit and workplaces.
+              </p>
+
+              <div className="space-y-2">
+                <Watchlist items={d.watchlist} />
+              </div>
+            </div>
+
+            {/* Quick alert setting */}
+            <div
+              className="mt-4 p-3.5 rounded-2xl border"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+            >
+              <div className="flex items-center justify-between text-xs font-black t1 mb-1">
+                <span>Severe Air Alert Threshold</span>
+                <span className="text-indigo font-bold">AQI &gt; 300</span>
+              </div>
+              <p className="text-[11px] font-medium t3">
+                Push notifications enabled for Saket (Home) &amp; Vasant Kunj (School).
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* ═══════════════ HEALTH TIPS DRAWER / MODAL ═══════════════ */}
+      {healthTipsOpen && (
+        <div className="fixed inset-0 z-[3000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="card max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🫁</span>
+                <h3 className="text-lg font-extrabold t1">Health &amp; Action Advisory</h3>
+              </div>
+              <button
+                onClick={() => setHealthTipsOpen(false)}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold t3 hover:bg-[var(--surface-alt)]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs font-semibold t2">
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400">
+                <strong>Current Status: Severe Risk (AQI 312)</strong><br />
+                Vulnerable groups (children, elderly, asthma patients) must remain strictly indoors.
+              </div>
+              <ul className="list-disc list-inside space-y-1.5 pl-1 t1">
+                <li>Wear a certified N95 or FFP2 mask if transit is unavoidable.</li>
+                <li>Avoid early morning (6 AM – 9 AM) and night outdoor workouts.</li>
+                <li>Keep indoor air purifiers running with windows and vents sealed.</li>
+                <li>Utilize the 3 PM – 5 PM window for any critical outdoor errands.</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => setHealthTipsOpen(false)}
+              className="w-full mt-5 py-2.5 rounded-xl bg-indigo text-white font-extrabold text-xs shadow-md"
+            >
+              Close Advisory
+            </button>
           </div>
         </div>
+      )}
 
-      </div>
+      {/* ═══════════════ BOTTOM ACTION BAR (Matching s1 Bottom Toolbar) ═══════════════ */}
+      <footer
+        className="sticky bottom-0 z-[1500] px-5 lg:px-8 py-3 border-t backdrop-blur-md transition-colors"
+        style={{
+          borderColor: 'var(--border)',
+          background: dark ? 'rgba(20, 28, 46, 0.92)' : 'rgba(255, 255, 255, 0.92)',
+        }}
+      >
+        <div className="max-w-[1720px] mx-auto flex items-center justify-between gap-4">
+          {/* Left Buttons: Watchlist, Alerts, Share */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => scrollToSection('ask')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo text-white shadow-sm hover:scale-105 active:scale-95 transition-all"
+            >
+              <span>✓</span>
+              <span>Watchlist</span>
+            </button>
+            <button
+              onClick={() => alert('Push Alerts are active for Delhi-NCR (AQI 312 Stagnation alert).')}
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold border transition-colors hover:bg-[var(--surface-alt)]"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+              title="Alert Notifications"
+            >
+              🔔
+            </button>
+            <button
+              onClick={() => navigator.clipboard && navigator.clipboard.writeText(window.location.href)}
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold border transition-colors hover:bg-[var(--surface-alt)]"
+              style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+              title="Share Report"
+            >
+              ↗
+            </button>
+          </div>
+
+          {/* Center Attribution */}
+          <div className="hidden md:block text-[11px] font-semibold t3">
+            Arise Intelligence Core · Real-time CPCB + Satellite Inversion Telemetry · Mock Mode
+          </div>
+
+          {/* Right Action: Health Tips Pill & Close */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setHealthTipsOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-black border transition-all hover:scale-105 active:scale-95 shadow-sm"
+              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+            >
+              <span>✚</span>
+              <span>Health Tips</span>
+            </button>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
