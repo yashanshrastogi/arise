@@ -25,10 +25,10 @@ export default function App() {
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col gap-8 max-w-[1600px] mx-auto">
       {/* Header */}
-      <header className="flex justify-between items-center">
+      <header className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-3">
-           <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white font-black text-xl">A</div>
-           <h1 className="text-2xl font-bold tracking-tight text-indigo-950 dark:text-indigo-100">Arise</h1>
+           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-sm">A</div>
+           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Arise</h1>
         </div>
         
         <div className="hidden md:flex flex-1 mx-12">
@@ -38,14 +38,14 @@ export default function App() {
         <div className="flex items-center gap-4">
            <button 
              onClick={() => setDemoMode(!demoMode)} 
-             className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-orange-500"
+             className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-orange-600 dark:text-orange-500"
            >
              {demoMode ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
              Demo Mode
            </button>
            <button 
              onClick={() => setDarkMode(!darkMode)}
-             className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+             className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
            >
              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
            </button>

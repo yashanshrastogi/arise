@@ -15,14 +15,14 @@ export default function PollutantCards({ data }) {
       {pollutants.map(p => (
         <div key={p.name} className="bg-card text-card-foreground p-5 rounded-[24px] shadow-sm border border-border flex flex-col justify-between hover:shadow-md transition-shadow">
           <div className="flex justify-between items-center mb-3">
-            <span className="font-bold text-xs text-slate-500 dark:text-slate-400 tracking-wide uppercase">{p.name}</span>
-            <div className={`w-2.5 h-2.5 rounded-full ${colorMap[p.status] ? colorMap[p.status].split(' ')[0] : 'bg-slate-300'}`}></div>
+            <span className="font-bold text-xs text-slate-700 dark:text-slate-400 tracking-wide uppercase">{p.name}</span>
+            <div className={`w-3 h-3 rounded-full ${colorMap[p.status] ? colorMap[p.status].split(' ')[0] : 'bg-slate-400'}`}></div>
           </div>
           <div className="mb-2">
-            <span className="text-2xl font-black tracking-tight">{p.value}</span>
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 ml-1 uppercase tracking-wider">{p.unit}</span>
+            <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">{p.value}</span>
+            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 ml-1 uppercase tracking-wider">{p.unit}</span>
           </div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{p.status}</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-500">{p.status}</div>
         </div>
       ))}
     </div>
