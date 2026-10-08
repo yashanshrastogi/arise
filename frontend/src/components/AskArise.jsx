@@ -9,8 +9,8 @@ export default function AskArise({ replies }) {
            <Sparkles size={18} className="text-indigo-500" />
          </div>
          <div>
-           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Assistant</h2>
-           <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-200">Ask Arise</h3>
+           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Assistant</h2>
+           <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100">Ask Arise</h3>
          </div>
       </div>
 
@@ -18,13 +18,13 @@ export default function AskArise({ replies }) {
         {replies.map((reply, idx) => (
           <div key={idx} className="bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-800/50 rounded-[24px] p-5 shadow-sm">
             <div className="flex justify-between items-center mb-3">
-               <span className="font-bold text-sm text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-900/50 px-3 py-1 rounded-full">{reply.verdict}</span>
-               <span className="text-xs font-semibold text-slate-400">{reply.timestamp}</span>
+               <span className="font-bold text-sm text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 px-3 py-1 rounded-full">{reply.verdict}</span>
+               <span className="text-xs font-semibold text-slate-400 dark:text-slate-400">{reply.timestamp}</span>
             </div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed mb-4">{reply.text}</p>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-2 border-t border-indigo-100 dark:border-indigo-900/50 pt-3">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-relaxed mb-4">{reply.text}</p>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-2 border-t border-indigo-100 dark:border-indigo-900/50 pt-3">
                <span>Sources:</span> 
-               <span className="text-indigo-600 dark:text-indigo-400">{reply.sources.join(', ')}</span>
+               <span className="text-indigo-600 dark:text-indigo-300">{reply.sources.join(', ')}</span>
             </div>
           </div>
         ))}

@@ -9,15 +9,15 @@ export default function SchoolCard({ data }) {
            <ShieldAlert size={18} className="text-red-500" />
          </div>
          <div>
-           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">School Safety</h2>
-           <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-200">Outdoor Activity</h3>
+           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">School Safety</h2>
+           <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100">Outdoor Activity</h3>
          </div>
       </div>
       
       <div className="flex gap-3 mb-8">
-        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'GO' ? 'bg-green-aqi text-white shadow-md shadow-green-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>GO</div>
-        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'MODIFY' ? 'bg-orange-aqi text-white shadow-md shadow-orange-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>MODIFY</div>
-        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'CANCEL' ? 'bg-red-aqi text-white shadow-md shadow-red-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>CANCEL</div>
+        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'GO' ? 'bg-green-aqi text-white shadow-md shadow-green-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-700/50 dark:text-slate-500'}`}>GO</div>
+        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'MODIFY' ? 'bg-orange-aqi text-white shadow-md shadow-orange-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-700/50 dark:text-slate-500'}`}>MODIFY</div>
+        <div className={`flex-1 py-3 text-center rounded-xl font-black text-sm tracking-wide transition-all ${data.action === 'CANCEL' ? 'bg-red-aqi text-white shadow-md shadow-red-aqi/20' : 'bg-slate-100 text-slate-400 dark:bg-slate-700/50 dark:text-slate-500'}`}>CANCEL</div>
       </div>
 
       <div className="border border-slate-100 dark:border-slate-800 rounded-2xl p-5 bg-slate-50 dark:bg-slate-800/30 relative">

@@ -11,11 +11,11 @@ export default function ForecastCard({ data }) {
                <BarChart3 size={18} className="text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Analytics</h2>
-               <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-200">Hourly Forecast</h3>
+               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Analytics</h2>
+               <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100">Hourly Forecast</h3>
             </div>
          </div>
-         <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+         <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <div className="flex items-center gap-2">
                <div className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-600"></div> Past
             </div>

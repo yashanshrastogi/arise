@@ -26,28 +26,28 @@ export default function TodayCard({ data }) {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-800">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
+            <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
               <AlertTriangle size={14} className="text-orange-500" />
               Primary Reason
             </h3>
-            <p className="text-base font-semibold leading-relaxed text-slate-700 dark:text-slate-300">
+            <p className="text-base font-semibold leading-relaxed text-slate-700 dark:text-slate-100">
               {data.why}
             </p>
           </div>
           
           <div className="grid grid-cols-2 gap-4 pt-2">
-             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
-                <h3 className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1.5">
+             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1 flex items-center gap-1.5">
                   <Clock size={14} className="text-green-aqi" /> Best Window
                 </h3>
-                <p className="font-bold text-base text-slate-800 dark:text-slate-200">{data.bestWindow}</p>
+                <p className="font-bold text-base text-slate-800 dark:text-slate-100">{data.bestWindow}</p>
              </div>
-             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
-                <h3 className="text-xs font-bold text-slate-500 uppercase mb-1 flex items-center gap-1.5">
+             <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-1 flex items-center gap-1.5">
                   <Wind size={14} className="text-indigo-500" /> Dominant
                 </h3>
-                <p className="font-bold text-base text-slate-800 dark:text-slate-200">{data.dominantPollutant}</p>
+                <p className="font-bold text-base text-slate-800 dark:text-slate-100">{data.dominantPollutant}</p>
              </div>
           </div>
         </div>

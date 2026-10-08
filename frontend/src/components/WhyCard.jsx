@@ -20,8 +20,8 @@ export default function WhyCard({ details }) {
            <Activity size={18} className="text-slate-600 dark:text-slate-300" />
          </div>
          <div>
-           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Intelligence Brief</h2>
-           <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-200">Environmental Factors</h3>
+           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Intelligence Brief</h2>
+           <h3 className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100">Environmental Factors</h3>
          </div>
       </div>
       
@@ -33,7 +33,7 @@ export default function WhyCard({ details }) {
                <div className={`p-3 rounded-xl ${config.bg} ${config.color} shrink-0 transition-transform group-hover:scale-105`}>
                  {config.icon}
                </div>
-               <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 leading-snug">{detail}</p>
+               <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 leading-snug">{detail}</p>
             </div>
           );
         })}
