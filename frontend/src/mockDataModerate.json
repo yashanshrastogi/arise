@@ -1,0 +1,74 @@
+{
+  "location": "Delhi-NCR",
+  "updated": "10:02 AM, 8 Oct 2026",
+  "aqi": 128,
+  "status": "Moderate",
+  "verdict": "BE SMART",
+  "recommendation": "Air quality is acceptable for most; sensitive groups should limit prolonged outdoor exertion.",
+  "bestWindow": "11 AM – 4 PM",
+  "recheckAt": "2:00 PM",
+  "dominantPollutant": "PM10",
+  "confidence": "High",
+  "why": [
+    { "label": "PM10 is dominant", "detail": "Coarse dust concentration at 115.0 µg/m³ from road and local surface dust.", "type": "pollutant" },
+    { "label": "Moderate wind dispersion", "detail": "Northwesterly surface breeze (8.5 km/h) aiding regional atmospheric mixing.", "type": "weather" },
+    { "label": "Isolated fire signal upwind", "detail": "Isolated agricultural fire signal detected in Punjab; minimal smoke contribution.", "type": "fire" },
+    { "label": "Open boundary layer", "detail": "Solar heating keeping atmospheric boundary layer above 1,100m, preventing trapping.", "type": "atmosphere" }
+  ],
+  "pollutants": [
+    { "name": "PM2.5", "value": 48.2,  "unit": "µg/m³", "aqi": 120, "status": "Moderate", "pct": 42, "dominant": false },
+    { "name": "PM10",  "value": 115.0, "unit": "µg/m³", "aqi": 128, "status": "Moderate", "pct": 58, "dominant": true },
+    { "name": "NO₂",   "value": 32.1,  "unit": "µg/m³", "aqi": 32,  "status": "Good",     "pct": 16, "dominant": false },
+    { "name": "SO₂",   "value": 8.5,   "unit": "µg/m³", "aqi": 8,   "status": "Good",     "pct": 6,  "dominant": false },
+    { "name": "CO",    "value": 0.7,   "unit": "mg/m³", "aqi": 18,  "status": "Good",     "pct": 10, "dominant": false },
+    { "name": "O₃",    "value": 42.0,  "unit": "µg/m³", "aqi": 42,  "status": "Good",     "pct": 21, "dominant": false }
+  ],
+  "forecast": [
+    { "time": "6 AM",  "aqi": 145, "past": true  },
+    { "time": "7 AM",  "aqi": 140, "past": true  },
+    { "time": "8 AM",  "aqi": 135, "past": true  },
+    { "time": "9 AM",  "aqi": 130, "past": true  },
+    { "time": "10 AM", "aqi": 128, "past": true  },
+    { "time": "11 AM", "aqi": 120, "past": false, "bestWindow": true },
+    { "time": "12 PM", "aqi": 115, "past": false, "bestWindow": true },
+    { "time": "1 PM",  "aqi": 110, "past": false, "bestWindow": true },
+    { "time": "2 PM",  "aqi": 112, "past": false, "bestWindow": true },
+    { "time": "3 PM",  "aqi": 118, "past": false, "bestWindow": true },
+    { "time": "4 PM",  "aqi": 122, "past": false, "bestWindow": true },
+    { "time": "5 PM",  "aqi": 130, "past": false },
+    { "time": "6 PM",  "aqi": 138, "past": false },
+    { "time": "7 PM",  "aqi": 145, "past": false },
+    { "time": "8 PM",  "aqi": 150, "past": false }
+  ],
+  "stations": [
+    { "id": 1, "name": "ITO",           "lat": 28.6289, "lng": 77.2412, "aqi": 128, "pm25": 48.2, "pm10": 115.0 },
+    { "id": 2, "name": "RK Puram",      "lat": 28.5635, "lng": 77.1724, "aqi": 118, "pm25": 42.0, "pm10": 105.0 },
+    { "id": 3, "name": "Anand Vihar",   "lat": 28.6469, "lng": 77.3164, "aqi": 142, "pm25": 56.0, "pm10": 130.0 },
+    { "id": 4, "name": "Punjabi Bagh",  "lat": 28.6683, "lng": 77.1308, "aqi": 132, "pm25": 50.0, "pm10": 120.0 },
+    { "id": 5, "name": "Dwarka",        "lat": 28.5921, "lng": 77.0460, "aqi": 115, "pm25": 39.0, "pm10": 98.0 }
+  ],
+  "fires": [
+    { "id": 102, "lat": 29.81, "lng": 76.48, "intensity": "low" }
+  ],
+  "school": {
+    "action": "MODIFY",
+    "question": "Should outdoor school activity continue?",
+    "indoorPm25": 18.5,
+    "indoorCo2": 620,
+    "ventilation": "Active HEPA"
+  },
+  "watchlist": [
+    { "name": "Home",   "location": "Saket",        "aqi": 128, "status": "Moderate" },
+    { "name": "School", "location": "Vasant Kunj",  "aqi": 118, "status": "Moderate" },
+    { "name": "Office", "location": "Connaught Pl.", "aqi": 132, "status": "Moderate" }
+  ],
+  "chatReplies": [
+    {
+      "question": "Is it safe to exercise outdoors?",
+      "verdict": "BE SMART",
+      "text": "AQI is at 128 (Moderate). General population can engage in outdoor activities. Individuals sensitive to particulate matter should reduce high-intensity prolonged exertion. The best outdoor window is 11 AM – 4 PM.",
+      "sources": ["CPCB Delhi", "Arise Forecast"],
+      "timestamp": "10:15 AM"
+    }
+  ]
+}

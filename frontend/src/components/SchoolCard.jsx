@@ -48,12 +48,16 @@ export default function SchoolCard({ data }) {
       <div
         className="p-3 rounded-2xl my-2 text-xs font-bold"
         style={{
-          background: '#E5484D14',
-          border: '1px solid #E5484D35',
-          color: '#E5484D',
+          background: data.action === 'CANCEL' ? '#E5484D14' : data.action === 'MODIFY' ? '#F28C2814' : '#2EB87214',
+          border: `1px solid ${data.action === 'CANCEL' ? '#E5484D35' : data.action === 'MODIFY' ? '#F28C2835' : '#2EB87235'}`,
+          color: data.action === 'CANCEL' ? '#E5484D' : data.action === 'MODIFY' ? '#F28C28' : '#2EB872',
         }}
       >
-        🚨 Outdoor sports, morning assemblies, and recess suspended. Move all activities to filtered indoor rooms.
+        {data.action === 'CANCEL'
+          ? '🚨 Outdoor sports, morning assemblies, and recess suspended. Move all activities to filtered indoor rooms.'
+          : data.action === 'MODIFY'
+          ? '⚠️ Limit high-intensity sports and strenuous aerobic sessions. Routine recess permitted with observation.'
+          : '✓ Normal outdoor sports and school activities permitted under current air levels.'}
       </div>
 
       {/* Indoor Metrics (Demo Data) */}
@@ -65,7 +69,7 @@ export default function SchoolCard({ data }) {
           className="absolute -top-2.5 right-3 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full"
           style={{ background: 'var(--border)', color: 'var(--text-tertiary)' }}
         >
-          Demo Indoor Sensor
+          Indoor Sensor (Demo data)
         </span>
         <div className="grid grid-cols-3 gap-2 mt-1">
           <div>

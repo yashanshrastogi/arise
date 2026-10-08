@@ -52,13 +52,14 @@ function CustomTooltip({ active, payload, label }) {
   );
 }
 
-export default function ForecastChart({ data }) {
+export default function ForecastChart({ data = [] }) {
   const [activeTab, setActiveTab] = useState('Hourly');
   const tabs = ['Hourly', 'Daily', 'Monthly', 'Yearly'];
 
-  // Current time marker
+  // Current time marker and current AQI
   const nowIdx = data.findIndex(d => !d.past);
-  const nowTime = nowIdx > 0 ? data[nowIdx - 1].time : data[0].time;
+  const nowTime = nowIdx > 0 ? data[nowIdx - 1].time : data[0]?.time || '10 AM';
+  const nowAqi = nowIdx > 0 ? data[nowIdx - 1].aqi : data[0]?.aqi || 312;
 
   // Process data for smooth past solid vs future dashed with seamless connection at now
   const merged = data.map((d, i) => ({
@@ -71,6 +72,12 @@ export default function ForecastChart({ data }) {
   const bwStart = data.find(d => d.bestWindow)?.time;
   const bwItems = data.filter(d => d.bestWindow);
   const bwEnd = bwItems[bwItems.length - 1]?.time;
+
+  // Dynamic YAxis domain and expected low
+  const allValues = data.map(d => d.aqi).filter(v => typeof v === 'number');
+  const minVal = allValues.length ? Math.max(0, Math.floor(Math.min(...allValues) / 10) * 10 - 20) : 0;
+  const maxVal = allValues.length ? Math.ceil(Math.max(...allValues) / 10) * 10 + 20 : 500;
+  const minItem = data.reduce((min, cur) => cur.aqi < min.aqi ? cur : min, data[0] || { aqi: 0, time: '' });
 
   return (
     <div className="card p-6 h-full flex flex-col justify-between">
@@ -136,7 +143,7 @@ export default function ForecastChart({ data }) {
               />
 
               <YAxis
-                domain={[220, 340]}
+                domain={[minVal, maxVal]}
                 axisLine={false}
                 tickLine={false}
                 tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--text-tertiary)' }}
@@ -167,7 +174,7 @@ export default function ForecastChart({ data }) {
                 strokeWidth={2}
                 strokeDasharray="4 4"
                 label={{
-                  value: 'NOW (312)',
+                  value: `NOW (${nowAqi})`,
                   position: 'top',
                   fill: '#E5484D',
                   fontSize: 10,
@@ -229,12 +236,14 @@ export default function ForecastChart({ data }) {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500"></span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">Best Window (3–5 PM)</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">
+              Best Window ({bwStart && bwEnd ? `${bwStart}–${bwEnd}` : 'Afternoon'})
+            </span>
           </div>
         </div>
 
         <div className="text-[11px] font-bold t3">
-          Expected low: <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">245 AQI</span> at 4:00 PM
+          Expected low: <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">{minItem.aqi} AQI</span> at {minItem.time}
         </div>
       </div>
     </div>

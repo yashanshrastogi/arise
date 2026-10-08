@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import mockData from './mockData.json';
+import mockDataModerate from './mockDataModerate.json';
 import AirMap from './components/AirMap';
 import AqiGauge from './components/AqiGauge';
 import ForecastChart from './components/ForecastChart';
@@ -34,7 +35,8 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
 
-  const d = mockData;
+  // Demo mode toggle: dynamically loads the saved very-bad-air day or live moderate day
+  const d = demoMode ? mockData : mockDataModerate;
 
   const scrollToSection = (id) => {
     setActiveNav(id);
@@ -96,18 +98,20 @@ export default function App() {
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-2.5">
-            {/* Demo Badge */}
+            {/* Demo Mode Toggle (Criterion 22) */}
             <button
               onClick={() => setDemoMode(!demoMode)}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all"
+              id="btn-demo-mode"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all hover:scale-105 active:scale-95"
               style={{
-                background: demoMode ? '#F28C2815' : 'var(--surface-alt)',
-                borderColor: demoMode ? '#F28C2850' : 'var(--border)',
-                color: demoMode ? '#F28C28' : 'var(--text-tertiary)',
+                background: demoMode ? '#E5484D18' : '#2EB87218',
+                borderColor: demoMode ? '#E5484D50' : '#2EB87250',
+                color: demoMode ? '#E5484D' : '#2EB872',
               }}
+              title="Toggle Demo Mode: Saved Very-Bad Day (AQI 312) vs Live Moderate Day (AQI 128)"
             >
-              <span className={`w-2 h-2 rounded-full ${demoMode ? 'bg-[#F28C28] animate-pulse' : 'bg-gray-400'}`} />
-              <span>Mock Live</span>
+              <span className={`w-2 h-2 rounded-full ${demoMode ? 'bg-[#E5484D] animate-ping' : 'bg-[#2EB872]'}`} />
+              <span>{demoMode ? 'Demo: Bad Air (AQI 312)' : 'Live: Moderate (AQI 128)'}</span>
             </button>
 
             {/* Dark/Light Mode Toggle */}
@@ -150,6 +154,83 @@ export default function App() {
       {/* ═══════════════ MAIN CONTENT ═══════════════ */}
       <main className="flex-1 max-w-[1720px] mx-auto w-full p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
 
+        {/* ── FIRST VIEWPORT EXECUTIVE HIERARCHY: Location → AQI → Severity → Verdict → Reason → Action ── */}
+        <section
+          id="today"
+          className="w-full card p-4 lg:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border shadow-sm transition-all"
+        >
+          {/* 1. Location */}
+          <div className="flex items-center gap-3 min-w-[210px]">
+            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl bg-indigo/10 text-indigo flex-shrink-0">
+              📍
+            </div>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-wider tm">Monitored Region</div>
+              <div className="text-base lg:text-lg font-black t1 leading-tight">{d.location}</div>
+              <div className="text-[10px] font-bold t3 mt-0.5">{d.updated}</div>
+            </div>
+          </div>
+
+          {/* 2. AQI & Severity */}
+          <div className="flex items-center gap-3.5 px-4 md:border-x min-w-[170px]" style={{ borderColor: 'var(--border)' }}>
+            <div
+              className="text-3xl lg:text-4xl font-black tracking-tight"
+              style={{
+                color: d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : d.aqi > 100 ? '#F5C542' : '#2EB872'
+              }}
+            >
+              {d.aqi}
+            </div>
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-wider tm">Index / Level</div>
+              <span
+                className="inline-flex text-xs font-black px-2.5 py-0.5 rounded-full mt-0.5"
+                style={{
+                  background: (d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542') + '18',
+                  color: d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542',
+                  border: `1px solid ${(d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542')}35`
+                }}
+              >
+                {d.status}
+              </span>
+            </div>
+          </div>
+
+          {/* 3. Verdict */}
+          <div className="flex items-center min-w-[130px]">
+            <div
+              className="w-full text-center px-4 py-2 rounded-xl text-xs font-black tracking-wider uppercase shadow-sm"
+              style={{
+                background: d.verdict === 'STAY IN' ? '#E5484D' : d.verdict === 'CUT BACK' ? '#F28C28' : '#2EB872',
+                color: '#ffffff',
+              }}
+            >
+              {d.verdict}
+            </div>
+          </div>
+
+          {/* 4. Reason */}
+          <div className="flex-1 md:max-w-md px-2">
+            <div className="text-[10px] font-black uppercase tracking-wider tm mb-0.5">Primary Reason</div>
+            <p className="text-xs font-bold t1 leading-snug line-clamp-2">
+              <span className="text-indigo font-extrabold">{d.why?.[0]?.label}:</span> {d.why?.[0]?.detail}
+            </p>
+          </div>
+
+          {/* 5. Action */}
+          <div
+            className="min-w-[240px] p-2.5 rounded-2xl border flex flex-col justify-center"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+          >
+            <div className="text-[10px] font-black uppercase tracking-wider text-indigo mb-0.5">Recommended Action</div>
+            <div className="text-xs font-bold t1 leading-tight line-clamp-2">{d.recommendation}</div>
+            <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 mt-1 flex items-center justify-between">
+              <span>Best Window: {d.bestWindow}</span>
+              <span className="t3 font-bold">Recheck {d.recheckAt}</span>
+            </div>
+          </div>
+        </section>
+
         {/* ── SECTION 1: MAP (Full Width, Majestic s1/s2 Experience) ── */}
         <section id="map" className="w-full">
           <AirMap stations={d.stations} fires={d.fires} dark={dark} />
@@ -182,10 +263,10 @@ export default function App() {
           {/* Card 1: Air Flow Status (from s2) */}
           <div className="flex flex-col">
             <AirFlowCard
-              speed="3.2"
+              speed={demoMode ? "3.2" : "8.5"}
               unit="km/h"
-              direction="NW"
-              degrees={315}
+              direction={demoMode ? "NW" : "WNW"}
+              degrees={demoMode ? 315 : 290}
             />
           </div>
 

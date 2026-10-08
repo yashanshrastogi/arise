@@ -178,6 +178,11 @@ export default function AskArise({ replies = [] }) {
           ➤
         </button>
       </div>
+
+      {/* Non-medical guidance disclaimer (Criterion 35) */}
+      <div className="text-[10px] font-medium tm text-center mt-2 pt-1.5 border-t" style={{ borderColor: 'var(--border)' }}>
+        Environmental exposure intelligence for everyday decisions · Not medical advice
+      </div>
     </div>
   );
 }

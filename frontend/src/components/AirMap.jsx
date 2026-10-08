@@ -153,17 +153,43 @@ function getUserLocationMarkerIcon(google) {
   };
 }
 
+// 4. Real User Location GPS Marker (Visually differentiated pulsing blue radar beacon)
+function getUserGpsMarkerIcon(google) {
+  const size = 48;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <!-- Radiating translucent blue radar wave -->
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 4}" fill="#2563EB" fill-opacity="0.22" stroke="#3B82F6" stroke-width="1.5" stroke-dasharray="3,3" />
+      <!-- Solid vibrant blue beacon body with clean white stroke -->
+      <circle cx="${size / 2}" cy="${size / 2}" r="11" fill="#2563EB" stroke="#ffffff" stroke-width="3.5" />
+      <!-- Pure white satellite core -->
+      <circle cx="${size / 2}" cy="${size / 2}" r="4" fill="#ffffff" />
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+  };
+}
+
 export default function AirMap({ stations = [], fires = [], dark = false }) {
   const mapRef = useRef(null);
   const googleMapInstance = useRef(null);
   const infoWindowRef = useRef(null);
-  const markersRef = useRef({ stations: [], fires: [], user: null });
+  const markersRef = useRef({ stations: [], fires: [], user: null, userGps: null });
   const circlesRef = useRef([]);
 
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [viewOptionsOpen, setViewOptionsOpen] = useState(true);
   const [selectedStationName, setSelectedStationName] = useState('Delhi-NCR');
+
+  // Real browser geolocation state
+  const [userLocation, setUserLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const [geoStatus, setGeoStatus] = useState(null);
 
   // Layer state
   const [layers, setLayers] = useState({
@@ -304,6 +330,45 @@ export default function AirMap({ stations = [], fires = [], dark = false }) {
       markersRef.current.user = userMarker;
     }
 
+    // Real Browser GPS User Location Marker
+    if (userLocation) {
+      if (markersRef.current.userGps) {
+        markersRef.current.userGps.setPosition({ lat: userLocation.lat, lng: userLocation.lng });
+        markersRef.current.userGps.setMap(map);
+      } else {
+        const gpsMarker = new google.maps.Marker({
+          position: { lat: userLocation.lat, lng: userLocation.lng },
+          map: map,
+          title: 'Your Location (GPS)',
+          icon: getUserGpsMarkerIcon(google),
+          zIndex: 2000,
+        });
+
+        gpsMarker.addListener('click', () => {
+          infoWindow.setContent(`
+            <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 6px 10px; min-width: 195px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 14px;">🎯</span>
+                <span style="font-size: 11px; font-weight: 800; color: #2563EB; text-transform: uppercase; letter-spacing: 0.5px;">Your Location (GPS)</span>
+              </div>
+              <div style="font-size: 14px; font-weight: 800; color: #111827; margin-top: 3px;">
+                Browser Geolocation Active
+              </div>
+              <div style="font-size: 11px; font-weight: 600; color: #475569; margin-top: 4px;">
+                Lat: ${userLocation.lat.toFixed(4)}°, Lng: ${userLocation.lng.toFixed(4)}°
+              </div>
+              <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #e2e8f0; font-size: 10px; font-weight: 700; color: #16a34a;">
+                ✓ Zero cloud transmission · Processed on-device
+              </div>
+            </div>
+          `);
+          infoWindow.open(map, gpsMarker);
+        });
+
+        markersRef.current.userGps = gpsMarker;
+      }
+    }
+
     // 2. Monitoring Station Markers
     if (layers.stations) {
       stations.forEach((st, i) => {
@@ -424,7 +489,60 @@ export default function AirMap({ stations = [], fires = [], dark = false }) {
 
       circlesRef.current = [outerCircle, midCircle, coreCircle];
     }
-  }, [mapReady, layers, stations, fires]);
+  }, [mapReady, layers, stations, fires, userLocation]);
+
+  // Real browser geolocation handler (Phase 1 compliant: strictly on-device)
+  const handleLocateMe = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setGeoStatus({
+        type: 'warning',
+        message: 'Browser Geolocation is not supported by your browser.',
+      });
+      setTimeout(() => setGeoStatus(null), 5000);
+      return;
+    }
+
+    setLocating(true);
+    setGeoStatus(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setUserLocation({ lat, lng });
+
+        if (googleMapInstance.current) {
+          googleMapInstance.current.panTo({ lat, lng });
+          googleMapInstance.current.setZoom(13);
+        }
+
+        setGeoStatus({
+          type: 'success',
+          message: `Location acquired: ${lat.toFixed(4)}°, ${lng.toFixed(4)}° (device only)`,
+        });
+        setTimeout(() => setGeoStatus(null), 4500);
+      },
+      (error) => {
+        setLocating(false);
+        let msg = 'Unable to determine your location.';
+        if (error.code === 1 || error.code === error.PERMISSION_DENIED) {
+          msg = 'Location permission denied. Map remains centered on Delhi-NCR.';
+        } else if (error.code === 2 || error.code === error.POSITION_UNAVAILABLE) {
+          msg = 'Geolocation unavailable on this device. Retaining Delhi-NCR view.';
+        } else if (error.code === 3 || error.code === error.TIMEOUT) {
+          msg = 'Location request timed out. Retaining Delhi-NCR view.';
+        }
+        setGeoStatus({ type: 'warning', message: msg });
+        setTimeout(() => setGeoStatus(null), 5000);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      }
+    );
+  };
 
   // Zoom control helpers
   const handleZoomIn = () => {
@@ -540,8 +658,43 @@ export default function AirMap({ stations = [], fires = [], dark = false }) {
         </div>
       </div>
 
-      {/* ── 2. Floating Search Pill (Top-Right, Mock / Local Interaction) ── */}
-      <div className="absolute top-4 right-4 z-[10] hidden sm:block">
+      {/* ── Geolocation Status Toast Notification ── */}
+      {geoStatus && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[30] animate-in fade-in slide-in-from-top-2 duration-200">
+          <div
+            className={`px-4 py-2 rounded-2xl shadow-2xl text-xs font-black border backdrop-blur-md flex items-center gap-2.5 ${
+              geoStatus.type === 'success'
+                ? 'bg-emerald-600 text-white border-emerald-400 shadow-emerald-600/30'
+                : 'bg-slate-900/95 text-white border-slate-700 shadow-slate-900/40'
+            }`}
+          >
+            <span>{geoStatus.type === 'success' ? '✓' : '⚠️'}</span>
+            <span>{geoStatus.message}</span>
+            <button
+              onClick={() => setGeoStatus(null)}
+              className="ml-1 opacity-70 hover:opacity-100 font-extrabold text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 2. Floating Search Pill & Locate Me (Top-Right) ── */}
+      <div className="absolute top-4 right-4 z-[10] hidden sm:flex items-center gap-2">
+        <button
+          onClick={handleLocateMe}
+          disabled={locating}
+          className={`glass rounded-full px-3.5 py-1.5 flex items-center gap-1.5 text-xs font-black shadow-lg border transition-all hover:scale-105 active:scale-95 ${
+            userLocation ? 'text-blue-600 border-blue-500/50' : 't1'
+          }`}
+          style={{ borderColor: userLocation ? '#2563eb' : 'var(--border)' }}
+          title="Use current device location via browser Geolocation API"
+        >
+          <span className={locating ? 'animate-spin' : ''}>🎯</span>
+          <span>{locating ? 'Locating...' : userLocation ? 'GPS Active' : 'Locate Me'}</span>
+        </button>
+
         <div className="glass rounded-full pl-4 pr-1.5 py-1.5 flex items-center gap-2 shadow-lg border" style={{ borderColor: 'var(--border)' }}>
           <select
             value={selectedStationName}
@@ -585,8 +738,49 @@ export default function AirMap({ stations = [], fires = [], dark = false }) {
         </div>
       </div>
 
-      {/* ── 4. Floating Zoom Controls (Bottom-Right) ── */}
-      <div className="absolute bottom-5 right-5 z-[10] flex flex-col gap-1.5">
+      {/* ── 4. Floating Map Controls (Bottom-Right: Dedicated Locate Me + Zoom) ── */}
+      <div className="absolute bottom-5 right-5 z-[10] flex flex-col gap-2 items-center">
+        {/* Dedicated GPS / Locate Me Button (Criteria 9-15) */}
+        <button
+          onClick={handleLocateMe}
+          disabled={locating}
+          id="btn-locate-me"
+          className={`w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-extrabold shadow-lg border transition-all ${
+            userLocation
+              ? 'bg-blue-600 text-white border-blue-500 shadow-blue-500/30 ring-2 ring-blue-400/40'
+              : locating
+              ? 'glass border-indigo/40 text-indigo animate-pulse'
+              : 'glass t1 hover:bg-[var(--surface-alt)] hover:scale-105 active:scale-95'
+          }`}
+          style={{ borderColor: userLocation ? '#2563eb' : 'var(--border)' }}
+          title="Locate Me (Browser GPS)"
+          aria-label="Locate Me"
+        >
+          {locating ? (
+            <span className="w-4 h-4 border-2 border-indigo border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="7" />
+              <line x1="12" y1="1" x2="12" y2="5" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="1" y1="12" x2="5" y2="12" />
+              <line x1="19" y1="12" x2="23" y2="12" />
+              <circle cx="12" cy="12" r="2" fill="currentColor" />
+            </svg>
+          )}
+        </button>
+
+        {/* Zoom Controls */}
         <div className="glass rounded-2xl p-1 shadow-lg border flex flex-col gap-1" style={{ borderColor: 'var(--border)' }}>
           <button
             onClick={handleZoomIn}
