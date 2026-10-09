@@ -52,6 +52,20 @@ async def observability_middleware(request: Request, call_next):
     return response
 
 
+# Root endpoint
+@app.get("/", tags=["Root"])
+def root():
+    """Root endpoint welcoming users and providing direct links to documentation and health check."""
+    return {
+        "service": "Arise API",
+        "description": "Delhi-NCR Environmental Intelligence & Air Quality Decision Platform",
+        "version": "2.0.0",
+        "status": "online",
+        "docs_url": "/docs",
+        "health_url": "/health"
+    }
+
+
 # Mount API routers
 app.include_router(health_router)
 app.include_router(air_router)
