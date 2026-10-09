@@ -62,6 +62,8 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
       best_window: "3 PM – 5 PM",
       recheck_at: "4:00 PM",
       sources: ["CPCB Stations", "Open-Meteo Dynamics"],
+      assistant_label: "Arise Assistant (rule-based)",
+      is_rule_based: true,
       timestamp: "10:15 AM",
     },
   ]);
@@ -98,6 +100,8 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
             best_window: res.best_window,
             recheck_at: res.recheck_at,
             sources: res.sources || ["CPCB Ground Stations"],
+            assistant_label: res.assistant_label || "Arise Assistant (rule-based)",
+            is_rule_based: res.is_rule_based ?? true,
             timestamp: nowTime,
           },
         ]);
@@ -130,6 +134,8 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
         best_window: fb.best_window || "3 PM – 5 PM",
         recheck_at: fb.recheck_at || "4:00 PM",
         sources: fb.sources || ["CPCB Stations"],
+        assistant_label: "Arise Assistant (rule-based)",
+        is_rule_based: true,
         timestamp: nowTime,
       },
     ]);
@@ -146,12 +152,16 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
           </div>
           <div>
             <h3 className="text-sm font-extrabold t1">Ask Arise</h3>
-            <p className="text-[10px] font-semibold t3">Strands AI Intelligence Copilot · Tool Grounded</p>
+            <p className="text-[10px] font-semibold t3">Environmental Decision Assistant · Tool Grounded</p>
           </div>
         </div>
-        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo/10 text-indigo flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo animate-pulse" />
-          <span>Strands Agent</span>
+        <span
+          className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5"
+          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          title="Bedrock AI with automatic rule-based verdict fallback"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Bedrock + Rule Fallback</span>
         </span>
       </div>
 
@@ -180,13 +190,24 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
                   borderLeft: `4px solid ${col}`,
                 }}
               >
-                <div className="flex items-center justify-between">
-                  <span
-                    className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider"
-                    style={{ background: `${col}18`, color: col }}
-                  >
-                    {m.verdict}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider"
+                      style={{ background: `${col}18`, color: col }}
+                    >
+                      {m.verdict}
+                    </span>
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                        m.is_rule_based
+                          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                          : 'bg-indigo/10 text-indigo border-indigo/20'
+                      }`}
+                    >
+                      {m.assistant_label || (m.is_rule_based ? 'Arise Assistant (rule-based)' : 'Arise AI (Bedrock)')}
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2">
                     {m.best_window && (
                       <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400">

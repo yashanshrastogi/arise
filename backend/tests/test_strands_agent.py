@@ -144,6 +144,31 @@ class TestChatApiRoute(unittest.TestCase):
         self.assertIn("best_window", data)
         self.assertIn("recheck_at", data)
         self.assertIn("sources", data)
+        self.assertEqual(data.get("assistant_label"), "Arise Assistant (rule-based)")
+        self.assertTrue(data.get("is_rule_based"))
+        self.assertIn("Arise Assistant (rule-based)", data.get("sources", []))
+
+    def test_chat_bedrock_exception_fallback(self):
+        """
+        Verify that on any Bedrock exception, /chat automatically falls back to
+        a rule-based answer labeled 'Arise Assistant (rule-based)', never returning 500.
+        """
+        from unittest.mock import patch
+        payload = {
+            "question": "Can my kid play outside today?",
+            "lat": 28.6139,
+            "lon": 77.2090,
+            "persona": "Child/Parent",
+            "demo": True,
+        }
+        with patch("app.agents.arise_agent.BedrockModel", side_effect=RuntimeError("Simulated Bedrock Throttling")):
+            res = self.client.post("/chat", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertEqual(data.get("assistant_label"), "Arise Assistant (rule-based)")
+            self.assertTrue(data.get("is_rule_based"))
+            self.assertIn("verdict", data)
+            self.assertIn("headline", data)
 
     def test_chat_endpoint_empty_question(self):
         payload = {

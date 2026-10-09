@@ -180,6 +180,7 @@ def _generate_grounded_fallback_response(
     ]
     if fire_data.get("signals_count", 0) > 0:
         sources_list.append("NASA FIRMS (VIIRS Thermal Detection)")
+    sources_list.append("Arise Assistant (rule-based)")
 
     return AskAriseVerdictResponse(
         verdict=verdict,
@@ -191,12 +192,16 @@ def _generate_grounded_fallback_response(
         best_window=best_window,
         recheck_at=recheck_at,
         sources=sources_list,
+        assistant_label="Arise Assistant (rule-based)",
+        is_rule_based=True,
     )
 
 
 class AriseAgent:
     """
     Strands Environmental Copilot for Arise.
+    Tries Bedrock; on any exception, automatically falls back to a rule-based
+    answer built from the verdict engine and tool data.
     """
 
     def __init__(self):
@@ -213,8 +218,10 @@ class AriseAgent:
     async def answer(self, request: AskAriseRequest) -> AskAriseVerdictResponse:
         """
         Execute Ask Arise query.
-        Tries Strands Agent with Bedrock when in AWS mode;
-        falls back gracefully to deterministic tool-grounded engine in local mode.
+        Tries Bedrock; on any exception, automatically falls back to a rule-based
+        answer built from the verdict engine and tool data.
+        Labels the response 'Arise Assistant (rule-based)' when the fallback is used.
+        Never presents rule-based text as AI-generated.
         """
         # Always run authoritative ground tools first to guarantee facts
         verdict_data = get_verdict(lat=request.lat, lon=request.lon, persona=request.persona, demo=request.demo)
@@ -222,29 +229,39 @@ class AriseAgent:
         fc_data = get_forecast(lat=request.lat, lon=request.lon, demo=request.demo)
         fire_data = get_fire_signal(lat=request.lat, lon=request.lon, demo=request.demo)
 
-        # In AWS mode with Bedrock configured, run live Strands Agent
-        if self.settings.MODE == "aws" and self.settings.AWS_REGION:
-            try:
-                model = BedrockModel(model_id=self.settings.BEDROCK_MODEL_ID)
-                agent = Agent(
-                    model=model,
-                    tools=self.tools,
-                    system_prompt=SYSTEM_PROMPT,
-                    structured_output_model=AskAriseVerdictResponse,
-                )
-                response = await agent.run(request.question)
-                if isinstance(response, AskAriseVerdictResponse):
-                    # Ensure agent NEVER overrode deterministic verdict
-                    if response.verdict != verdict_data["verdict"]:
-                        logger.warning(
-                            f"LLM attempted to override verdict ({response.verdict} vs {verdict_data['verdict']}). Reverting to authoritative verdict."
-                        )
-                        response.verdict = verdict_data["verdict"]
-                    return response
-            except Exception as e:
-                logger.warning(f"Strands Bedrock agent unavailable ({e}), using grounded tool engine.")
+        # 1. Try Bedrock
+        try:
+            model_id = self.settings.BEDROCK_MODEL_ID or "us.amazon.nova-lite-v1:0"
+            region_name = self.settings.AWS_REGION or "us-east-1"
+            model = BedrockModel(model_id=model_id, region_name=region_name)
+            agent = Agent(
+                model=model,
+                tools=self.tools,
+                system_prompt=SYSTEM_PROMPT,
+                structured_output_model=AskAriseVerdictResponse,
+            )
+            result = await agent.invoke_async(
+                request.question,
+                structured_output_model=AskAriseVerdictResponse,
+            )
+            parsed = getattr(result, "structured_output", None) or result
+            if isinstance(parsed, AskAriseVerdictResponse):
+                # Ensure agent NEVER overrode deterministic verdict
+                if parsed.verdict != verdict_data["verdict"]:
+                    logger.warning(
+                        f"LLM attempted to override verdict ({parsed.verdict} vs {verdict_data['verdict']}). Reverting to authoritative verdict."
+                    )
+                    parsed.verdict = verdict_data["verdict"]
+                parsed.assistant_label = f"Arise AI (Amazon Bedrock · {model_id})"
+                parsed.is_rule_based = False
+                return parsed
+        except Exception as e:
+            logger.info(
+                f"Bedrock invocation unavailable or failed ({type(e).__name__}: {e}). "
+                f"Automatically falling back to rule-based answer built from verdict engine and tool data."
+            )
 
-        # Grounded tool-based explanation
+        # 2. Automatically fall back to rule-based answer built from verdict engine and tool data
         return _generate_grounded_fallback_response(
             question=request.question,
             verdict_data=verdict_data,
