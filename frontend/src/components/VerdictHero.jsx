@@ -251,8 +251,8 @@ export default function VerdictHero({
               </span>
             </div>
           ) : (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 dark:bg-red-950/30 text-red-700 dark:text-red-300 font-bold border border-red-500/20">
-              <span>✕</span>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-rose-100 text-rose-950 border border-rose-300 font-extrabold shadow-2xs dark:bg-rose-950/50 dark:text-rose-100 dark:border-rose-800">
+              <span className="text-rose-700 dark:text-rose-400">✕</span>
               <span>No safe time to go out today.</span>
             </div>
           )}

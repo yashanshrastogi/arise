@@ -115,6 +115,45 @@ body {
   box-shadow: var(--shadow-2);
 }
 
+/* ── Solid Affiliated Map Overlays (Opaque in both light & dark themes) ── */
+.map-solid-panel {
+  background-color: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+}
+
+.dark .map-solid-panel, [data-theme="dark"] .map-solid-panel {
+  background-color: #131A2E !important;
+  border-color: #1E293B !important;
+  color: #E7EAF3 !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+
+.map-solid-control {
+  background-color: var(--card) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08) !important;
+}
+
+.map-solid-control:hover {
+  background-color: var(--surface-alt) !important;
+}
+
+.dark .map-solid-control, [data-theme="dark"] .map-solid-control {
+  background-color: #131A2E !important;
+  border-color: #1E293B !important;
+  color: #E7EAF3 !important;
+}
+
+/* Fallback for glass utility: guarantee solid opacity affiliated with current theme */
+.glass {
+  background-color: var(--card) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
 /* ── Touch Targets (WCAG 2.2 >= 44x44px) ── */
 .touch-target {
   min-height: 44px;

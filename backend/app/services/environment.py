@@ -206,6 +206,10 @@ class EnvironmentService:
         weather_dict["condition"] = snapshot.weather.condition_text if snapshot.weather else "Hazy Sunshine"
         weather_dict["icon"] = "🌤️"
         weather_dict["correlation"] = snapshot.weather.correlation_text if snapshot.weather else "Calm winds limiting dispersion."
+        weather_dict["uvIndex"] = getattr(snapshot.weather, "uv_index", 5.0) or 5.0
+        weather_dict["visibility"] = getattr(snapshot.weather, "visibility", 2.8) or 2.8
+        weather_dict["sunrise"] = "6:22 AM"
+        weather_dict["sunset"] = "5:54 PM"
 
         return {
             "location": snapshot.location,

@@ -62,7 +62,7 @@ export default function WeatherCard({ weather, aqi }) {
         </div>
         <div>
           <div className="text-[10px] font-bold uppercase tm">Sun strength</div>
-          <div className="text-xs font-black t1 mt-0.5">{weather.uvIndex}</div>
+          <div className="text-xs font-black t1 mt-0.5">{weather.uvIndex != null ? `${weather.uvIndex} (UV)` : '5.0 (UV)'}</div>
         </div>
       </div>
 
@@ -76,7 +76,9 @@ export default function WeatherCard({ weather, aqi }) {
       >
         <div className="flex items-center gap-1.5 font-black mb-1" style={{ color: aqi > 300 ? 'var(--poor-ink)' : 'var(--good-ink)' }}>
           <span>ⓘ</span>
-          <span className="text-[10px] uppercase tracking-wider font-extrabold">Why the air is stuck</span>
+          <span className="text-[10px] uppercase tracking-wider font-extrabold">
+            {aqi > 300 ? 'Why the air is trapped' : 'Atmospheric Dispersion'}
+          </span>
         </div>
         <p className="text-xs font-semibold t1 leading-tight">
           {weather.correlation || (aqi > 300 ? 'Calm surface wind under 4 km/h prevents smoke and dust from dispersing.' : 'Active winds help ventilate the surface layer.')}
@@ -85,8 +87,8 @@ export default function WeatherCard({ weather, aqi }) {
 
       {/* Sunrise / Sunset */}
       <div className="flex items-center justify-between text-xs font-bold tm pt-2 mt-2 border-t" style={{ borderColor: 'var(--border)' }}>
-        <span>🌅 Sunrise: {weather.sunrise}</span>
-        <span>🌇 Sunset: {weather.sunset}</span>
+        <span>🌅 Sunrise: {weather.sunrise || '6:22 AM'}</span>
+        <span>🌇 Sunset: {weather.sunset || '5:54 PM'}</span>
       </div>
     </div>
   );

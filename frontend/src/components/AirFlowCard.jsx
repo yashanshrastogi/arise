@@ -6,6 +6,9 @@ import React from 'react';
  * and atmospheric dispersion status banner.
  */
 export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 'NW', degrees = 315 }) {
+  const speedNum = parseFloat(speed) || 3.2;
+  const speedMs = (speedNum / 3.6).toFixed(1);
+
   // Compass dial points
   const points = [
     { deg: 0, label: 'N' },
@@ -28,7 +31,7 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
   const r = 62;
 
   return (
-    <div className="card p-5 flex flex-col justify-between h-full">
+    <div className="card p-5 flex flex-col justify-between h-full" style={{ background: 'var(--card)' }}>
       <div className="flex items-center justify-between mb-2">
         <div>
           <h3 className="text-sm font-extrabold t1">Air Flow Status</h3>
@@ -75,24 +78,25 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
             {/* Compass markers */}
             {points.map(pt => {
               const rad = ((pt.deg - 90) * Math.PI) / 180;
-              const x = cx + (r + 10) * Math.cos(rad);
-              const y = cy + (r + 10) * Math.sin(rad);
               const isMajor = ['N', 'S', 'E', 'W'].includes(pt.label);
+              const tx = isMajor ? cx + r * Math.cos(rad) : cx + (r + 10) * Math.cos(rad);
+              const ty = isMajor ? cy + r * Math.sin(rad) : cy + (r + 10) * Math.sin(rad);
+
               return (
                 <g key={pt.deg}>
                   {isMajor ? (
                     <circle
-                      cx={cx + r * Math.cos(rad)}
-                      cy={cy + r * Math.sin(rad)}
-                      r={7}
-                      fill={pt.label === 'N' ? '#5B4BDB' : 'var(--surface-alt)'}
-                      stroke={pt.label === 'N' ? '#5B4BDB' : 'var(--border)'}
-                      strokeWidth="1"
+                      cx={tx}
+                      cy={ty}
+                      r={8}
+                      fill={pt.label === 'N' ? '#4F46E5' : 'var(--card)'}
+                      stroke={pt.label === 'N' ? '#4F46E5' : 'var(--border)'}
+                      strokeWidth="1.5"
                     />
                   ) : null}
                   <text
-                    x={x}
-                    y={y}
+                    x={tx}
+                    y={ty}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize={isMajor ? 8.5 : 6.5}
@@ -116,7 +120,7 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
                   y1={cy}
                   x2={nx}
                   y2={ny}
-                  stroke="#5B4BDB"
+                  stroke="#4F46E5"
                   strokeWidth="2.5"
                   strokeLinecap="round"
                 />
@@ -142,7 +146,7 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
               fontWeight="800"
               fill="var(--text-primary)"
             >
-              0.9 m/s
+              {speedMs} m/s
             </text>
           </svg>
         </div>

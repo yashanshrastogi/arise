@@ -18,7 +18,7 @@ export default function DelhiNcrVectorMap({
   stations = [],
   fires = [],
   weather = null,
-  traffic = null,
+  traffic: _traffic = null,
   dark = false,
   primaryLayer = 'aqi',
   signals = { stations: true, fires: true, traffic: false },
@@ -26,7 +26,7 @@ export default function DelhiNcrVectorMap({
   userLocation = null,
   onSelectStation = null,
 }) {
-  const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [_hoveredPoint, setHoveredPoint] = useState(null);
 
   // Geographic projection helper to SVG viewBox (1000 x 700)
   const project = (lat, lng) => {
@@ -42,14 +42,14 @@ export default function DelhiNcrVectorMap({
     return { x, y };
   };
 
-  // Color tokens
-  const bgCol = dark ? '#0a0f1d' : '#f8fafc';
-  const borderCol = dark ? '#1e293b' : '#e2e8f0';
-  const gridCol = dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)';
-  const nctFill = dark ? '#111827' : '#f1f5f9';
-  const nctStroke = dark ? '#334155' : '#cbd5e1';
-  const riverCol = dark ? '#0284c7' : '#38bdf8';
-  const textColor = dark ? '#94a3b8' : '#64748b';
+  // Color tokens affiliated with light (#F6F7FB / #FFFFFF) and dark (#0B1020 / #131A2E)
+  const bgCol = dark ? '#0B1020' : '#F6F7FB';
+  const borderCol = dark ? '#1E293B' : '#E2E8F0';
+  const gridCol = dark ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)';
+  const nctFill = dark ? '#131A2E' : '#FFFFFF';
+  const nctStroke = dark ? '#334155' : '#CBD5E1';
+  const riverCol = dark ? '#0284C7' : '#0284C7';
+  const textColor = dark ? '#94A3B8' : '#334155';
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden" style={{ background: bgCol }}>
@@ -249,9 +249,9 @@ export default function DelhiNcrVectorMap({
                   width="70"
                   height="16"
                   rx="8"
-                  fill={dark ? 'rgba(15,23,42,0.88)' : 'rgba(255,255,255,0.92)'}
+                  fill={dark ? '#0F172A' : '#FFFFFF'}
                   stroke={isSelected ? col : borderCol}
-                  strokeWidth="1"
+                  strokeWidth="1.5"
                 />
                 <text
                   x="0"
@@ -259,7 +259,7 @@ export default function DelhiNcrVectorMap({
                   textAnchor="middle"
                   fontSize="8.5"
                   fontWeight="800"
-                  fill={dark ? '#f1f5f9' : '#0f172a'}
+                  fill={dark ? '#F1F5F9' : '#0F172A'}
                 >
                   {st.name && st.name.length > 10 ? st.name.slice(0, 9) + '…' : st.name}
                 </text>

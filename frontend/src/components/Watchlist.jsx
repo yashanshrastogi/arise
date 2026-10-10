@@ -30,7 +30,7 @@ export default function Watchlist({
   isGuest = true,
   onSelect = null,
   onOpenSaveLocations = null,
-  onOpenMap = null,
+  onOpenMap: _onOpenMap = null,
 }) {
   if (!items || items.length === 0) {
     return (

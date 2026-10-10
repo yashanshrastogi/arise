@@ -946,8 +946,7 @@ export default function AirMap({
             type="button"
             onClick={() => setControlsVisible(true)}
             id="btn-restore-map-controls"
-            className="absolute top-3 left-3 z-[25] glass px-3 py-1.5 rounded-xl text-xs font-black t1 shadow-lg border hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
-            style={{ borderColor: 'var(--border)' }}
+            className="absolute top-3 left-3 z-[25] map-solid-control px-3.5 py-1.5 rounded-xl text-xs font-black shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
             title="Restore Map Controls & Layer Selector"
           >
             <span>🗺️</span>
@@ -958,7 +957,7 @@ export default function AirMap({
         {/* ── 1. Floating Structured Layer Selector (Top-Left) ── */}
         {controlsVisible && (
         <div ref={layerDrawerRef} className="absolute top-3 left-3 z-[25] max-w-[225px]">
-          <div className="glass rounded-2xl shadow-xl p-2.5 border transition-all" style={{ borderColor: 'var(--border)' }}>
+          <div className="map-solid-panel rounded-2xl shadow-xl p-2.5 transition-all">
             <div
               className="flex items-center justify-between cursor-pointer select-none px-1"
               onClick={() => setLayerDrawerOpen(!layerDrawerOpen)}
@@ -966,7 +965,7 @@ export default function AirMap({
               <div className="flex items-center gap-1.5 text-xs font-black t1">
                 <span>👁️</span>
                 <span>Layers</span>
-                <span className="text-[9px] font-bold text-indigo px-1.5 py-0.2 rounded-full bg-indigo/10 uppercase">
+                <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 px-1.5 py-0.2 rounded-full bg-indigo-500/10 uppercase">
                   {primaryLayer}
                 </span>
               </div>
@@ -991,8 +990,8 @@ export default function AirMap({
                         onClick={() => setPrimaryLayer(p.id)}
                         className={`py-1 px-1 rounded-lg text-[10.5px] font-black transition-all text-center ${
                           primaryLayer === p.id
-                            ? 'bg-indigo text-white shadow-sm'
-                            : 'bg-[var(--surface-alt)] t2 hover:text-[var(--text-primary)]'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100'
                         }`}
                       >
                         {p.label}
@@ -1018,8 +1017,8 @@ export default function AirMap({
                         onClick={() => setPrimaryLayer(w.id)}
                         className={`py-1 px-1 rounded-lg text-[10px] font-black transition-all text-center ${
                           primaryLayer === w.id
-                            ? 'bg-indigo text-white shadow-sm'
-                            : 'bg-[var(--surface-alt)] t2 hover:text-[var(--text-primary)]'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100'
                         }`}
                       >
                         {w.label}
@@ -1073,32 +1072,31 @@ export default function AirMap({
               }
               setMapMode(m => m === 'vector' ? 'google' : 'vector');
             }}
-            className="glass px-2.5 py-1 rounded-full border text-[11px] font-black t1 flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all"
-            style={{ borderColor: 'var(--border)' }}
+            className="map-solid-control px-3 py-1.5 rounded-xl text-[11px] font-black t1 flex items-center gap-1.5 shadow-md hover:scale-105 transition-all"
             title="Switch between Vector Map and Google Maps"
           >
-            <span>{mapMode === 'vector' ? '🗺️ Vector' : '🛰️ Google'}</span>
-            <span className="text-[9px] font-bold text-indigo px-1 py-0.2 rounded-full bg-indigo/10 uppercase">
+            <span>{mapMode === 'vector' ? '🗺️ Vector Map' : '🛰️ Google Maps'}</span>
+            <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 px-1 py-0.2 rounded-full bg-indigo-500/10 uppercase">
               Toggle
             </span>
           </button>
 
-          <div className="glass rounded-full pl-3.5 pr-1 py-1 flex items-center gap-2 shadow-lg border" style={{ borderColor: 'var(--border)' }}>
+          <div className="map-solid-panel rounded-xl pl-3.5 pr-1.5 py-1 flex items-center gap-2 shadow-md">
             <select
               value={selectedStationName}
               onChange={e => handleSelectStation(e.target.value)}
-              className="bg-transparent text-[11px] font-black t1 outline-none cursor-pointer pr-1"
+              className="bg-transparent text-[11px] font-black text-slate-800 dark:text-slate-100 outline-none cursor-pointer pr-1"
             >
-              <option value="Delhi-NCR">Delhi-NCR (All)</option>
+              <option value="Delhi-NCR" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">Delhi-NCR (All)</option>
               {stations.map(s => (
-                <option key={s.id} value={s.name}>
+                <option key={s.id} value={s.name} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">
                   {s.name} (AQI {s.aqi})
                 </option>
               ))}
             </select>
             <button
               onClick={() => handleSelectStation(selectedStationName)}
-              className="w-7 h-7 rounded-full bg-indigo text-white flex items-center justify-center text-xs font-bold shadow-sm"
+              className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold shadow-xs hover:bg-indigo-700"
               title="Focus Station"
             >
               🔍
@@ -1112,7 +1110,7 @@ export default function AirMap({
         <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-[15] pointer-events-auto transition-opacity duration-200 ${
           layerDrawerOpen ? 'hidden md:flex' : 'flex'
         }`}>
-          <div className="glass rounded-2xl px-3.5 py-1.5 shadow-lg border flex flex-col gap-1 min-w-[170px]" style={{ borderColor: 'var(--border)' }}>
+          <div className="map-solid-panel rounded-2xl px-4 py-2 shadow-lg flex flex-col gap-1 min-w-[180px]">
             <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-wider">
               <span className="text-emerald-600 dark:text-emerald-400">{legend.left}</span>
               <span className="text-rose-600 dark:text-rose-400">{legend.right}</span>
@@ -1123,7 +1121,7 @@ export default function AirMap({
             />
             <div className="flex items-center justify-between text-[8.5px] font-bold t3 mt-0.5">
               <span>{legend.title}</span>
-              <span className="text-[8px] text-indigo font-black">Click to inspect</span>
+              <span className="text-[8px] text-indigo-600 dark:text-indigo-400 font-black">Click to inspect</span>
             </div>
           </div>
         </div>
@@ -1135,12 +1133,11 @@ export default function AirMap({
           <button
             onClick={() => setControlsVisible(!controlsVisible)}
             id="btn-toggle-map-controls"
-            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-lg border transition-all hover:scale-105 active:scale-95 ${
+            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95 ${
               controlsVisible
-                ? 'glass t1 hover:bg-[var(--surface-alt)]'
-                : 'bg-indigo text-white border-indigo/40 shadow-indigo/20'
+                ? 'map-solid-control'
+                : 'bg-indigo-600 text-white shadow-indigo-500/20'
             }`}
-            style={{ borderColor: 'var(--border)' }}
             title={controlsVisible ? 'Collapse Overlays to Explore Map Canvas' : 'Show Map Controls & Layers'}
             aria-label={controlsVisible ? 'Collapse map overlays' : 'Show map overlays'}
             aria-pressed={!controlsVisible}
@@ -1152,8 +1149,7 @@ export default function AirMap({
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             id="btn-expand-map"
-            className="w-8 h-8 rounded-xl glass flex items-center justify-center text-xs font-black shadow-lg border transition-all hover:scale-105 active:scale-95 t1"
-            style={{ borderColor: 'var(--border)' }}
+            className="w-8 h-8 rounded-xl map-solid-control flex items-center justify-center text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95"
             title={isExpanded ? 'Minimize Map [Esc]' : 'Expand Map'}
             aria-label="Expand Map"
           >
@@ -1165,19 +1161,18 @@ export default function AirMap({
             onClick={handleLocateMe}
             disabled={locating}
             id="btn-locate-me"
-            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-lg border transition-all ${
+            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-md transition-all ${
               userLocation
-                ? 'bg-blue-600 text-white border-blue-500 shadow-blue-500/30'
+                ? 'bg-blue-600 text-white shadow-blue-500/30'
                 : locating
-                ? 'glass border-indigo/40 text-indigo animate-pulse'
-                : 'glass t1 hover:bg-[var(--surface-alt)] hover:scale-105 active:scale-95'
+                ? 'map-solid-control border-indigo-500 text-indigo-600 animate-pulse'
+                : 'map-solid-control hover:scale-105 active:scale-95'
             }`}
-            style={{ borderColor: userLocation ? '#2563eb' : 'var(--border)' }}
             title="Locate Me (Browser GPS)"
             aria-label="Locate Me"
           >
             {locating ? (
-              <span className="w-3.5 h-3.5 border-2 border-indigo border-t-transparent rounded-full animate-spin" />
+              <span className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
             ) : (
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -1201,7 +1196,7 @@ export default function AirMap({
           </button>
 
           {/* Zoom Controls */}
-          <div className="glass rounded-xl p-0.5 shadow-lg border flex flex-col gap-0.5" style={{ borderColor: 'var(--border)' }}>
+          <div className="map-solid-panel rounded-xl p-0.5 shadow-md flex flex-col gap-0.5">
             <button
               onClick={handleZoomIn}
               className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-extrabold t1 hover:bg-[var(--surface-alt)] transition-colors"
@@ -1249,8 +1244,7 @@ export default function AirMap({
         {/* ── 6. Floating Inspected Station Telemetry Card ── */}
         {inspectedStation && (
           <div
-            className="absolute bottom-16 sm:bottom-4 left-3 z-[28] max-w-[320px] w-full card p-3.5 shadow-2xl border animate-in fade-in slide-in-from-bottom-2 duration-200"
-            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
+            className="absolute bottom-16 sm:bottom-4 left-3 z-[28] max-w-[320px] w-full map-solid-panel p-4 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200"
           >
             <div className="flex items-start justify-between gap-2 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
               <div>

@@ -20,7 +20,6 @@ import TechnicalGlossaryModal from './components/TechnicalGlossaryModal';
 import VerdictHero from './components/VerdictHero';
 import PersonaSelector from './components/PersonaSelector';
 import AskBar from './components/AskBar';
-import BasicAccordions from './components/BasicAccordions';
 import DataStatusPopover from './components/DataStatusPopover';
 import { useAuth } from './auth/AuthContext';
 
@@ -44,15 +43,6 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
 
-  // Default to Basic View mode per Section 3
-  const [viewMode, setViewMode] = useState(() => {
-    try {
-      return localStorage.getItem('arise_view_mode') || 'basic';
-    } catch {
-      return 'basic';
-    }
-  });
-
   const [persona, setPersona] = useState('General Public');
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [healthTipsOpen, setHealthTipsOpen] = useState(false);
@@ -62,15 +52,6 @@ export default function App() {
   const [selectedCoords, setSelectedCoords] = useState({ lat: 28.6139, lon: 77.2090, name: 'Mandir Marg, New Delhi' });
   const [envData, setEnvData] = useState(null);
   const [loadingEnv, setLoadingEnv] = useState(false);
-
-  const handleViewModeChange = (mode) => {
-    setViewMode(mode);
-    try {
-      localStorage.setItem('arise_view_mode', mode);
-    } catch {
-      // ignore
-    }
-  };
 
   // Dark mode class sync
   useEffect(() => {
@@ -330,48 +311,8 @@ export default function App() {
             })}
           </nav>
 
-          {/* Right Controls: Basic/Advanced Toggle, A+, Dark Mode, User Profile */}
+          {/* Right Controls: A+, Dark Mode, User Profile */}
           <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Basic / Advanced Mode Toggle */}
-            <div
-              role="radiogroup"
-              aria-label="Select view mode"
-              className="flex items-center gap-0.5 p-0.5 rounded-xl border bg-[var(--surface-alt)]"
-              style={{ borderColor: 'var(--border)' }}
-            >
-              <button
-                type="button"
-                role="radio"
-                id="btn-view-mode-basic"
-                aria-checked={viewMode === 'basic'}
-                onClick={() => handleViewModeChange('basic')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all touch-target flex items-center gap-1 ${
-                  viewMode === 'basic'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 't3 hover:t1'
-                }`}
-                title="Basic view: quick verdict, advice, and reasons"
-              >
-                <span>🌱</span>
-                <span className="hidden sm:inline">Basic</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                id="btn-view-mode-advanced"
-                aria-checked={viewMode === 'advanced'}
-                onClick={() => handleViewModeChange('advanced')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all touch-target flex items-center gap-1 ${
-                  viewMode === 'advanced'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 't3 hover:t1'
-                }`}
-                title="Advanced view: detailed charts, telemetry, and corridors"
-              >
-                <span>⚡</span>
-                <span className="hidden sm:inline">Advanced</span>
-              </button>
-            </div>
 
             {/* A+ Font Size Toggle */}
             <button
@@ -418,146 +359,101 @@ export default function App() {
       <main className="flex-1 w-full px-4 sm:px-6 py-6 flex flex-col items-center">
         {/* ── TAB 1: TODAY (Core "Can I go out?" Intelligence) ── */}
         {activeTab === 'today' && (
-          viewMode === 'basic' ? (
-            /* ─────────────────────────────────────────────────────────── */
-            /* ── BASIC VIEW (Wireframe: Single Column, Max 720px) ────── */
-            /* ─────────────────────────────────────────────────────────── */
-            <div className="w-full max-w-[720px] space-y-5">
-              {/* Persona Selector ("Who are you checking for?") */}
-              <PersonaSelector
-                currentPersona={persona}
-                onSelectPersona={(p) => setPersona(p)}
-              />
+          <div className="w-full max-w-[1400px] space-y-6">
+            {/* Persona Selector ("Who are you checking for?") */}
+            <PersonaSelector
+              currentPersona={persona}
+              onSelectPersona={(p) => setPersona(p)}
+            />
 
-              {/* The Verdict Hero (Answers "Can I go out?" once, in 72px type) */}
-              <VerdictHero
-                aqi={d.aqi}
-                locationName={selectedCoords.name}
-                forecast={d.forecast}
-                recheckAt={d.recheckAt}
-                persona={persona}
-                isLoading={loadingEnv}
-                onOpenAdvisory={() => setHealthTipsOpen(true)}
-                onOpenMap={() => handleTabChange('map')}
-              />
+            {/* Primary Severity & Weather Row */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              <div className="md:col-span-6 lg:col-span-5 flex flex-col">
+                <VerdictHero
+                  aqi={d.aqi}
+                  locationName={selectedCoords.name}
+                  forecast={d.forecast}
+                  recheckAt={d.recheckAt}
+                  persona={persona}
+                  isLoading={loadingEnv}
+                  onOpenAdvisory={() => setHealthTipsOpen(true)}
+                  onOpenMap={() => handleTabChange('map')}
+                />
+              </div>
+              <div className="md:col-span-6 lg:col-span-4 flex flex-col">
+                <WeatherCard weather={d.weather} aqi={d.aqi} />
+              </div>
+              <div className="md:col-span-12 lg:col-span-3 flex flex-col">
+                <AirFlowCard
+                  speed={d.weather?.windSpeed != null ? String(d.weather.windSpeed) : (demoMode ? "3.2" : "8.5")}
+                  unit="km/h"
+                  direction={d.weather?.windDirection || (demoMode ? "NW" : "WNW")}
+                  degrees={d.weather?.windDegrees || (demoMode ? 315 : 290)}
+                />
+              </div>
+            </div>
 
-              {/* Single Ask Arise Box with Quick Chips */}
-              <AskBar
-                lat={selectedCoords.lat}
-                lon={selectedCoords.lon}
-                persona={persona}
-                demo={demoMode}
-                onOpenFullChat={() => handleTabChange('ask')}
-              />
+            {/* Single Ask Arise Box with Quick Chips */}
+            <AskBar
+              lat={selectedCoords.lat}
+              lon={selectedCoords.lon}
+              persona={persona}
+              demo={demoMode}
+              onOpenFullChat={() => handleTabChange('ask')}
+            />
 
-              {/* 3 Progressive Accordions (Why / Hour by hour / What's in the air) */}
-              <BasicAccordions data={d} />
+            {/* Forecast Horizon Chart */}
+            <ForecastChart data={d.forecast} data7Day={d.forecast7Day} currentAqi={d.aqi} />
 
-              {/* Meta & Navigation Utility Strip */}
-              <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs" style={{ borderColor: 'var(--border)' }}>
-                <div className="flex items-center gap-2">
-                  <DataStatusPopover hasLiveFires={hasLiveFires} />
-                  <button
-                    type="button"
-                    onClick={() => setGlossaryOpen(true)}
-                    className="font-bold t2 hover:underline touch-target px-2 py-1"
-                  >
-                    📖 Glossary
-                  </button>
+            {/* School Safety & Travel Corridors */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <SchoolCard data={d.school} />
+              <MobilityCard corridors={d.traffic?.corridors} />
+              <div className="card p-5 flex flex-col justify-between" style={{ background: 'var(--card)' }}>
+                <div>
+                  <h3 className="text-sm font-extrabold t1 mb-2">My places</h3>
+                  <Watchlist
+                    items={personalizedWatchlist}
+                    isGuest={!isAuthenticated}
+                    onSelect={(lat, lon, name) => setSelectedCoords({ lat, lon, name })}
+                    onOpenSaveLocations={() => {
+                      setCurrentView('signup');
+                      window.location.hash = '#/signup';
+                    }}
+                  />
                 </div>
+                {/* Quick Alert Setting (Truth fix: Alerts coming soon) */}
+                <div className="mt-4 p-3 rounded-xl border" style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}>
+                  <div className="flex items-center justify-between text-xs font-bold t1 mb-1">
+                    <span>Severe Air Alert Threshold</span>
+                    <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">AQI &gt; 300</span>
+                  </div>
+                  <p className="text-[11px] font-medium t3">
+                    {userProfile?.alerts_enabled
+                      ? 'Personal alerts enabled for saved locations.'
+                      : 'Alerts coming soon for critical Delhi-NCR air zones.'}
+                  </p>
+                </div>
+              </div>
+            </div>
 
+            {/* Pollutant Cards */}
+            <PollutantCards pollutants={d.pollutants} />
+
+            {/* Meta & Navigation Utility Strip */}
+            <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-3 text-xs" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <DataStatusPopover hasLiveFires={hasLiveFires} />
                 <button
                   type="button"
-                  onClick={() => handleViewModeChange('advanced')}
-                  className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline touch-target px-2 py-1"
+                  onClick={() => setGlossaryOpen(true)}
+                  className="font-bold t2 hover:underline touch-target px-2 py-1"
                 >
-                  Need deep telemetry? Switch to Advanced view →
+                  📖 Glossary
                 </button>
               </div>
             </div>
-          ) : (
-            /* ─────────────────────────────────────────────────────────── */
-            /* ── ADVANCED VIEW (Multi-Column Detailed Telemetry) ─────── */
-            /* ─────────────────────────────────────────────────────────── */
-            <div className="w-full max-w-[1400px] space-y-6">
-              {/* Quick Persona & Location Banner */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl card" style={{ background: 'var(--card)' }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">📍</span>
-                  <span className="font-extrabold t1">{selectedCoords.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <PersonaSelector currentPersona={persona} onSelectPersona={(p) => setPersona(p)} />
-                  <DataStatusPopover hasLiveFires={hasLiveFires} />
-                </div>
-              </div>
-
-              {/* Primary Severity & Weather Row */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                <div className="md:col-span-6 lg:col-span-5 flex flex-col">
-                  <VerdictHero
-                    aqi={d.aqi}
-                    locationName={selectedCoords.name}
-                    forecast={d.forecast}
-                    recheckAt={d.recheckAt}
-                    persona={persona}
-                    isLoading={loadingEnv}
-                    onOpenAdvisory={() => setHealthTipsOpen(true)}
-                    onOpenMap={() => handleTabChange('map')}
-                  />
-                </div>
-                <div className="md:col-span-6 lg:col-span-4 flex flex-col">
-                  <WeatherCard weather={d.weather} aqi={d.aqi} />
-                </div>
-                <div className="md:col-span-12 lg:col-span-3 flex flex-col">
-                  <AirFlowCard
-                    speed={d.weather?.windSpeed != null ? String(d.weather.windSpeed) : (demoMode ? "3.2" : "8.5")}
-                    unit="km/h"
-                    direction={d.weather?.windDirection || (demoMode ? "NW" : "WNW")}
-                    degrees={d.weather?.windDegrees || (demoMode ? 315 : 290)}
-                  />
-                </div>
-              </div>
-
-              {/* Forecast Horizon Chart */}
-              <ForecastChart data={d.forecast} data7Day={d.forecast7Day} currentAqi={d.aqi} />
-
-              {/* School Safety & Travel Corridors */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <SchoolCard data={d.school} />
-                <MobilityCard corridors={d.traffic?.corridors} />
-                <div className="card p-5 flex flex-col justify-between" style={{ background: 'var(--card)' }}>
-                  <div>
-                    <h3 className="text-sm font-extrabold t1 mb-2">My places</h3>
-                    <Watchlist
-                      items={personalizedWatchlist}
-                      isGuest={!isAuthenticated}
-                      onSelect={(lat, lon, name) => setSelectedCoords({ lat, lon, name })}
-                      onOpenSaveLocations={() => {
-                        setCurrentView('signup');
-                        window.location.hash = '#/signup';
-                      }}
-                    />
-                  </div>
-                  {/* Quick Alert Setting (Truth fix: Alerts coming soon) */}
-                  <div className="mt-4 p-3 rounded-xl border" style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}>
-                    <div className="flex items-center justify-between text-xs font-bold t1 mb-1">
-                      <span>Severe Air Alert Threshold</span>
-                      <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">AQI &gt; 300</span>
-                    </div>
-                    <p className="text-[11px] font-medium t3">
-                      {userProfile?.alerts_enabled
-                        ? 'Personal alerts enabled for saved locations.'
-                        : 'Alerts coming soon for critical Delhi-NCR air zones.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pollutant Cards */}
-              <PollutantCards pollutants={d.pollutants} />
-            </div>
-          )
+          </div>
         )}
 
         {/* ── TAB 2: MAP (Full Delhi-NCR Interactive Map) ── */}
