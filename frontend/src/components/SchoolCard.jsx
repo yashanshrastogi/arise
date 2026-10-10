@@ -1,93 +1,92 @@
 import React from 'react';
 
-/**
- * School Safety decision card — inspired by s4 remediation workflow.
- * Clear GO / MODIFY / CANCEL verdict with indoor telemetry indicators.
- */
-const ACTIONS = [
-  { key: 'GO',     color: '#2EB872', label: 'Go',     icon: '✓' },
-  { key: 'MODIFY', color: '#F28C28', label: 'Modify', icon: '⚠' },
-  { key: 'CANCEL', color: '#E5484D', label: 'Cancel', icon: '✕' },
-];
+export default function SchoolCard({ data = {} }) {
+  const isCancel = data.action === 'CANCEL';
+  const isModify = data.action === 'MODIFY';
 
-export default function SchoolCard({ data }) {
+  const statusLabel = isCancel
+    ? 'Move activities indoors'
+    : isModify
+    ? 'Limit outdoor sports'
+    : 'Normal outdoor activities permitted';
+
+  const statusColor = isCancel ? '#B42318' : isModify ? '#B54708' : '#067647';
+  const statusBg = isCancel ? 'var(--vpoor-bg)' : isModify ? 'var(--poor-bg)' : 'var(--good-bg)';
+  const statusInk = isCancel ? 'var(--vpoor-ink)' : isModify ? 'var(--poor-ink)' : 'var(--good-ink)';
+  const statusIcon = isCancel ? '■' : isModify ? '▲' : '✓';
+
   return (
-    <div className="card p-5 h-full flex flex-col justify-between">
+    <div className="card p-5 h-full flex flex-col justify-between" style={{ background: 'var(--card)' }}>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-sm font-extrabold t1">School Safety Protocol</h3>
-          <p className="text-[11px] font-semibold t3 mt-0.5">{data.question}</p>
+          <h3 className="text-sm font-extrabold t1">Should kids play outside?</h3>
+          <p className="text-xs font-semibold t3 mt-0.5">School and children outdoor guideline</p>
         </div>
-        <span className="text-2xl">🏫</span>
+        <span className="text-2xl" aria-hidden="true">🏫</span>
       </div>
 
-      {/* Decision Action Buttons */}
-      <div className="grid grid-cols-3 gap-2 my-2">
-        {ACTIONS.map(a => {
-          const isActive = data.action === a.key;
-          return (
-            <button
-              key={a.key}
-              className={`py-2.5 px-2 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
-                isActive ? 'shadow-md scale-100' : 'opacity-60 hover:opacity-100'
-              }`}
-              style={{
-                background: isActive ? a.color : 'var(--surface-alt)',
-                color: isActive ? '#ffffff' : 'var(--text-tertiary)',
-                border: `1.5px solid ${isActive ? a.color : 'var(--border)'}`,
-              }}
-            >
-              <span>{a.icon}</span>
-              <span>{a.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Action Directive */}
+      {/* Single Labelled Status (Truth Fix: not clickable buttons) */}
       <div
-        className="p-3 rounded-2xl my-2 text-xs font-bold"
+        className="p-4 rounded-xl border flex items-center justify-between gap-3 my-2"
         style={{
-          background: data.action === 'CANCEL' ? '#E5484D14' : data.action === 'MODIFY' ? '#F28C2814' : '#2EB87214',
-          border: `1px solid ${data.action === 'CANCEL' ? '#E5484D35' : data.action === 'MODIFY' ? '#F28C2835' : '#2EB87235'}`,
-          color: data.action === 'CANCEL' ? '#E5484D' : data.action === 'MODIFY' ? '#F28C28' : '#2EB872',
+          background: statusBg,
+          borderColor: `${statusColor}40`,
+          color: statusInk,
         }}
       >
-        {data.action === 'CANCEL'
-          ? '🚨 Outdoor sports, morning assemblies, and recess suspended. Move all activities to filtered indoor rooms.'
-          : data.action === 'MODIFY'
-          ? '⚠️ Limit high-intensity sports and strenuous aerobic sessions. Routine recess permitted with observation.'
-          : '✓ Normal outdoor sports and school activities permitted under current air levels.'}
+        <div className="flex items-center gap-2.5">
+          <span className="text-lg font-black" aria-hidden="true">{statusIcon}</span>
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-wider opacity-80">
+              Answer for today
+            </div>
+            <div className="text-sm font-black">
+              {statusLabel}
+            </div>
+          </div>
+        </div>
+        <span className="text-xs font-bold px-2 py-0.5 rounded-full border border-current opacity-90">
+          {isCancel ? 'CANCEL' : isModify ? 'MODIFY' : 'GO'}
+        </span>
       </div>
 
-      {/* Indoor Metrics (Demo Data) */}
+      {/* Directive text in plain language */}
+      <p className="text-xs font-medium t2 my-2">
+        {isCancel
+          ? 'Keep sports, assembly and recess indoors today. Run clean indoor filtration in classrooms.'
+          : isModify
+          ? 'Limit high-intensity sports. Low-exertion recess permitted with close observation.'
+          : 'Outdoor sports and routine recess permitted under current acceptable air levels.'}
+      </p>
+
+      {/* Inside Air (Practice data) */}
       <div
-        className="rounded-2xl p-3.5 relative"
-        style={{ background: 'var(--surface-alt)', border: '1px solid var(--border)' }}
+        className="rounded-xl p-3.5 relative mt-2 border"
+        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
       >
-        <span
-          className="absolute -top-2.5 right-3 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full"
-          style={{ background: 'var(--border)', color: 'var(--text-tertiary)' }}
-        >
-          Simulated (demo data)
-        </span>
-        <div className="grid grid-cols-3 gap-2 mt-1">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-bold t3 uppercase">Inside air</span>
+          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+            Practice data
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
           <div>
-            <div className="text-[10px] font-bold t3 uppercase">Indoor PM2.5</div>
-            <div className="text-base font-black t1 mt-0.5">
-              {data.indoorPm25} <span className="text-[10px] font-semibold tm">µg/m³</span>
+            <div className="text-[10px] font-bold t3">Inside dust</div>
+            <div className="text-sm font-black t1 mt-0.5">
+              {data.indoorPm25 || 28} <span className="text-[10px] font-semibold tm">µg/m³</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold t3 uppercase">Indoor CO₂</div>
-            <div className="text-base font-black t1 mt-0.5">
-              {data.indoorCo2} <span className="text-[10px] font-semibold tm">ppm</span>
+            <div className="text-[10px] font-bold t3">Stuffy-air level</div>
+            <div className="text-sm font-black t1 mt-0.5">
+              {data.indoorCo2 || 640} <span className="text-[10px] font-semibold tm">ppm</span>
             </div>
           </div>
           <div>
-            <div className="text-[10px] font-bold t3 uppercase">Air Filtration</div>
-            <div className="text-xs font-black text-indigo mt-1">
-              {data.ventilation}
+            <div className="text-[10px] font-bold t3">Air filtration</div>
+            <div className="text-xs font-black text-indigo-600 dark:text-indigo-400 mt-1">
+              {data.ventilation || 'HEPA Active'}
             </div>
           </div>
         </div>

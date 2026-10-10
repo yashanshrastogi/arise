@@ -122,10 +122,18 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
     };
   });
 
-  // Best window bounds
+  // Best window bounds and truth check (>= 15% improvement or better band)
   const bwStart = data.find(d => d.bestWindow)?.time;
   const bwItems = data.filter(d => d.bestWindow);
   const bwEnd = bwItems[bwItems.length - 1]?.time;
+
+  // Lowest AQI item
+  const minAqiItem = data.reduce((min, cur) => cur.aqi < min.aqi ? cur : min, data[0] || { aqi: 0, time: '' });
+  const currentVal = currentAqi != null ? Number(currentAqi) : (nowVal || 329);
+  const minAqi = minAqiItem?.aqi || currentVal;
+  const percentImprovement = currentVal > 0 ? (currentVal - minAqi) / currentVal : 0;
+  const isBetterBand = (currentVal > 300 && minAqi <= 300) || (currentVal > 200 && minAqi <= 200) || (currentVal > 100 && minAqi <= 100);
+  const hasRealSafeWindow = (percentImprovement >= 0.15 || isBetterBand) && Boolean(bwStart && bwEnd);
 
   // Compute dynamic domain
   const activeDataset = period === '24h' ? data : data7Day.length ? data7Day : data;
@@ -133,11 +141,8 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
   const minVal = allValues.length ? Math.max(0, Math.floor(Math.min(...allValues) / 5) * 5 - 10) : cfg.min;
   const maxVal = allValues.length ? Math.ceil(Math.max(...allValues) / 5) * 5 + 10 : cfg.max;
 
-  // Lowest AQI item
-  const minAqiItem = data.reduce((min, cur) => cur.aqi < min.aqi ? cur : min, data[0] || { aqi: 0, time: '' });
-
   return (
-    <div className="card p-6 h-full flex flex-col justify-between">
+    <div className="card p-6 h-full flex flex-col justify-between" style={{ background: 'var(--card)' }}>
       {/* Header with Title, Metric Switchers, and Period Selectors */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
@@ -145,7 +150,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
             Air &amp; Weather Forecast
           </h3>
           <p className="text-xs font-semibold t3 mt-0.5">
-            Multi-Variable Dispersion Horizon · {cfg.label}
+            How the air changes today · {cfg.label}
           </p>
         </div>
 
@@ -228,15 +233,15 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
 
                 <Tooltip content={<CustomTooltip activeMetric={metric} />} />
 
-                {/* Best Outdoor Window (Green highlight) */}
-                {metric === 'aqi' && bwStart && bwEnd && (
+                {/* Best Outdoor Window (Green highlight, only shown if truly >=15% better or better band) */}
+                {metric === 'aqi' && hasRealSafeWindow && bwStart && bwEnd && (
                   <ReferenceArea
                     x1={bwStart}
                     x2={bwEnd}
-                    fill="#2EB872"
-                    fillOpacity={0.12}
-                    stroke="#2EB872"
-                    strokeOpacity={0.4}
+                    fill="#067647"
+                    fillOpacity={0.14}
+                    stroke="#067647"
+                    strokeOpacity={0.5}
                     strokeDasharray="4 4"
                   />
                 )}
@@ -411,7 +416,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                   <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo/15 text-indigo">
                     {selectedPoint[cfg.dataKey]} {cfg.unit}
                   </span>
-                  {selectedPoint.bestWindow && (
+                  {selectedPoint.bestWindow && hasRealSafeWindow && (
                     <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
                       🌟 Best Outdoor Window
                     </span>
@@ -420,7 +425,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                 <div className="text-[11px] font-medium t2 mt-0.5 flex items-center gap-3 flex-wrap">
                   {selectedPoint.aqi != null && <span>AQI: <strong className="t1">{selectedPoint.aqi}</strong></span>}
                   {selectedPoint.temp != null && <span>Temp: <strong className="t1">{selectedPoint.temp}°C</strong></span>}
-                  {selectedPoint.rainProb != null && <span>Rain: <strong className="t1">{selectedPoint.rainProb}%</strong></span>}
+                  {selectedPoint.rainProb != null && <span>Chance of rain: <strong className="t1">{selectedPoint.rainProb}%</strong></span>}
                   {selectedPoint.windSpeed != null && <span>Wind: <strong className="t1">{selectedPoint.windSpeed} km/h</strong></span>}
                 </div>
               </div>
@@ -442,38 +447,50 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-1 rounded-full" style={{ background: cfg.color }} />
-            <span className="t2 font-bold text-[11px]">Observed</span>
+            <span className="t2 font-bold text-[11px]">So far today</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span
               className="w-3 h-1 rounded-full opacity-60"
               style={{ backgroundImage: `repeating-linear-gradient(90deg, ${cfg.color} 0, ${cfg.color} 3px, transparent 3px, transparent 6px)` }}
             />
-            <span className="t2 font-bold text-[11px]">Forecast Horizon</span>
+            <span className="t2 font-bold text-[11px]">Expected</span>
           </div>
-          {bwStart && bwEnd && (
+          {hasRealSafeWindow && bwStart && bwEnd ? (
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500" />
               <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px]">
                 Best Window ({bwStart}–{bwEnd})
               </span>
             </div>
-          )}
+          ) : metric === 'aqi' ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-red-600 dark:text-red-400 font-bold text-[11px]">
+                No safe time to go out today
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* Plain-English Takeaway */}
         <div className="text-[11px] font-bold t1">
           {metric === 'aqi' ? (
-            <>
-              Optimal outdoor window: <span className="text-emerald-600 dark:text-emerald-400 font-black">{bwStart} – {bwEnd}</span> (dipping to <span className="text-emerald-600 dark:text-emerald-400 font-black">{minAqiItem.aqi} AQI</span>)
-            </>
+            hasRealSafeWindow ? (
+              <>
+                Optimal outdoor window: <span className="text-emerald-600 dark:text-emerald-400 font-black">{bwStart} – {bwEnd}</span> (dipping to <span className="text-emerald-600 dark:text-emerald-400 font-black">{minAqiItem.aqi} AQI</span>)
+              </>
+            ) : (
+              <>
+                Air quality remains very bad throughout the day (between {minVal} and {maxVal} AQI).
+              </>
+            )
           ) : metric === 'temp' ? (
             <>
               Peak heat projected at <span className="text-indigo font-black">1 PM (31°C)</span>, cooling into evening.
             </>
           ) : metric === 'rain' ? (
             <>
-              Precipitation probability remains <span className="text-blue-600 dark:text-blue-400 font-black">&lt;15%</span> across NCR.
+              Chance of rain remains <span className="text-blue-600 dark:text-blue-400 font-black">&lt;15%</span> across NCR.
             </>
           ) : (
             <>

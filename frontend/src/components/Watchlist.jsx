@@ -1,47 +1,47 @@
 import React from 'react';
 
-/**
- * Watchlist component — monitored personal locations (Home, Work, School).
- * Includes empty state explaining the real benefit of saved locations
- * and a high-converting CTA to save locations.
- */
 const AQI_COLOR = aqi =>
-  aqi > 400 ? '#8B1E3F' :
-  aqi > 300 ? '#E5484D' :
-  aqi > 200 ? '#F28C28' :
-  aqi > 100 ? '#F5C542' :
-  aqi > 50  ? '#9BD34A' : '#2EB872';
+  aqi > 400 ? '#7A1B3D' :
+  aqi > 300 ? '#B42318' :
+  aqi > 200 ? '#B54708' :
+  aqi > 100 ? '#FDB022' :
+  aqi > 50  ? '#4D7C0F' : '#067647';
 
 const SEVERITY_ICON = aqi =>
-  aqi > 400 ? '🚨' :
-  aqi > 300 ? '🔴' :
-  aqi > 200 ? '🟠' :
-  aqi > 100 ? '🟡' :
-  aqi > 50  ? '🟢' : '✅';
+  aqi > 400 ? '⚠️' :
+  aqi > 300 ? '■' :
+  aqi > 200 ? '▲' :
+  aqi > 100 ? '●' :
+  aqi > 50  ? '●' : '✓';
 
-export default function Watchlist({ items = [], onSelect = null, onOpenSaveLocations = null }) {
+export default function Watchlist({
+  items = [],
+  isGuest = true,
+  onSelect = null,
+  onOpenSaveLocations = null,
+}) {
   if (!items || items.length === 0) {
     return (
       <div
         className="p-4 rounded-2xl border text-center flex flex-col items-center justify-center gap-2.5"
         style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
       >
-        <div className="w-10 h-10 rounded-2xl bg-indigo/10 text-indigo flex items-center justify-center text-xl">
+        <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center text-xl">
           📍
         </div>
         <div>
-          <h4 className="text-xs font-black t1">No Saved Locations Yet</h4>
+          <h4 className="text-xs font-black t1">No Saved Places Yet</h4>
           <p className="text-[11px] font-medium t3 max-w-xs mt-1 leading-relaxed">
-            Registered users can save Home and Work locations to receive personalized environmental insights and quick-switch air quality monitoring across Delhi-NCR.
+            Save your Home and Work locations to personalize environmental alerts.
           </p>
         </div>
         {onOpenSaveLocations && (
           <button
             type="button"
             onClick={onOpenSaveLocations}
-            className="mt-1 px-3.5 py-1.5 rounded-xl bg-indigo hover:bg-indigo-600 text-white font-bold text-xs shadow-sm transition-all hover:scale-105 active:scale-95"
+            className="mt-1 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition-all touch-target"
           >
-            Save Locations &amp; Personalize Insights
+            Save my places
           </button>
         )}
       </div>
@@ -49,7 +49,23 @@ export default function Watchlist({ items = [], onSelect = null, onOpenSaveLocat
   }
 
   return (
-    <div className="space-y-2 max-w-full" role="list" aria-label="Monitored personal locations">
+    <div className="space-y-2 max-w-full" role="list" aria-label={isGuest ? "Sample places" : "My places"}>
+      {/* Subheader clarifying sample vs saved places */}
+      <div className="flex items-center justify-between px-1 text-xs">
+        <span className="font-bold t3">
+          {isGuest ? 'Sample places (sign in to save yours)' : 'Your saved places'}
+        </span>
+        {isGuest && onOpenSaveLocations && (
+          <button
+            type="button"
+            onClick={onOpenSaveLocations}
+            className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+          >
+            Save my places →
+          </button>
+        )}
+      </div>
+
       {items.map(w => {
         const col = AQI_COLOR(w.aqi);
         const icon = w.name === 'Home' ? '🏠' : w.name === 'School' ? '🏫' : '🏢';
@@ -69,7 +85,7 @@ export default function Watchlist({ items = [], onSelect = null, onOpenSaveLocat
             }}
             aria-label={`Select ${w.name}: AQI ${w.aqi}, status ${w.status}`}
             className={`card p-3 flex items-center justify-between gap-3 transition-all ${
-              onSelect ? 'cursor-pointer hover:border-indigo/50 hover:shadow-sm active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-indigo' : ''
+              onSelect ? 'cursor-pointer hover:border-indigo-400/50 hover:shadow-xs active:scale-[0.99] touch-target' : ''
             }`}
           >
             <div className="flex items-center gap-2.5 min-w-0">
@@ -91,7 +107,7 @@ export default function Watchlist({ items = [], onSelect = null, onOpenSaveLocat
                     <span>Delhi-NCR</span>
                   )}
                   <span>•</span>
-                  <span>{w.updated || 'Live Telemetry'}</span>
+                  <span>{isGuest ? 'Sample' : (w.updated || 'Saved')}</span>
                 </div>
               </div>
             </div>

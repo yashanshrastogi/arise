@@ -69,7 +69,7 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false, p
             best_window: res.best_window,
             recheck_at: res.recheck_at,
             sources: Array.isArray(res.sources) && res.sources.length > 0 ? res.sources : [],
-            assistant_label: res.assistant_label || (isRuleBased ? "Arise Assistant (rule-based)" : "Arise AI (Bedrock)"),
+            assistant_label: res.assistant_label || (isRuleBased ? "Arise Assistant (rule-based)" : "Arise AI (Google Gemini)"),
             is_rule_based: isRuleBased,
             timestamp: res.timestamp || res.recheck_at || "Live Response",
           },
@@ -131,16 +131,16 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false, p
           </div>
           <div>
             <h3 className="text-sm font-extrabold t1">Ask Arise</h3>
-            <p className="text-[10px] font-semibold t3">Environmental Decision Assistant · Tool Grounded</p>
+            <p className="text-[11px] font-semibold t3">Uses today's live data · Tool Grounded</p>
           </div>
         </div>
         <span
-          className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5"
+          className="text-[11px] font-extrabold px-3 py-1 rounded-full border flex items-center gap-1.5 shadow-2xs"
           style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-          title="Bedrock AI with automatic rule-based verdict fallback"
+          title="Google Gemini 2.5 Flash Lite with automatic rule-based verdict fallback"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Bedrock + Rule Fallback</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Gemini + Rule Fallback</span>
         </span>
       </div>
 
@@ -196,7 +196,7 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false, p
                           : 'bg-indigo/10 text-indigo border-indigo/20'
                       }`}
                     >
-                      {m.assistant_label || (m.is_rule_based ? 'Arise Assistant (rule-based)' : 'Arise AI (Bedrock)')}
+                      {m.assistant_label || (m.is_rule_based ? 'Arise Assistant (rule-based)' : 'Arise AI (Google Gemini)')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

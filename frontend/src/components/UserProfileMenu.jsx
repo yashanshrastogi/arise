@@ -67,8 +67,8 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated }) {
           className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-all active:scale-[0.98] flex items-center gap-1.5"
           title="Registered users can save Home and Work locations to personalize environmental insights"
         >
-          <span className="hidden xl:inline">Save Locations &amp; Personalize Insights</span>
-          <span className="xl:hidden">Sign Up</span>
+          <span className="hidden sm:inline">Save my places</span>
+          <span className="sm:hidden">Sign Up</span>
         </button>
 
         {error && (
