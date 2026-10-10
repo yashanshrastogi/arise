@@ -8,3 +8,8 @@ dist/
 *.pyc
 data/cache/
 backend/data/cache/
+*.zip
+changeset_details.json
+create_t8_changeset.sh
+compare_env.py
+new_changeset.json
