@@ -13,3 +13,10 @@ changeset_details.json
 create_t8_changeset.sh
 compare_env.py
 new_changeset.json
+create_f1_changeset.sh
+f1_changeset*.json
+check_stack_params.sh
+inspect_f1_changeset.py.sh
+compare_live_env.py.sh
+check_live_environment.py
+time_warm_chat.py

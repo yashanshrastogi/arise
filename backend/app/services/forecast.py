@@ -93,17 +93,33 @@ class ForecastService:
         """Generate unified 24h hourly and 7-day forecast."""
         raw_points = await self.weather_provider.get_hourly_forecast(lat, lon, force_demo=force_demo)
 
-        # Attach estimated AQI if missing
+        # Calibrate hourly forecast points against live ground telemetry current_aqi
+        now_idx = 0
+        for idx, pt in enumerate(raw_points):
+            if not pt.past:
+                now_idx = max(0, idx - 1)
+                break
+
+        model_now_aqi = raw_points[now_idx].aqi if now_idx < len(raw_points) else None
+
         calibrated_points: List[ForecastPoint] = []
         for i, pt in enumerate(raw_points):
             pt_copy = pt.model_copy()
-            if pt_copy.aqi is None:
-                # Diurnal curve: pollution dips in mid-afternoon (3-5 PM) due to boundary layer expansion
-                # and rises in evening / early morning inversion
-                diurnal_delta = -50 if "3 PM" in pt.time_label or "4 PM" in pt.time_label or "5 PM" in pt.time_label else (
-                    -25 if "1 PM" in pt.time_label or "2 PM" in pt.time_label else 15
+            if model_now_aqi and model_now_aqi > 0 and pt_copy.aqi is not None:
+                # Proportional calibration anchored to current ground truth
+                ratio = current_aqi / float(model_now_aqi)
+                calibrated = round(pt_copy.aqi * ratio)
+                pt_copy.aqi = max(20, min(500, calibrated))
+            else:
+                # Diurnal curve fallback when model AQI is unavailable
+                diurnal_delta = -50 if any(h in pt.time_label for h in ["3 PM", "4 PM", "5 PM"]) else (
+                    -25 if any(h in pt.time_label for h in ["1 PM", "2 PM"]) else 15
                 )
-                pt_copy.aqi = max(50, current_aqi + diurnal_delta)
+                pt_copy.aqi = max(50, min(500, current_aqi + diurnal_delta))
+
+            if i == now_idx:
+                pt_copy.aqi = current_aqi
+
             calibrated_points.append(pt_copy)
 
         window_str, tagged_points = compute_best_outdoor_window(calibrated_points)

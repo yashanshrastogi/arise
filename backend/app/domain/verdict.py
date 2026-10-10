@@ -168,7 +168,7 @@ def evaluate_environment(
     if snapshot.fire_signals:
         is_demo_fires = any(f.source == "DEMO" for f in snapshot.fire_signals)
         sources.append({
-            "name": "NASA FIRMS (Demo Simulation)" if is_demo_fires else "NASA FIRMS (VIIRS Near-Real-Time)",
+            "name": "Simulated Fires (Demo Mode)" if is_demo_fires else "NASA FIRMS (VIIRS Near-Real-Time - fire signal, not proof of cause)",
             "time": snapshot.timestamp
         })
 

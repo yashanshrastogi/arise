@@ -86,8 +86,13 @@ def get_fire_signal(lat: float = 28.6139, lon: float = 77.2090, demo: bool = Fal
     """
     env_svc = EnvironmentService()
     snapshot = _run_async(env_svc.get_environmental_snapshot(lat=lat, lon=lon, force_demo=demo))
+    is_live = any(s.source == "NASA-FIRMS" for s in snapshot.fire_signals)
+    is_demo = all(s.source == "DEMO" for s in snapshot.fire_signals) or not is_live
     return {
         "signals_count": len(snapshot.fire_signals),
+        "is_live": is_live,
+        "is_demo": is_demo,
+        "source": "NASA-FIRMS" if is_live else "DEMO",
         "signals": [
             {
                 "latitude": s.latitude,
@@ -96,10 +101,11 @@ def get_fire_signal(lat: float = 28.6139, lon: float = 77.2090, demo: bool = Fal
                 "direction": s.direction,
                 "confidence": s.confidence,
                 "satellite": s.satellite,
+                "source": s.source,
             }
             for s in snapshot.fire_signals
         ],
-        "disclaimer": "Thermal anomalies indicate satellite heat detections. Environmental impact depends on surface wind dispersion.",
+        "disclaimer": "Thermal anomalies indicate satellite heat detections. Environmental impact depends on surface wind dispersion (fire signal, not proof of cause).",
     }
 
 

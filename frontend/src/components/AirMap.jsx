@@ -624,16 +624,16 @@ export default function AirMap({
           infoWindow.setContent(`
             <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 8px; max-width: 220px;">
               <div style="font-size: 11px; font-weight: 800; color: #E5484D; text-transform: uppercase; display: flex; align-items: center; gap: 4px;">
-                <span>🔥</span> Satellite Fire Signal
+                <span>🔥</span> ${f.isDemo ? 'Simulated Fire Signal (DEMO)' : 'Satellite Fire Signal (VIIRS NRT)'}
               </div>
               <div style="font-size: 13px; font-weight: 800; color: #111827; margin-top: 2px;">
-                Thermal Anomaly (${f.intensity.toUpperCase()})
+                Thermal Anomaly (${f.intensity.toUpperCase()}) ${f.isDemo ? '· DEMO' : ''}
               </div>
               <div style="font-size: 10px; font-weight: 600; color: #64748b; margin-top: 4px; line-height: 1.35;">
-                Detected in monitored upwind region. Satellite fire signals reflect thermal activity; environmental causation is evaluated with wind dispersion telemetry.
+                ${f.isDemo ? 'Calibrated simulated fire hotspot for demonstration mode.' : 'Detected in monitored upwind region. Fire signal, not proof of cause.'}
               </div>
               <div style="font-size: 9px; font-weight: 700; color: #94a3b8; margin-top: 4px;">
-                Lat: ${f.lat.toFixed(2)}, Lng: ${f.lng.toFixed(2)} · NASA FIRMS
+                Lat: ${f.lat.toFixed(2)}, Lng: ${f.lng.toFixed(2)} · ${f.isDemo ? 'DEMO DATA' : 'NASA FIRMS (fire signal, not proof of cause)'}
               </div>
             </div>
           `);
@@ -1007,7 +1007,7 @@ export default function AirMap({
                   </div>
                   {[
                     { key: 'stations', label: 'Stations', icon: '📍' },
-                    { key: 'fires',    label: 'Fire Signals', icon: '🔥' },
+                    { key: 'fires',    label: fires.some(f => f.isDemo) ? 'Fire Signals (DEMO)' : 'Fire Signals', icon: '🔥' },
                     { key: 'traffic',  label: 'NCR Corridors', icon: '🚗' },
                   ].map(s => (
                     <button

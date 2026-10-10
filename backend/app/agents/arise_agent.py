@@ -19,6 +19,7 @@ from strands import Agent
 from strands.models.bedrock import BedrockModel
 
 from app.core.config import get_settings
+from app.cache.repository import get_cache_repository
 from app.agents.schemas import AskAriseVerdictResponse, AskAriseRequest
 from app.agents.tools import (
     get_air_now,
@@ -91,7 +92,10 @@ def _generate_grounded_fallback_response(
     if fc_data.get("forecast_points"):
         sources_list.append("Open-Meteo Atmospheric Dynamics")
     if fire_data.get("signals_count", 0) > 0:
-        sources_list.append("NASA FIRMS (VIIRS Thermal Detection)")
+        if fire_data.get("is_demo") or fire_data.get("source") == "DEMO":
+            sources_list.append("Simulated Fires (Demo Mode)")
+        else:
+            sources_list.append("NASA FIRMS (VIIRS Thermal Detection - fire signal, not proof of cause)")
     sources_list.append("Arise Assistant (rule-based)")
 
     # 1. If necessary environmental data is unavailable, state it truthfully without fabricating
@@ -195,6 +199,32 @@ def _generate_grounded_fallback_response(
                 f"Recheck air quality around {recheck_desc}.",
             ]
 
+    elif "fire" in q_lower or "stubble" in q_lower or "hotspot" in q_lower or "satellite" in q_lower:
+        sig_count = fire_data.get("signals_count", 0)
+        is_demo = fire_data.get("is_demo") or fire_data.get("source") == "DEMO"
+        if sig_count > 0:
+            if is_demo:
+                headline = f"{sig_count} simulated thermal hotspot anomalies displayed in upwind agricultural corridors (Demo mode)."
+                why = [
+                    f"{sig_count} simulated thermal anomalies shown for demonstration (Demo data).",
+                    "Simulated satellite telemetry is used when NASA FIRMS API key is not active.",
+                ]
+            else:
+                headline = f"{sig_count} satellite thermal fire detections observed upwind by NASA FIRMS (fire signal, not proof of cause)."
+                why = [
+                    f"{sig_count} satellite thermal anomalies detected upwind by NASA FIRMS (fire signal, not proof of cause).",
+                    "Satellite observations reflect thermal signatures; direct pollutant impact depends on wind dispersion telemetry.",
+                ]
+        else:
+            headline = "No active thermal fire anomalies detected in the immediate regional basin."
+            why = [
+                "Satellite infrared sensors detect no elevated thermal signatures in upwind corridors.",
+            ]
+        do = [
+            "Monitor regional boundary layer dispersion and wind speed updates.",
+            f"Check updated readings around {recheck_desc}.",
+        ]
+
     elif "why" in q_lower or "reason" in q_lower or "bad" in q_lower:
         headline = f"Air quality is {category} (AQI {aqi}) driven primarily by elevated {pollutant_desc} and calm dispersion."
         why = [
@@ -202,9 +232,14 @@ def _generate_grounded_fallback_response(
             "Calm surface winds and atmospheric inversion trap emissions close to the surface.",
         ]
         if fire_data.get("signals_count", 0) > 0:
-            why.append(
-                f"{fire_data.get('signals_count')} satellite thermal anomalies detected upwind by NASA FIRMS, contributing to regional background load."
-            )
+            if fire_data.get("is_demo") or fire_data.get("source") == "DEMO":
+                why.append(
+                    f"{fire_data.get('signals_count')} simulated thermal anomalies shown for demonstration (Demo data)."
+                )
+            else:
+                why.append(
+                    f"{fire_data.get('signals_count')} satellite thermal anomalies detected upwind by NASA FIRMS (fire signal, not proof of cause)."
+                )
         do = [
             "Limit unnecessary outdoor travel during early morning smog spikes.",
             "Use N95 or equivalent filtration masks when commuting along major corridors.",
@@ -292,13 +327,18 @@ def _generate_grounded_fallback_response(
 class AriseAgent:
     """
     Strands Environmental Copilot for Arise.
-    Tries Bedrock first; on any exception, timeout, or unusable response,
-    automatically falls back to a rule-based answer built from the verdict engine
-    and tool data.
+    1. Checks DynamoDB chat cache (30-minute TTL by rounded location, persona, question).
+    2. When LLM_PROVIDER is 'rule-based', bypasses Bedrock entirely for instant response.
+    3. When LLM_PROVIDER is 'bedrock':
+       - Checks 10-minute circuit breaker on Bedrock failures.
+       - Enforces 5-second timeout on Bedrock invocation.
+       - Automatically trips 10-minute breaker and falls back to rule-based engine on failure.
+    4. Caches answers in DynamoDB for 30 minutes.
     """
 
     def __init__(self):
         self.settings = get_settings()
+        self.cache = get_cache_repository()
         self.tools = [
             get_air_now,
             get_forecast,
@@ -310,14 +350,28 @@ class AriseAgent:
 
     async def answer(self, request: AskAriseRequest) -> AskAriseVerdictResponse:
         """
-        Execute Ask Arise query.
-        Tries Bedrock first; on any exception, timeout, or empty/unusable response,
-        automatically falls back to a rule-based answer built from the verdict engine
-        and tool data.
-        Labels the response 'Arise Assistant (rule-based)' when the fallback is used.
-        Never presents rule-based text as AI-generated.
+        Execute Ask Arise query with caching, circuit breaker, and deterministic fallbacks.
         """
-        # Always query authoritative ground tools first to guarantee facts
+        # 0. Check chat response cache (rounded lat/lon, persona, normalized question)
+        lat_rnd = round(request.lat, 2)
+        lon_rnd = round(request.lon, 2)
+        q_norm = request.question.strip().lower()
+        persona = request.persona
+        cache_key = f"chat:{lat_rnd}:{lon_rnd}:{persona}:{q_norm}"
+
+        cached_entry = self.cache.get(cache_key, allow_stale=False)
+        if cached_entry and cached_entry.value:
+            try:
+                cached_val = cached_entry.value
+                if isinstance(cached_val, dict):
+                    cached_resp = AskAriseVerdictResponse(**cached_val)
+                    cached_resp.timestamp = datetime.now(timezone.utc).strftime("%I:%M %p")
+                    logger.info(f"Serving cached chat response for '{q_norm}' (key: {cache_key})")
+                    return cached_resp
+            except Exception as e:
+                logger.warning(f"Error restoring cached chat response: {e}")
+
+        # Query authoritative ground tools to guarantee factual grounding
         verdict_data = {}
         air_data = {}
         fc_data = {}
@@ -343,7 +397,42 @@ class AriseAgent:
         except Exception as e:
             logger.warning(f"Error querying get_fire_signal: {e}")
 
-        # 1. Try Bedrock first
+        # Check LLM_PROVIDER: When 'rule-based', do NOT call Bedrock at all (instant answer)
+        provider_mode = (self.settings.LLM_PROVIDER or "rule-based").lower()
+        if provider_mode == "rule-based":
+            logger.info("LLM_PROVIDER is 'rule-based'. Bypassing Bedrock for immediate deterministic synthesis.")
+            fallback_resp = _generate_grounded_fallback_response(
+                question=request.question,
+                verdict_data=verdict_data,
+                air_data=air_data,
+                fc_data=fc_data,
+                fire_data=fire_data,
+            )
+            try:
+                self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
+            except Exception as ce:
+                logger.warning(f"Failed to cache chat response: {ce}")
+            return fallback_resp
+
+        # When 'bedrock', check 10-minute circuit breaker on Bedrock failures
+        breaker_key = "bedrock_circuit_breaker:failure"
+        breaker_entry = self.cache.get(breaker_key, allow_stale=False)
+        if breaker_entry and breaker_entry.value:
+            logger.info("Bedrock is in 10-minute circuit breaker cooldown. Immediately using rule-based fallback.")
+            fallback_resp = _generate_grounded_fallback_response(
+                question=request.question,
+                verdict_data=verdict_data,
+                air_data=air_data,
+                fc_data=fc_data,
+                fire_data=fire_data,
+            )
+            try:
+                self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
+            except Exception as ce:
+                logger.warning(f"Failed to cache chat response: {ce}")
+            return fallback_resp
+
+        # Try Bedrock with a strict 5-second timeout
         try:
             model_id = self.settings.BEDROCK_MODEL_ID or "us.amazon.nova-lite-v1:0"
             region_name = self.settings.AWS_REGION or "us-east-1"
@@ -354,7 +443,8 @@ class AriseAgent:
                 system_prompt=SYSTEM_PROMPT,
                 structured_output_model=AskAriseVerdictResponse,
             )
-            timeout_sec = float(self.settings.API_TIMEOUT_SECONDS or 10.0)
+            # 5-second timeout
+            timeout_sec = 5.0
             result = await asyncio.wait_for(
                 agent.invoke_async(
                     request.question,
@@ -364,7 +454,6 @@ class AriseAgent:
             )
             parsed = getattr(result, "structured_output", None) or result
             if _is_usable_bedrock_response(parsed):
-                # Ensure agent NEVER overrode deterministic verdict
                 if verdict_data and verdict_data.get("verdict"):
                     if parsed.verdict != verdict_data["verdict"]:
                         logger.warning(
@@ -376,28 +465,31 @@ class AriseAgent:
                 parsed.is_rule_based = False
                 if not getattr(parsed, "timestamp", None):
                     parsed.timestamp = datetime.now(timezone.utc).strftime("%I:%M %p")
+                try:
+                    self.cache.set(cache_key, parsed.model_dump(), ttl_seconds=1800, source="arise-chat")
+                except Exception as ce:
+                    logger.warning(f"Failed to cache chat response: {ce}")
                 return parsed
             else:
-                logger.warning(
-                    f"Bedrock returned empty or unusable response ({parsed!r}). "
-                    "Automatically falling back to rule-based answer."
-                )
+                logger.warning("Bedrock returned empty or unusable response. Tripping breaker for 10 minutes.")
+                self.cache.set(breaker_key, {"failed": True, "reason": "unusable_response"}, ttl_seconds=600, source="circuit-breaker")
         except asyncio.TimeoutError:
-            logger.warning(
-                "Bedrock invocation timed out. "
-                "Automatically falling back to rule-based answer built from verdict engine and tool data."
-            )
+            logger.warning("Bedrock invocation timed out (5s limit). Tripping breaker for 10 minutes.")
+            self.cache.set(breaker_key, {"failed": True, "reason": "timeout"}, ttl_seconds=600, source="circuit-breaker")
         except Exception as e:
-            logger.info(
-                f"Bedrock invocation unavailable or failed ({type(e).__name__}: {e}). "
-                "Automatically falling back to rule-based answer built from verdict engine and tool data."
-            )
+            logger.info(f"Bedrock invocation failed ({type(e).__name__}: {e}). Tripping breaker for 10 minutes.")
+            self.cache.set(breaker_key, {"failed": True, "reason": str(e)}, ttl_seconds=600, source="circuit-breaker")
 
-        # 2. Automatically fall back to rule-based answer built from verdict engine and tool data
-        return _generate_grounded_fallback_response(
+        # Automatically fall back to rule-based answer
+        fallback_resp = _generate_grounded_fallback_response(
             question=request.question,
             verdict_data=verdict_data,
             air_data=air_data,
             fc_data=fc_data,
             fire_data=fire_data,
         )
+        try:
+            self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
+        except Exception as ce:
+            logger.warning(f"Failed to cache chat response: {ce}")
+        return fallback_resp

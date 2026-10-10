@@ -88,7 +88,7 @@ class FirmsFireProvider:
                                                 direction=bearing,
                                                 source="NASA-FIRMS",
                                                 is_signal=True,
-                                                display_text="Satellite fire signal detected in monitored upwind region."
+                                                display_text="Satellite fire signal detected in monitored upwind region (fire signal, not proof of cause)."
                                             ))
                                         except Exception:
                                             pass
@@ -130,7 +130,7 @@ class FirmsFireProvider:
                 direction="NW",
                 source="DEMO",
                 is_signal=True,
-                display_text="Satellite fire signal detected in monitored upwind region."
+                display_text="Simulated demo fire hotspot (Demo mode)."
             )
             for lat, lon, conf, dist in demo_fires
         ]

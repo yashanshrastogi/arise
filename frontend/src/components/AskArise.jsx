@@ -36,14 +36,25 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
     setInput('');
     setLoading(true);
 
+    let isTimeout = false;
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        isTimeout = true;
+        reject(new Error("TIMEOUT_25S"));
+      }, 25000);
+    });
+
     try {
-      const res = await askAriseChat({
-        question: q,
-        lat,
-        lon,
-        persona: "General Public",
-        demo,
-      });
+      const res = await Promise.race([
+        askAriseChat({
+          question: q,
+          lat,
+          lon,
+          persona: "General Public",
+          demo,
+        }),
+        timeoutPromise,
+      ]);
 
       if (res && res.verdict) {
         const isRuleBased = res.provider === 'rule-based' || res.is_rule_based === true;
@@ -67,6 +78,26 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
         return;
       }
     } catch (err) {
+      if (isTimeout || err?.message === "TIMEOUT_25S") {
+        setMessages(prev => [
+          ...prev,
+          {
+            q,
+            verdict: "BE SMART",
+            headline: "Telemetry synthesis is taking longer than expected under peak load. Please try asking again in a moment.",
+            why: ["The live environmental telemetry query exceeded our 25-second responsiveness budget."],
+            do: ["Check the live AQI gauges above or re-submit your question shortly."],
+            best_window: "Unavailable",
+            recheck_at: "Shortly",
+            sources: [],
+            assistant_label: "Arise Assistant (rule-based)",
+            is_rule_based: true,
+            timestamp: "Timeout",
+          },
+        ]);
+        setLoading(false);
+        return;
+      }
       console.warn("Ask Arise chat error:", err);
     }
 
@@ -232,9 +263,12 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
         }))}
 
         {loading && (
-          <div className="flex items-center gap-2 p-3 rounded-2xl bg-[var(--surface-alt)] border max-w-[70%]">
-            <span className="w-2 h-2 rounded-full bg-indigo animate-ping" />
-            <span className="text-xs font-bold t3">Querying telemetry tools &amp; synthesizing verdict...</span>
+          <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-[var(--surface-alt)] border max-w-[85%] shadow-xs">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo animate-ping shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-xs font-bold t1">Synthesizing environmental intelligence...</span>
+              <span className="text-[10px] font-medium t3">Querying ground telemetry, atmospheric dispersion &amp; satellite detections</span>
+            </div>
           </div>
         )}
       </div>

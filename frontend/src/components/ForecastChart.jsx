@@ -95,7 +95,7 @@ function CustomTooltip({ active, payload, label, activeMetric }) {
   );
 }
 
-export default function ForecastChart({ data = [], data7Day = [] }) {
+export default function ForecastChart({ data = [], data7Day = [], currentAqi = null }) {
   const [metric, setMetric] = useState('aqi');
   const [period, setPeriod] = useState('24h'); // '24h' | '7d'
 
@@ -104,14 +104,22 @@ export default function ForecastChart({ data = [], data7Day = [] }) {
   // Current time index and reference point
   const nowIdx = data.findIndex(d => !d.past);
   const nowTime = nowIdx > 0 ? data[nowIdx - 1].time : data[0]?.time || '10 AM';
-  const nowVal = nowIdx > 0 ? data[nowIdx - 1][cfg.dataKey] : data[0]?.[cfg.dataKey] || 0;
+  const nowVal = (metric === 'aqi' && currentAqi != null)
+    ? currentAqi
+    : (nowIdx > 0 ? data[nowIdx - 1][cfg.dataKey] : data[0]?.[cfg.dataKey] || 0);
 
-  // Process 24h data for solid past and dashed future
-  const merged24h = data.map((d, i) => ({
-    ...d,
-    pastVal: d.past ? d[cfg.dataKey] : null,
-    futureVal: !d.past || (nowIdx > 0 && i === nowIdx - 1) ? d[cfg.dataKey] : null,
-  }));
+  // Process 24h data for solid past and dashed future, anchoring now reference to currentAqi if provided
+  const targetIdx = nowIdx > 0 ? nowIdx - 1 : 0;
+  const merged24h = data.map((d, i) => {
+    const itemVal = (metric === 'aqi' && currentAqi != null && i === targetIdx)
+      ? currentAqi
+      : d[cfg.dataKey];
+    return {
+      ...d,
+      pastVal: d.past ? itemVal : null,
+      futureVal: !d.past || (nowIdx > 0 && i === nowIdx - 1) ? itemVal : null,
+    };
+  });
 
   // Best window bounds
   const bwStart = data.find(d => d.bestWindow)?.time;

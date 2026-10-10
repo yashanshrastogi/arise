@@ -74,6 +74,7 @@ export default function App() {
   // Merge live backend data with fallback state
   const fallbackData = demoMode ? mockData : mockDataModerate;
   const d = envData ? { ...fallbackData, ...envData } : fallbackData;
+  const hasLiveFires = Boolean(d?.fires?.some(f => !f.isDemo && f.source === 'NASA-FIRMS'));
 
   // Smooth scroll to section with dynamic sticky header offset calculation
   const scrollToSection = (id) => {
@@ -187,7 +188,7 @@ export default function App() {
 
           {/* Right Header Controls: Demo Toggle, Dark Mode, Profile/Auth */}
           <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Small 'Data status' chip: Live = OpenAQ + Open-Meteo, Demo = fires, traffic, indoor */}
+            {/* Dynamic 'Data status' chip */}
             <div
               id="chip-data-status"
               className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border shadow-xs"
@@ -196,13 +197,17 @@ export default function App() {
                 borderColor: 'var(--border)',
                 color: 'var(--text-secondary)',
               }}
-              title="Telemetry source status: Live = OpenAQ + Open-Meteo, Demo = fires, traffic, indoor"
+              title="Telemetry source status"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="font-bold" style={{ color: 'var(--text-primary)' }}>Data status:</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Live = OpenAQ + Open-Meteo</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                Live = OpenAQ + Open-Meteo{hasLiveFires ? ' + NASA FIRMS' : ''}
+              </span>
               <span className="opacity-30">|</span>
-              <span className="opacity-75">Demo = fires, traffic, indoor</span>
+              <span className="opacity-75">
+                Demo = {hasLiveFires ? 'traffic, indoor' : 'fires, traffic, indoor'}
+              </span>
             </div>
 
             {/* Demo / Live Status Pill & Toggle */}
@@ -259,9 +264,13 @@ export default function App() {
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-bold" style={{ color: 'var(--text-primary)' }}>Data status:</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Live = OpenAQ + Open-Meteo</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+              Live = OpenAQ + Open-Meteo{hasLiveFires ? ' + NASA FIRMS' : ''}
+            </span>
           </div>
-          <span className="opacity-75 text-[10px] shrink-0">Demo = fires, traffic, indoor</span>
+          <span className="opacity-75 text-[10px] shrink-0">
+            Demo = {hasLiveFires ? 'traffic, indoor' : 'fires, traffic, indoor'}
+          </span>
         </div>
 
         {/* ── 1. FIRST VIEWPORT EXECUTIVE FLOW: Location → AQI → Severity → Verdict → Reason → Action ── */}
@@ -399,7 +408,7 @@ export default function App() {
 
         {/* ── 4. MULTI-METRIC FORECAST CHART (Full Width) ── */}
         <section id="forecast" className="w-full scroll-mt-24">
-          <ForecastChart data={d.forecast} data7Day={d.forecast7Day} />
+          <ForecastChart data={d.forecast} data7Day={d.forecast7Day} currentAqi={d.aqi} />
         </section>
 
         {/* ── 5. INTELLIGENCE, SCHOOL CARE & MOBILITY CORRIDORS ── */}

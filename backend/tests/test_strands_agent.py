@@ -20,6 +20,7 @@ from app.agents.tools import (
     compare_places,
 )
 from app.agents.arise_agent import AriseAgent
+from app.core.config import Settings
 from main import app
 
 
@@ -127,6 +128,8 @@ class TestChatApiRoute(unittest.TestCase):
 
     def setUp(self):
         self.client = TestClient(app)
+        from app.cache.repository import get_cache_repository
+        get_cache_repository().clear()
 
     def test_chat_endpoint_valid(self):
         payload = {
@@ -169,7 +172,12 @@ class TestChatApiRoute(unittest.TestCase):
             provider="bedrock",
         )
 
-        with patch("app.agents.arise_agent.Agent.invoke_async", new_callable=AsyncMock) as mock_invoke:
+        with patch("app.agents.arise_agent.get_settings") as mock_settings, \
+             patch("app.agents.arise_agent.Agent.invoke_async", new_callable=AsyncMock) as mock_invoke:
+            mock_settings.return_value = Settings(
+                MODE="local",
+                LLM_PROVIDER="bedrock",
+            )
             mock_invoke.return_value = mock_bedrock_resp
             payload = {
                 "question": "Can I go out now?",

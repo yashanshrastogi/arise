@@ -40,7 +40,7 @@ class Settings(BaseModel):
     API_GATEWAY_BASE_PATH: Optional[str] = None
     
     # AI / LLM Integration
-    LLM_PROVIDER: Literal["local", "ollama", "bedrock"] = "local"
+    LLM_PROVIDER: Literal["local", "ollama", "bedrock", "rule-based"] = "rule-based"
     BEDROCK_MODEL_ID: str = "us.amazon.nova-lite-v1:0"
     OLLAMA_HOST: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2"
@@ -115,7 +115,7 @@ def get_settings() -> Settings:
         POWERTOOLS_SERVICE_NAME=os.getenv("POWERTOOLS_SERVICE_NAME", "arise-api"),
         STAGE=os.getenv("STAGE"),
         API_GATEWAY_BASE_PATH=os.getenv("API_GATEWAY_BASE_PATH"),
-        LLM_PROVIDER=os.getenv("LLM_PROVIDER", "local"),
+        LLM_PROVIDER=os.getenv("LLM_PROVIDER", "rule-based"),
         BEDROCK_MODEL_ID=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0"),
         OLLAMA_HOST=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         OLLAMA_MODEL=os.getenv("OLLAMA_MODEL", "llama3.2"),

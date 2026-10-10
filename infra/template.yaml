@@ -51,6 +51,14 @@ Parameters:
     Default: "32g687pdc6dulejhh4tcvd69m7"
     Description: Public Cognito SPA app client ID.
 
+  LlmProvider:
+    Type: String
+    Default: rule-based
+    AllowedValues:
+      - rule-based
+      - bedrock
+    Description: LLM provider for Ask Arise ('rule-based' or 'bedrock').
+
 Resources:
   # ==============================================================
   # 1. DynamoDB Cache Table (with epoch TTL for cleanup)
@@ -112,10 +120,10 @@ Resources:
           - PATCH
           - OPTIONS
         AllowHeaders:
-          - Content-Type
-          - Authorization
-          - X-Requested-With
-          - X-Request-ID
+          - content-type
+          - authorization
+          - x-requested-with
+          - x-request-id
         MaxAge: 300
 
   # ==============================================================
@@ -139,7 +147,7 @@ Resources:
           OPENAQ_API_KEY: !Ref OpenAQAKey
           FIRMS_MAP_KEY: !Ref FirmsMapKey
           CORS_ORIGINS: !Ref CorsOrigins
-          LLM_PROVIDER: bedrock
+          LLM_PROVIDER: !Ref LlmProvider
           BEDROCK_MODEL_ID: us.amazon.nova-lite-v1:0
       Policies:
         - DynamoDBCrudPolicy:
