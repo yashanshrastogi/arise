@@ -4,7 +4,10 @@
  * Provides resilient fallbacks and graceful degradation.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const RAW_API_URL =
+  import.meta.env.VITE_API_URL ||
+  'https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod';
+const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '');
 
 export async function checkBackendHealth() {
   try {
@@ -110,3 +113,52 @@ export async function askAriseChat({ question, lat = 28.6139, lon = 77.2090, per
   return null;
 }
 
+
+
+// Authenticated user-profile API.
+// The API verifies this Cognito access token before accessing profile data.
+function profileHeaders(accessToken, json = false) {
+  if (!accessToken) {
+    throw new Error("Sign in with Google to access your profile.");
+  }
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    ...(json ? { "Content-Type": "application/json" } : {}),
+  };
+}
+
+async function profileRequest(path, accessToken, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...profileHeaders(accessToken, Boolean(options.body)),
+      ...(options.headers || {}),
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Profile API failed (${response.status}).`);
+  }
+
+  return response.json();
+}
+
+export function getUserProfile(accessToken) {
+  return profileRequest("/profile", accessToken);
+}
+
+export function bootstrapUserProfile(accessToken, profile) {
+  return profileRequest("/profile/bootstrap", accessToken, {
+    method: "POST",
+    body: JSON.stringify(profile),
+  });
+}
+
+export function updateUserProfile(accessToken, updates) {
+  return profileRequest("/profile", accessToken, {
+    method: "PATCH",
+    body: JSON.stringify(updates),
+  });
+}

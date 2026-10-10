@@ -20,6 +20,8 @@ logger = logging.getLogger("arise.api")
 
 settings = get_settings()
 
+from app.api.routes.profile import router as profile_router
+
 app = FastAPI(
     title="Arise API",
     description="Delhi-NCR Environmental Intelligence & Air Quality Decision Platform",
@@ -76,3 +78,4 @@ app.include_router(environment_router)
 app.include_router(verdict_router)
 app.include_router(compare_router)
 app.include_router(chat_router)
+app.include_router(profile_router)

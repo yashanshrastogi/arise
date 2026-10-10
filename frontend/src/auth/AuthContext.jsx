@@ -1,98 +1,156 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useCallback } from 'react';
+import {
+  AuthProvider as OidcAuthProvider,
+  useAuth as useOidcAuth,
+} from 'react-oidc-context';
 
-/**
- * Arise Authentication Provider Architecture
- *
- * Current Phase: Local/Mock Authentication Mode (MODE=local)
- * Target Architecture: React → Amazon Cognito User Pool → Google Identity Provider → JWT → FastAPI
- *
- * This abstraction enables seamless switching to real AWS Cognito User Pool federation
- * without altering any frontend dashboard components.
- */
+const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'guest';
+const isCognito = AUTH_MODE === 'cognito-google';
 
 const AuthContext = createContext(null);
 
-const DEFAULT_LOCAL_USER = {
-  id: 'usr_google_delhi_01',
-  name: 'Yashansh Rastogi',
-  email: 'yashansh.rastogi@example.com',
-  initials: 'YR',
-  provider: 'Google',
-  role: 'Resident Analyst',
-  location: 'Delhi-NCR',
-  mode: 'Local Mock (Cognito Ready)',
+const GUEST_AUTH_VALUE = {
+  user: null,
+  isAuthenticated: false,
+  isGuest: true,
+  accessToken: null,
+  authMode: AUTH_MODE,
+  loading: false,
+  error: null,
+  authModalOpen: false,
+  setAuthModalOpen: () => {},
+  loginWithGoogle: () => {},
+  logout: () => {},
 };
 
-export function AuthProvider({ children }) {
-  // Read auth mode from environment or default to local
-  const authMode = import.meta.env.VITE_AUTH_MODE || 'local';
+function CognitoBridge({ children }) {
+  const oidc = useOidcAuth();
 
-  // In local mode, retrieve session state or default to authenticated developer profile
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem('arise_user');
-      return saved ? JSON.parse(saved) : DEFAULT_LOCAL_USER;
-    } catch {
-      return DEFAULT_LOCAL_USER;
+  const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
+  const cognitoDomain = import.meta.env.VITE_COGNITO_DOMAIN;
+  const logoutUri =
+    import.meta.env.VITE_COGNITO_LOGOUT_URI ||
+    (typeof window !== 'undefined' ? window.location.origin + '/' : '/');
+
+  const loginWithGoogle = useCallback(
+    () =>
+      oidc.signinRedirect({
+        extraQueryParams: { identity_provider: 'Google' },
+      }),
+    [oidc],
+  );
+
+  const logout = useCallback(async () => {
+    // Clear the local OIDC session, then use Cognito's logout endpoint.
+    await oidc.removeUser();
+
+    if (cognitoDomain && clientId && typeof window !== 'undefined') {
+      const url = new URL(`${cognitoDomain}/logout`);
+      url.searchParams.set('client_id', clientId);
+      url.searchParams.set('logout_uri', logoutUri);
+      window.location.assign(url.toString());
     }
-  });
+  }, [oidc, cognitoDomain, clientId, logoutUri]);
 
-  const [loading, setLoading] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const profile = oidc.user?.profile;
+  const name =
+    typeof profile?.name === 'string'
+      ? profile.name
+      : typeof profile?.email === 'string'
+        ? profile.email
+        : 'Arise User';
 
-  useEffect(() => {
-    try {
-      if (user) {
-        sessionStorage.setItem('arise_user', JSON.stringify(user));
-      } else {
-        sessionStorage.removeItem('arise_user');
-      }
-    } catch {
-      // Storage access gracefully handled
-    }
-  }, [user]);
+  const initials =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase() || 'U';
 
-  /**
-   * Mock "Continue with Google" sign-in flow.
-   * In AWS mode, this will redirect to the Cognito hosted UI federated to Google.
-   */
-  const loginWithGoogle = async () => {
-    setLoading(true);
-    // Simulate lightweight OAuth token exchange
-    await new Promise(resolve => setTimeout(resolve, 350));
-    setUser(DEFAULT_LOCAL_USER);
-    setLoading(false);
-    setAuthModalOpen(false);
-  };
-
-  /**
-   * Logout flow.
-   */
-  const logout = async () => {
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 150));
-    setUser(null);
-    setLoading(false);
-  };
+  const user =
+    oidc.isAuthenticated && profile
+      ? {
+          id: profile.sub,
+          name,
+          email: typeof profile.email === 'string' ? profile.email : '',
+          initials,
+          provider: 'Google',
+          mode: 'Cognito Google OAuth',
+        }
+      : null;
 
   const value = {
     user,
-    isAuthenticated: !!user,
-    authMode,
-    loading,
-    authModalOpen,
-    setAuthModalOpen,
+    isAuthenticated: Boolean(oidc.isAuthenticated && user),
+    isGuest: false,
+    accessToken: oidc.user?.access_token || null,
+    authMode: 'cognito-google',
+    loading: oidc.isLoading,
+    error: oidc.error?.message || null,
+    authModalOpen: false,
+    setAuthModalOpen: () => {},
     loginWithGoogle,
     logout,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function AuthProvider({ children }) {
+  if (!isCognito) {
+    return (
+      <AuthContext.Provider value={GUEST_AUTH_VALUE}>
+        {children}
+      </AuthContext.Provider>
+    );
+  }
+
+  const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
+  const logoutUri =
+    import.meta.env.VITE_COGNITO_LOGOUT_URI ||
+    (typeof window !== 'undefined' ? window.location.origin + '/' : '/');
+
+  const oidcConfig = {
+    authority: import.meta.env.VITE_COGNITO_AUTHORITY,
+    client_id: clientId,
+    redirect_uri:
+      import.meta.env.VITE_COGNITO_REDIRECT_URI ||
+      (typeof window !== 'undefined' ? window.location.origin + '/' : '/'),
+    post_logout_redirect_uri: logoutUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    automaticSilentRenew: false,
+  };
+
+  return (
+    <OidcAuthProvider
+      {...oidcConfig}
+      onSigninCallback={() => {
+        // Remove OAuth code/state from the visible URL after processing.
+        if (typeof window !== 'undefined') {
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname + window.location.hash,
+          );
+        }
+      }}
+    >
+      <CognitoBridge>{children}</CognitoBridge>
+    </OidcAuthProvider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (context) {
+    return context;
   }
-  return context;
+  return GUEST_AUTH_VALUE;
 }
