@@ -275,9 +275,19 @@ export default function App() {
               📍
             </div>
             <div>
-              <div className="text-[10px] font-black uppercase tracking-wider tm">Monitored Basin</div>
-              <div className="text-base lg:text-lg font-black t1 leading-tight">{d.location}</div>
-              <div className="text-[10px] font-bold t3 mt-0.5">{d.updated}</div>
+              <div className="text-[10px] font-black uppercase tracking-wider tm">
+                {d.spatialMethod || "3-Station Spatial IDW"}
+              </div>
+              <div className="text-base lg:text-lg font-black t1 leading-tight">
+                {selectedCoords?.name && selectedCoords.name !== 'Delhi-NCR Central'
+                  ? `${selectedCoords.name} (Spatial IDW)`
+                  : d.location}
+              </div>
+              <div className="text-[10px] font-bold t3 mt-0.5">
+                {d.contributingStations?.length
+                  ? `Nearest ${Math.min(3, d.contributingStations.length)} stations · ${d.updated}`
+                  : d.updated}
+              </div>
             </div>
           </div>
 

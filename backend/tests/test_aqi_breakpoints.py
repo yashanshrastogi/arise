@@ -163,6 +163,26 @@ class TestAqiBreakpointsAndBoundaries(unittest.TestCase):
         self.assertEqual(res.category, "Good")
         self.assertFalse(res.is_cpcb_compliant)
 
+    def test_cpcb_prompt_specifications(self):
+        """
+        Verify authoritative prompt specification:
+        PM10 210 -> Moderate
+        PM2.5 142.5 -> Very Poor
+        """
+        # PM10 210 -> Sub-index in Moderate band (101-200)
+        pm10_sub = calculate_sub_index("PM10", 210.0)
+        self.assertIsNotNone(pm10_sub)
+        cat_pm10, _ = get_aqi_category(pm10_sub)
+        self.assertEqual(cat_pm10, "Moderate")
+        self.assertTrue(101 <= pm10_sub <= 200)
+
+        # PM2.5 142.5 -> Sub-index in Very Poor band (301-400)
+        pm25_sub = calculate_sub_index("PM2.5", 142.5)
+        self.assertIsNotNone(pm25_sub)
+        cat_pm25, _ = get_aqi_category(pm25_sub)
+        self.assertEqual(cat_pm25, "Very Poor")
+        self.assertTrue(301 <= pm25_sub <= 400)
+
 
 if __name__ == "__main__":
     unittest.main()

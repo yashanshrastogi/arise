@@ -166,7 +166,11 @@ def evaluate_environment(
         {"name": "Open-Meteo Surface Dynamics", "time": snapshot.timestamp}
     ]
     if snapshot.fire_signals:
-        sources.append({"name": "NASA FIRMS (VIIRS Near-Real-Time)", "time": snapshot.timestamp})
+        is_demo_fires = any(f.source == "DEMO" for f in snapshot.fire_signals)
+        sources.append({
+            "name": "NASA FIRMS (Demo Simulation)" if is_demo_fires else "NASA FIRMS (VIIRS Near-Real-Time)",
+            "time": snapshot.timestamp
+        })
 
     return VerdictOutput(
         verdict=effective_verdict,

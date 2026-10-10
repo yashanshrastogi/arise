@@ -19,7 +19,7 @@ class TestEnvironmentService(unittest.TestCase):
                 lat=28.6289, lon=77.2412, force_demo=True # Target near ITO
             )
             self.assertIsNotNone(snap)
-            self.assertEqual(snap.location, "Delhi-NCR")
+            self.assertIn("IDW", snap.location)
             self.assertGreater(snap.aqi, 200)
             self.assertEqual(snap.dominant_pollutant, "PM2.5")
             self.assertIsNotNone(snap.verdict)

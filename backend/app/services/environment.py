@@ -95,9 +95,16 @@ class EnvironmentService:
             logger.warning(f"Error from fire provider: {e}")
             fire_signals = []
 
-        # 7. Intermediate Snapshot
+        # 7. Intermediate Snapshot — derive specific user location from nearest stations (IDW)
+        if estimation.contributing_stations:
+            nearest_station = estimation.contributing_stations[0].name
+            num_st = min(3, len(estimation.contributing_stations))
+            loc_label = f"{nearest_station} & Surrounds ({num_st}-Station IDW)"
+        else:
+            loc_label = f"{round(lat, 4)}°N, {round(lon, 4)}°E (Spatial IDW)"
+
         snapshot = EnvironmentalSnapshot(
-            location="Delhi-NCR",
+            location=loc_label,
             latitude=lat,
             longitude=lon,
             timestamp=now_iso,
@@ -177,7 +184,9 @@ class EnvironmentService:
                 "id": idx + 100,
                 "lat": f.latitude,
                 "lng": f.longitude,
-                "intensity": f.confidence
+                "intensity": f.confidence,
+                "source": f.source,
+                "isDemo": (f.source == "DEMO"),
             }
             for idx, f in enumerate(snapshot.fire_signals)
         ]
