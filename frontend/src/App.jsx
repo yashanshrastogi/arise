@@ -564,7 +564,7 @@ export default function App() {
           </div>
 
           <div className="hidden md:block text-[11px] font-semibold t3">
-            Arise Core · Real-time CPCB Telemetry · {demoMode ? 'Saved Severe Event' : 'Moderate Day Simulation'}
+            Live air data · OpenAQ / CPCB stations
           </div>
 
           <div className="flex items-center gap-2">
