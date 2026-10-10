@@ -242,6 +242,17 @@ export default function AirMap({
     };
   }, [layerDrawerOpen]);
 
+  // Hook global Google Maps auth failure for graceful resilience
+  useEffect(() => {
+    window.gm_authFailure = () => {
+      console.warn('Google Maps authentication or quota failure.');
+      setLoadError('Google Maps service unavailable (Demo Key quota limit reached). Operating in station telemetry mode.');
+    };
+    return () => {
+      delete window.gm_authFailure;
+    };
+  }, []);
+
   // 1. Initialize Google Maps with POI suppression & clickableIcons: false
   useEffect(() => {
     if (!apiKey || apiKey.trim() === '') return;
@@ -1137,21 +1148,77 @@ export default function AirMap({
           </div>
         </div>
 
-        {/* ── 5. Graceful Fallback if API Key Missing ── */}
-        {!apiKey || apiKey.trim() === '' ? (
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center" style={{ background: 'var(--surface-alt)' }}>
-            <div className="w-12 h-12 rounded-2xl bg-indigo/10 flex items-center justify-center text-xl mb-3">
-              🗺️
+        {/* ── 5. Graceful Fallback (Message + Station List) if Maps Fails ── */}
+        {(!apiKey || apiKey.trim() === '' || loadError) ? (
+          <div className="w-full h-full flex flex-col p-4 sm:p-6 overflow-y-auto" style={{ background: 'var(--surface-alt)' }}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo/10 text-indigo flex items-center justify-center text-xl flex-shrink-0">
+                  📍
+                </div>
+                <div>
+                  <h3 className="text-sm font-black t1">Regional Monitoring Station Network</h3>
+                  <p className="text-[11px] font-semibold t3">
+                    {loadError ? 'Map operating in resilient station mode' : 'Interactive cartography offline'} · {stations.length} active telemetry stations available
+                  </p>
+                </div>
+              </div>
+              <span
+                className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border self-start sm:self-auto"
+                style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+              >
+                Live Station Telemetry Mode
+              </span>
             </div>
-            <h3 className="text-sm font-black t1 mb-1">Google Maps API Key Missing</h3>
-            <p className="text-xs font-semibold t3 max-w-sm mb-3">
-              Add <code className="px-1.5 py-0.5 rounded bg-[var(--surface)] text-indigo font-bold border border-indigo/20">VITE_GOOGLE_MAPS_API_KEY</code> to <code className="px-1.5 py-0.5 rounded bg-[var(--surface)] font-bold">frontend/.env.local</code> and restart Vite.
-            </p>
-          </div>
-        ) : loadError ? (
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center" style={{ background: 'var(--surface-alt)' }}>
-            <h3 className="text-sm font-black text-rose-600 mb-1">Google Maps Error</h3>
-            <p className="text-xs font-semibold t3 max-w-sm">{loadError}</p>
+
+            {/* Stations List */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1">
+              {stations.map(st => {
+                const col = st.aqi > 300 ? '#E5484D' : st.aqi > 200 ? '#F28C28' : st.aqi > 100 ? '#F5C542' : '#2EB872';
+                return (
+                  <div
+                    key={st.id || st.name}
+                    onClick={() => {
+                      setSelectedStationName(st.name);
+                      if (onLocationSelect) onLocationSelect(st.lat, st.lng, st.name);
+                    }}
+                    className="card p-3.5 flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.02] border"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-xs font-black t1">{st.name}</h4>
+                        <p className="text-[10px] font-semibold tm">
+                          {st.lat ? `${Number(st.lat).toFixed(3)}°N, ${Number(st.lng).toFixed(3)}°E` : 'Ground Telemetry'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-black" style={{ color: col }}>{st.aqi}</span>
+                        <span
+                          className="block text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase"
+                          style={{ background: `${col}18`, color: col }}
+                        >
+                          {st.aqi > 300 ? 'Very Poor' : st.aqi > 200 ? 'Poor' : st.aqi > 100 ? 'Moderate' : 'Good'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t text-[11px] font-medium t2" style={{ borderColor: 'var(--border)' }}>
+                      <div>PM2.5: <strong className="t1">{st.pm25} µg/m³</strong></div>
+                      <div>PM10: <strong className="t1">{st.pm10} µg/m³</strong></div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-3 w-full py-1.5 rounded-xl text-[10px] font-bold text-center border transition-colors hover:bg-[var(--surface)]"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+                    >
+                      Select Station Location →
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div ref={mapRef} className="map-canvas-container absolute inset-0 w-full h-full z-0" />
