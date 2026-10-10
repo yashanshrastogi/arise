@@ -24,7 +24,7 @@ export default function MobilityCard({ traffic }) {
           className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full"
           style={{ background: 'var(--surface-alt)', color: 'var(--text-tertiary)', border: '1px solid var(--border)' }}
         >
-          Simulated (Demo data)
+          Simulated (demo data)
         </span>
       </div>
 

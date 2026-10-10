@@ -24,49 +24,8 @@ const VERDICT_COLORS = {
   GO: '#2EB872',
 };
 
-const STATIC_FALLBACKS = {
-  "Why is the AQI bad today?": {
-    verdict: "STAY_IN",
-    headline: "AQI is Very Poor driven by elevated PM2.5 and calm dispersion.",
-    why: ["Ground stations report PM2.5 as primary pollutant.", "Calm surface winds and inversion trap emissions."],
-    do: ["Limit outdoor transit during early morning hours.", "Use N95 masks when traveling outdoors."],
-    best_window: "3 PM – 5 PM",
-    recheck_at: "4:00 PM",
-    sources: ["CPCB Stations", "NASA FIRMS Satellite", "Open-Meteo"],
-  },
-  "Can my kid play outside?": {
-    verdict: "STAY_IN",
-    headline: "Keep children indoors — particulate exposure is hazardous today.",
-    why: ["Children breathe faster and absorb fine particulates rapidly.", "Regional dispersion remains low."],
-    do: ["Move sports and activities indoors.", "Operate HEPA filtration."],
-    best_window: "3 PM – 5 PM",
-    recheck_at: "4:00 PM",
-    sources: ["CPCB Health Advisory", "WHO Reference Thresholds"],
-  },
-};
-
 export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false }) {
-  const [messages, setMessages] = useState([
-    {
-      q: "Can my kid play outside today?",
-      verdict: "STAY IN",
-      headline: "Keep children indoors — particulate exposure is hazardous today.",
-      why: [
-        "Ground telemetry across Delhi-NCR shows Very Poor air quality (AQI > 300).",
-        "Fine particulates (PM2.5) pose acute respiratory risks during active play."
-      ],
-      do: [
-        "Shift recreation to filtered indoor spaces.",
-        "Wait for the lowest-risk 3 PM – 5 PM afternoon window."
-      ],
-      best_window: "3 PM – 5 PM",
-      recheck_at: "4:00 PM",
-      sources: ["CPCB Stations", "Open-Meteo Dynamics"],
-      assistant_label: "Arise Assistant (rule-based)",
-      is_rule_based: true,
-      timestamp: "10:15 AM",
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -76,8 +35,6 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
 
     setInput('');
     setLoading(true);
-
-    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     try {
       const res = await askAriseChat({
@@ -89,6 +46,7 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
       });
 
       if (res && res.verdict) {
+        const isRuleBased = res.provider === 'rule-based' || res.is_rule_based === true;
         setMessages(prev => [
           ...prev,
           {
@@ -99,44 +57,34 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
             do: res.do || [],
             best_window: res.best_window,
             recheck_at: res.recheck_at,
-            sources: res.sources || ["CPCB Ground Stations"],
-            assistant_label: res.assistant_label || "Arise Assistant (rule-based)",
-            is_rule_based: res.is_rule_based ?? true,
-            timestamp: nowTime,
+            sources: Array.isArray(res.sources) && res.sources.length > 0 ? res.sources : [],
+            assistant_label: res.assistant_label || (isRuleBased ? "Arise Assistant (rule-based)" : "Arise AI (Bedrock)"),
+            is_rule_based: isRuleBased,
+            timestamp: res.timestamp || res.recheck_at || "Live Response",
           },
         ]);
         setLoading(false);
         return;
       }
     } catch (err) {
-      console.warn("Ask Arise chat error, using grounded fallback:", err);
+      console.warn("Ask Arise chat error:", err);
     }
 
-    // Local grounded fallback
-    const fb = STATIC_FALLBACKS[q] || {
-      verdict: "STAY IN",
-      headline: `Ground telemetry indicates high exposure risk across the monitored basin.`,
-      why: ["Surface meteorological stagnation limits particulate dispersion."],
-      do: ["Avoid strenuous exertion outdoors; use certified HEPA purifiers."],
-      best_window: "3 PM – 5 PM",
-      recheck_at: "4:00 PM",
-      sources: ["CPCB Telemetry", "Arise Intelligence Core"],
-    };
-
+    // Network / service error state
     setMessages(prev => [
       ...prev,
       {
         q,
-        verdict: (fb.verdict || "STAY IN").replace('_', ' '),
-        headline: fb.headline || fb.text,
-        why: fb.why || [],
-        do: fb.do || [],
-        best_window: fb.best_window || "3 PM – 5 PM",
-        recheck_at: fb.recheck_at || "4:00 PM",
-        sources: fb.sources || ["CPCB Stations"],
+        verdict: "STAY IN",
+        headline: "Telemetry service temporarily unreachable. Please retry shortly.",
+        why: ["Unable to establish connection to the backend telemetry service."],
+        do: ["Check your internet connection and re-query."],
+        best_window: "Unavailable",
+        recheck_at: "Unavailable",
+        sources: [],
         assistant_label: "Arise Assistant (rule-based)",
         is_rule_based: true,
-        timestamp: nowTime,
+        timestamp: "Unavailable",
       },
     ]);
     setLoading(false);
@@ -167,7 +115,19 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
 
       {/* Chat Thread */}
       <div className="flex-1 overflow-y-auto space-y-3 my-2 max-h-[260px] pr-1">
-        {messages.map((m, i) => {
+        {messages.length === 0 ? (
+          <div
+            className="p-4 rounded-2xl border text-center flex flex-col items-center justify-center gap-1.5 my-2"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+          >
+            <div className="text-xl">💬</div>
+            <p className="text-xs font-bold t1">Ask Arise Environmental Copilot</p>
+            <p className="text-[11px] font-medium tm max-w-sm">
+              Query real-time health risks, activity windows, and precautions grounded in live CPCB and meteorological telemetry.
+            </p>
+          </div>
+        ) : (
+          messages.map((m, i) => {
           const col = VERDICT_COLORS[m.verdict] || '#E5484D';
           return (
             <div key={i} className="space-y-2">
@@ -269,7 +229,7 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
               </div>
             </div>
           );
-        })}
+        }))}
 
         {loading && (
           <div className="flex items-center gap-2 p-3 rounded-2xl bg-[var(--surface-alt)] border max-w-[70%]">

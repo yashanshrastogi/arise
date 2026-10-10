@@ -187,6 +187,24 @@ export default function App() {
 
           {/* Right Header Controls: Demo Toggle, Dark Mode, Profile/Auth */}
           <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Small 'Data status' chip: Live = OpenAQ + Open-Meteo, Demo = fires, traffic, indoor */}
+            <div
+              id="chip-data-status"
+              className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border shadow-xs"
+              style={{
+                background: 'var(--surface-alt)',
+                borderColor: 'var(--border)',
+                color: 'var(--text-secondary)',
+              }}
+              title="Telemetry source status: Live = OpenAQ + Open-Meteo, Demo = fires, traffic, indoor"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-bold" style={{ color: 'var(--text-primary)' }}>Data status:</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Live = OpenAQ + Open-Meteo</span>
+              <span className="opacity-30">|</span>
+              <span className="opacity-75">Demo = fires, traffic, indoor</span>
+            </div>
+
             {/* Demo / Live Status Pill & Toggle */}
             <button
               onClick={() => {
@@ -219,7 +237,7 @@ export default function App() {
               {dark ? '☀️' : '🌙'}
             </button>
 
-            {/* User Profile & Google Authentication Component */}
+            {/* User Profile & Google Authentication Component (Hidden in Guest Mode) */}
             <UserProfileMenu />
           </div>
         </div>
@@ -227,6 +245,24 @@ export default function App() {
 
       {/* ═══════════════ MAIN CONTENT ═══════════════ */}
       <main className="flex-1 max-w-[1720px] mx-auto w-full p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
+
+        {/* Small 'Data status' chip for mobile / tablet viewports */}
+        <div
+          id="chip-data-status-mobile"
+          className="flex lg:hidden items-center justify-between gap-2 px-3 py-2 rounded-xl text-[11px] font-semibold border"
+          style={{
+            background: 'var(--surface-alt)',
+            borderColor: 'var(--border)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-bold" style={{ color: 'var(--text-primary)' }}>Data status:</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-bold">Live = OpenAQ + Open-Meteo</span>
+          </div>
+          <span className="opacity-75 text-[10px] shrink-0">Demo = fires, traffic, indoor</span>
+        </div>
 
         {/* ── 1. FIRST VIEWPORT EXECUTIVE FLOW: Location → AQI → Severity → Verdict → Reason → Action ── */}
         <section
@@ -518,7 +554,7 @@ export default function App() {
           </div>
 
           <div className="hidden md:block text-[11px] font-semibold t3">
-            Arise Core · Real-time CPCB + Satellite Inversion Telemetry · {demoMode ? 'Saved Severe Event' : 'Moderate Day Simulation'}
+            Arise Core · Real-time CPCB Telemetry · {demoMode ? 'Saved Severe Event' : 'Moderate Day Simulation'}
           </div>
 
           <div className="flex items-center gap-2">

@@ -69,7 +69,7 @@ export default function SchoolCard({ data }) {
           className="absolute -top-2.5 right-3 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full"
           style={{ background: 'var(--border)', color: 'var(--text-tertiary)' }}
         >
-          Indoor Sensor (Demo data)
+          Simulated (demo data)
         </span>
         <div className="grid grid-cols-3 gap-2 mt-1">
           <div>
