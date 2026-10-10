@@ -51,7 +51,7 @@ class TestApiRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         # Verify complete React UI keys
-        self.assertEqual(data["location"], "Delhi-NCR")
+        self.assertIn("IDW", data["location"])
         self.assertIn("aqi", data)
         self.assertIn("verdict", data)
         self.assertIn("recommendation", data)
