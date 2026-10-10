@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea
 } from 'recharts';
 
@@ -98,6 +98,7 @@ function CustomTooltip({ active, payload, label, activeMetric }) {
 export default function ForecastChart({ data = [], data7Day = [], currentAqi = null }) {
   const [metric, setMetric] = useState('aqi');
   const [period, setPeriod] = useState('24h'); // '24h' | '7d'
+  const [selectedPoint, setSelectedPoint] = useState(null);
 
   const cfg = METRIC_CONFIG[metric];
 
@@ -328,6 +329,110 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
               }}
             />
             <span className="text-[9px] font-extrabold text-[#2EB872]">0</span>
+          </div>
+        )}
+      </div>
+
+      {/* Interactive Forecast Points Strip (Accessible & Mobile-friendly) */}
+      <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-black uppercase tracking-wider tm">
+            Interactive Forecast Inspection {period === '24h' ? '(Hourly)' : '(Daily)'}
+          </span>
+          {selectedPoint && (
+            <button
+              type="button"
+              onClick={() => setSelectedPoint(null)}
+              className="text-[10px] font-bold text-indigo hover:underline"
+            >
+              Reset selection
+            </button>
+          )}
+        </div>
+
+        {/* Scrollable button pills */}
+        <div
+          role="region"
+          aria-label="Forecast data points"
+          className="flex items-center gap-1.5 overflow-x-auto pb-1 focus:outline-none"
+        >
+          {activeDataset.map((pt, idx) => {
+            const isSelected = selectedPoint && (
+              (period === '24h' && selectedPoint.time === pt.time) ||
+              (period === '7d' && selectedPoint.day === pt.day)
+            );
+            const val = pt[cfg.dataKey];
+            const label = period === '24h' ? pt.time : pt.day;
+            const isBest = pt.bestWindow;
+
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setSelectedPoint(isSelected ? null : pt)}
+                aria-pressed={isSelected}
+                aria-label={`${label}: ${val} ${cfg.unit}${isBest ? ' (Optimal outdoor window)' : ''}`}
+                className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-left border transition-all text-xs focus-visible:ring-2 focus-visible:ring-indigo ${
+                  isSelected
+                    ? 'bg-indigo text-white border-indigo shadow-md scale-105'
+                    : isBest
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:scale-102'
+                    : 'bg-[var(--surface-alt)] border-[var(--border)] hover:bg-[var(--surface)] hover:scale-102'
+                }`}
+              >
+                <div className="flex items-center gap-1 font-bold">
+                  <span className={isSelected ? 'text-white' : 't3'}>{label}</span>
+                  {isBest && !isSelected && <span className="text-[9px]">🌟</span>}
+                </div>
+                <div className={`text-xs font-black ${isSelected ? 'text-white' : 't1'}`}>
+                  {val != null ? `${val} ${cfg.unit}` : '—'}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected Point Callout Card */}
+        {selectedPoint && (
+          <div
+            className="mt-2.5 p-3 rounded-2xl border flex items-center justify-between gap-3 animate-in fade-in duration-150"
+            style={{
+              background: 'rgba(91, 75, 219, 0.08)',
+              borderColor: 'rgba(91, 75, 219, 0.25)',
+            }}
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">📍</span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-indigo">
+                    {period === '24h' ? `Forecast for ${selectedPoint.time}` : `${selectedPoint.day} Forecast`}
+                  </span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo/15 text-indigo">
+                    {selectedPoint[cfg.dataKey]} {cfg.unit}
+                  </span>
+                  {selectedPoint.bestWindow && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                      🌟 Best Outdoor Window
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] font-medium t2 mt-0.5 flex items-center gap-3 flex-wrap">
+                  {selectedPoint.aqi != null && <span>AQI: <strong className="t1">{selectedPoint.aqi}</strong></span>}
+                  {selectedPoint.temp != null && <span>Temp: <strong className="t1">{selectedPoint.temp}°C</strong></span>}
+                  {selectedPoint.rainProb != null && <span>Rain: <strong className="t1">{selectedPoint.rainProb}%</strong></span>}
+                  {selectedPoint.windSpeed != null && <span>Wind: <strong className="t1">{selectedPoint.windSpeed} km/h</strong></span>}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedPoint(null)}
+              aria-label="Dismiss point details"
+              className="text-xs font-bold tm hover:t1 px-2 py-1 rounded-lg"
+            >
+              ✕
+            </button>
           </div>
         )}
       </div>

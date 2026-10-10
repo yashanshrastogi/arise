@@ -57,7 +57,18 @@ Parameters:
     AllowedValues:
       - rule-based
       - bedrock
-    Description: LLM provider for Ask Arise ('rule-based' or 'bedrock').
+      - gemini
+    Description: LLM provider for Ask Arise ('rule-based', 'bedrock', or 'gemini').
+
+  GeminiSecretId:
+    Type: String
+    Default: "arise/gemini-api-key"
+    Description: Secrets Manager secret ID or ARN storing the Google Gemini API key.
+
+  GeminiModelId:
+    Type: String
+    Default: "gemini-3.5-flash-lite"
+    Description: Gemini model identifier for Ask Arise AI ('gemini-3.5-flash-lite').
 
 Resources:
   # ==============================================================
@@ -149,6 +160,8 @@ Resources:
           CORS_ORIGINS: !Ref CorsOrigins
           LLM_PROVIDER: !Ref LlmProvider
           BEDROCK_MODEL_ID: us.amazon.nova-lite-v1:0
+          GEMINI_SECRET_ID: !Ref GeminiSecretId
+          GEMINI_MODEL_ID: !Ref GeminiModelId
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref CacheTable
@@ -160,6 +173,11 @@ Resources:
               Action:
                 - bedrock:InvokeModel
               Resource: "arn:aws:bedrock:*::foundation-model/*"
+            - Sid: SecretsManagerReadGeminiKey
+              Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${GeminiSecretId}*"
       Events:
         ProxyRoute:
           Type: HttpApi

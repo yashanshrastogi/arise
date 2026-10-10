@@ -20,3 +20,10 @@ inspect_f1_changeset.py.sh
 compare_live_env.py.sh
 check_live_environment.py
 time_warm_chat.py
+create_review_changeset.sh
+review_changeset*.json
+inspect_changeset.py
+create_gemini_changeset.sh
+gemini_changeset*.json
+inspect_gemini_changeset.py
+verify_deployment.py

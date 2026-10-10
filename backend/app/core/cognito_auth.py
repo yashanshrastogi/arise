@@ -53,7 +53,7 @@ def get_current_user(
             issuer=issuer,
             options={
                 "verify_aud": False,
-                "require": ["exp", "iat", "sub", "iss", "token_use", "client_id"],
+                "require": ["exp", "iat", "sub", "iss", "token_use"],
             },
         )
     except PyJWTError as exc:
@@ -69,10 +69,28 @@ def get_current_user(
             detail="Authentication verification is temporarily unavailable.",
         ) from exc
 
-    if claims.get("token_use") != "access":
-        raise HTTPException(status_code=401, detail="An access token is required.")
+    token_use = claims.get("token_use")
+    if token_use not in ("access", "id"):
+        raise HTTPException(status_code=401, detail="A valid Cognito access or ID token is required.")
 
-    if claims.get("client_id") != client_id:
+    token_client_id = claims.get("client_id") or claims.get("aud")
+    if token_client_id != client_id:
         raise HTTPException(status_code=401, detail="Token is for another application.")
+
+    # If email not present in token claims and access token was provided, attempt GetUser lookup
+    if not claims.get("email") and token_use == "access":
+        try:
+            import boto3
+            cognito_client = boto3.client("cognito-idp", region_name=region)
+            user_info = cognito_client.get_user(AccessToken=credentials.credentials)
+            for attr in user_info.get("UserAttributes", []):
+                if attr.get("Name") == "email":
+                    claims["email"] = attr.get("Value")
+                elif attr.get("Name") == "email_verified":
+                    claims["email_verified"] = attr.get("Value") == "true"
+                elif attr.get("Name") == "name":
+                    claims["name"] = attr.get("Value")
+        except Exception as e:
+            logger.debug(f"Cognito GetUser user attributes query skipped: {e}")
 
     return claims

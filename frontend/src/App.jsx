@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import mockData from './mockData.json';
 import mockDataModerate from './mockDataModerate.json';
-import { fetchEnvironment } from './api/client';
+import { fetchEnvironment, getUserProfile } from './api/client';
 import AirMap from './components/AirMap';
 import AqiGauge from './components/AqiGauge';
 import WeatherCard from './components/WeatherCard';
@@ -14,11 +14,16 @@ import PollutantCards from './components/PollutantCards';
 import AskArise from './components/AskArise';
 import Watchlist from './components/Watchlist';
 import UserProfileMenu from './components/UserProfileMenu';
+import LoginPage from './components/LoginPage';
+import SignUpPage from './components/SignUpPage';
+import CompleteProfileModal from './components/CompleteProfileModal';
+import TechnicalGlossaryModal from './components/TechnicalGlossaryModal';
+import { useAuth } from './auth/AuthContext';
 
 /**
  * Arise — Delhi-NCR Air & Weather Intelligence Platform
  * Production Architecture: Air + Weather Integration, Compact/Expandable Map,
- * Deterministic Environmental Logic, and Cognito-ready Google Auth.
+ * Deterministic Environmental Logic, and Cognito-ready Google/Email Auth.
  */
 
 const NAV_ITEMS = [
@@ -30,7 +35,43 @@ const NAV_ITEMS = [
   { id: 'ask',        label: 'Ask Arise',    icon: '✦' },
 ];
 
+function getPersonaAdvisory(persona) {
+  switch (persona) {
+    case 'Asthma / Respiratory Sensitive':
+      return 'Respiratory vigilance: High risk of airway irritation. Keep rescue inhaler accessible and use HEPA filtration indoors.';
+    case 'Child / Parent':
+    case 'Parent / Child Care':
+      return 'Child protection protocol: Children inhale more air per body weight. Limit outdoor play during peak smog hours.';
+    case 'Older Adult':
+    case 'Senior Citizen':
+      return 'Senior cardiovascular precaution: Minimize exertion outdoors and stay hydrated in filtered indoor environments.';
+    case 'Athlete':
+    case 'Athlete / Runner':
+      return 'Aerobic safety advisory: High ventilation rates increase deep particle inhalation. Shift high-intensity cardio indoors.';
+    case 'Outdoor Worker':
+      return 'Occupational exposure alert: Mandatory N95 particulate respirator recommended for extended outdoor shifts.';
+    case 'School Administrator':
+      return 'Campus policy alert: Suspend outdoor physical education and keep classroom windows sealed during high pollution.';
+    default:
+      return null;
+  }
+}
+
 export default function App() {
+  const { isAuthenticated, accessToken } = useAuth();
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [userProfile, setUserProfile] = useState(null);
+  const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
+
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('arise_view_mode') || 'basic';
+    } catch {
+      return 'basic';
+    }
+  });
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
+
   const [dark, setDark] = useState(false);
   const [activeNav, setActiveNav] = useState('today');
   const [demoMode, setDemoMode] = useState(false);
@@ -40,9 +81,74 @@ export default function App() {
   const [loadingEnv, setLoadingEnv] = useState(false);
   const [liveStatus, setLiveStatus] = useState('demo');
 
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('arise_view_mode', mode);
+    } catch {
+      // ignore storage access errors
+    }
+  };
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
+
+  // Synchronize hash routing (#/login, #/signup, #/dashboard)
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash;
+      if (hash === '#/login' || hash === '#login') {
+        setCurrentView('login');
+      } else if (hash === '#/signup' || hash === '#signup') {
+        setCurrentView('signup');
+      } else if (currentView !== 'dashboard') {
+        setCurrentView('dashboard');
+      }
+    };
+    handleHash();
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, [currentView]);
+
+  // If user signs in while on login or signup view, return to dashboard
+  useEffect(() => {
+    if (isAuthenticated && (currentView === 'login' || currentView === 'signup')) {
+      window.location.hash = '#/';
+    }
+  }, [isAuthenticated, currentView]);
+
+  // Profile status verification and mandatory post-registration completion enforcement
+  useEffect(() => {
+    let active = true;
+    async function checkProfile() {
+      if (!isAuthenticated || !accessToken) {
+        setUserProfile(null);
+        setNeedsProfileCompletion(false);
+        return;
+      }
+      try {
+        const p = await getUserProfile(accessToken);
+        if (active) {
+          setUserProfile(p);
+          if (!p || !p.display_name || !p.profile_completed) {
+            setNeedsProfileCompletion(true);
+          } else {
+            setNeedsProfileCompletion(false);
+          }
+        }
+      } catch {
+        if (active) {
+          // If 404 / uninitialized profile, require user to complete profile
+          setNeedsProfileCompletion(true);
+        }
+      }
+    }
+    checkProfile();
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, accessToken]);
 
   // Load environmental intelligence snapshot from backend
   useEffect(() => {
@@ -61,7 +167,7 @@ export default function App() {
         } else if (active) {
           setLiveStatus(demoMode ? 'demo' : 'offline');
         }
-      } catch (err) {
+      } catch {
         if (active) setLiveStatus(demoMode ? 'demo' : 'offline');
       } finally {
         if (active) setLoadingEnv(false);
@@ -75,6 +181,43 @@ export default function App() {
   const fallbackData = demoMode ? mockData : mockDataModerate;
   const d = envData ? { ...fallbackData, ...envData } : fallbackData;
   const hasLiveFires = Boolean(d?.fires?.some(f => !f.isDemo && f.source === 'NASA-FIRMS'));
+
+  // Personalize Watchlist using saved Home and Work locations
+  const personalizedWatchlist = useMemo(() => {
+    const list = [];
+    if (userProfile?.home_location?.latitude != null && userProfile?.home_location?.longitude != null) {
+      list.push({
+        name: userProfile.home_location.label || 'Home',
+        location: userProfile.home_location.address || 'Saved Home Area',
+        lat: Number(userProfile.home_location.latitude),
+        lon: Number(userProfile.home_location.longitude),
+        aqi: d?.aqi || 159,
+        status: d?.status || 'Moderate',
+        updated: 'Personal Location',
+      });
+    }
+    if (userProfile?.work_location?.latitude != null && userProfile?.work_location?.longitude != null) {
+      list.push({
+        name: userProfile.work_location.label || 'Work',
+        location: userProfile.work_location.address || 'Saved Work Area',
+        lat: Number(userProfile.work_location.latitude),
+        lon: Number(userProfile.work_location.longitude),
+        aqi: d?.aqi || 159,
+        status: d?.status || 'Moderate',
+        updated: 'Personal Location',
+      });
+    }
+    const existing = d?.watchlist || [];
+    const filteredExisting = existing.filter(
+      (item) => !list.some((p) => p.name.toLowerCase() === item.name.toLowerCase())
+    );
+    return [...list, ...filteredExisting];
+  }, [userProfile, d?.watchlist, d?.aqi, d?.status]);
+
+  // Dynamic navigation items based on active view mode
+  const activeNavItems = useMemo(() => {
+    return NAV_ITEMS.filter((item) => viewMode === 'advanced' || item.id !== 'mobility');
+  }, [viewMode]);
 
   // Smooth scroll to section with dynamic sticky header offset calculation
   const scrollToSection = (id) => {
@@ -124,6 +267,38 @@ export default function App() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // View routing: Dedicated Login Page
+  if (currentView === 'login') {
+    return (
+      <LoginPage
+        onNavigateSignUp={() => {
+          setCurrentView('signup');
+          window.location.hash = '#/signup';
+        }}
+        onContinueGuest={() => {
+          setCurrentView('dashboard');
+          window.location.hash = '';
+        }}
+      />
+    );
+  }
+
+  // View routing: Dedicated Sign Up Page
+  if (currentView === 'signup') {
+    return (
+      <SignUpPage
+        onNavigateLogin={() => {
+          setCurrentView('login');
+          window.location.hash = '#/login';
+        }}
+        onContinueGuest={() => {
+          setCurrentView('dashboard');
+          window.location.hash = '';
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col transition-colors duration-200">
       {/* ═══════════════ HEADER ═══════════════ */}
@@ -170,7 +345,7 @@ export default function App() {
             className="hidden md:flex items-center gap-1 p-1 rounded-2xl border"
             style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
           >
-            {NAV_ITEMS.map(item => (
+            {activeNavItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => scrollToSection(item.id)}
@@ -186,8 +361,49 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Right Header Controls: Demo Toggle, Dark Mode, Profile/Auth */}
+          {/* Right Header Controls: View Mode, Demo Toggle, Dark Mode, Profile/Auth */}
           <div className="flex items-center gap-2 sm:gap-2.5">
+            {/* Persistent Basic / Advanced View Mode Toggle */}
+            <div
+              role="radiogroup"
+              aria-label="Select view mode"
+              className="flex items-center gap-1 p-1 rounded-xl border bg-[var(--surface-alt)] shadow-xs"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <button
+                type="button"
+                role="radio"
+                id="btn-view-mode-basic"
+                aria-checked={viewMode === 'basic'}
+                onClick={() => handleViewModeChange('basic')}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-black transition-all ${
+                  viewMode === 'basic'
+                    ? 'bg-indigo text-white shadow-xs'
+                    : 't3 hover:text-[var(--text-primary)]'
+                }`}
+                title="Basic view: essential condition, health guidance, map, and forecast"
+              >
+                <span>🍃</span>
+                <span className="hidden sm:inline">Basic</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                id="btn-view-mode-advanced"
+                aria-checked={viewMode === 'advanced'}
+                onClick={() => handleViewModeChange('advanced')}
+                className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-xs font-black transition-all ${
+                  viewMode === 'advanced'
+                    ? 'bg-indigo text-white shadow-xs'
+                    : 't3 hover:text-[var(--text-primary)]'
+                }`}
+                title="Advanced view: comprehensive 6-pollutant telemetry, wind dynamics, and corridors"
+              >
+                <span>🔬</span>
+                <span className="hidden sm:inline">Advanced</span>
+              </button>
+            </div>
+
             {/* Dynamic 'Data status' chip */}
             <div
               id="chip-data-status"
@@ -197,7 +413,7 @@ export default function App() {
                 borderColor: 'var(--border)',
                 color: 'var(--text-secondary)',
               }}
-              title="Telemetry source status"
+              title={`Telemetry source status: ${liveStatus}`}
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="font-bold" style={{ color: 'var(--text-primary)' }}>Data status:</span>
@@ -242,8 +458,14 @@ export default function App() {
               {dark ? '☀️' : '🌙'}
             </button>
 
-            {/* User Profile & Google Authentication Component (Hidden in Guest Mode) */}
-            <UserProfileMenu />
+            {/* User Profile Menu (Supports both Guest mode buttons & Authenticated profile) */}
+            <UserProfileMenu
+              onNavigateAuth={(v) => {
+                setCurrentView(v);
+                window.location.hash = '#/' + v;
+              }}
+              onProfileUpdated={(p) => setUserProfile(p)}
+            />
           </div>
         </div>
       </header>
@@ -273,89 +495,184 @@ export default function App() {
           </span>
         </div>
 
-        {/* ── 1. FIRST VIEWPORT EXECUTIVE FLOW: Location → AQI → Severity → Verdict → Reason → Action ── */}
+        {/* ── Personalized Health Advisory Banner (Active for Authenticated Personas) ── */}
+        {userProfile?.persona && userProfile.persona !== 'General Public' && (
+          <div
+            id="banner-personalized-advisory"
+            className="w-full p-3 sm:p-4 rounded-2xl border flex items-center justify-between gap-3 shadow-xs"
+            style={{
+              background: 'rgba(99, 102, 241, 0.08)',
+              borderColor: 'rgba(99, 102, 241, 0.25)',
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🛡️</span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
+                    Personalized Health Advisory · {userProfile.persona}
+                  </span>
+                  {userProfile.display_name && (
+                    <span className="text-[10px] font-bold tm">
+                      ({userProfile.display_name})
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs font-semibold t1 mt-0.5 leading-snug">
+                  {getPersonaAdvisory(userProfile.persona)}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 1. CONSOLIDATED PRIMARY ENVIRONMENTAL ADVISORY ── */}
         <section
           id="today"
-          className="w-full card p-4 lg:p-5 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border shadow-sm transition-all scroll-mt-24"
+          aria-label="Current Air Quality Advisory"
+          className="w-full card p-4 sm:p-5 lg:p-6 flex flex-col gap-4 border shadow-sm transition-all scroll-mt-24"
         >
-          {/* Location */}
-          <div className="flex items-center gap-3 min-w-[200px]">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl bg-indigo/10 text-indigo flex-shrink-0">
-              📍
+          {/* Top Row: Location & Monitoring Network + Quick Location Switches + Glossary Trigger */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-xl bg-indigo/10 text-indigo flex-shrink-0">
+                📍
+              </div>
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-wider text-indigo">
+                  Current Air Quality In Your Area
+                </div>
+                <div className="text-base sm:text-lg font-black t1 leading-tight">
+                  {selectedCoords?.name ? selectedCoords.name.replace(' (Spatial IDW)', '') : (d.location || 'Delhi-NCR Central')}
+                </div>
+                <div className="text-[10px] font-bold t3 mt-0.5">
+                  Monitored via CPCB &amp; OpenAQ stations · Updated {d.updated}
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-wider tm">
-                {d.spatialMethod || "3-Station Spatial IDW"}
-              </div>
-              <div className="text-base lg:text-lg font-black t1 leading-tight">
-                {selectedCoords?.name && selectedCoords.name !== 'Delhi-NCR Central'
-                  ? `${selectedCoords.name} (Spatial IDW)`
-                  : d.location}
-              </div>
-              <div className="text-[10px] font-bold t3 mt-0.5">
-                {d.contributingStations?.length
-                  ? `Nearest ${Math.min(3, d.contributingStations.length)} stations · ${d.updated}`
-                  : d.updated}
-              </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Quick Switch for Saved Home/Work Locations */}
+              {(userProfile?.home_location?.latitude || userProfile?.work_location?.latitude) && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold tm">Saved:</span>
+                  {userProfile?.home_location?.latitude && (
+                    <button
+                      id="btn-quick-home"
+                      type="button"
+                      onClick={() => setSelectedCoords({
+                        lat: Number(userProfile.home_location.latitude),
+                        lon: Number(userProfile.home_location.longitude),
+                        name: userProfile.home_location.label || 'Home',
+                      })}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold border bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      🏠 {userProfile.home_location.label || 'Home'}
+                    </button>
+                  )}
+                  {userProfile?.work_location?.latitude && (
+                    <button
+                      id="btn-quick-work"
+                      type="button"
+                      onClick={() => setSelectedCoords({
+                        lat: Number(userProfile.work_location.latitude),
+                        lon: Number(userProfile.work_location.longitude),
+                        name: userProfile.work_location.label || 'Work',
+                      })}
+                      className="px-2 py-1 rounded-lg text-[10px] font-bold border bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:scale-105 active:scale-95 transition-all"
+                    >
+                      🏢 {userProfile.work_location.label || 'Work'}
+                    </button>
+                  )}
+                  <button
+                    id="btn-quick-delhi"
+                    type="button"
+                    onClick={() => setSelectedCoords({ lat: 28.6139, lon: 77.2090, name: 'Delhi-NCR Central' })}
+                    className="px-2 py-1 rounded-lg text-[10px] font-semibold border hover:bg-[var(--surface-alt)] transition-all"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+                  >
+                    📍 Central NCR
+                  </button>
+                </div>
+              )}
+
+              {/* Glossary Trigger */}
+              <button
+                type="button"
+                id="btn-open-glossary"
+                onClick={() => setGlossaryOpen(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-extrabold border bg-[var(--surface-alt)] hover:bg-[var(--surface)] transition-all t2"
+                style={{ borderColor: 'var(--border)' }}
+                title="Open Technical Glossary for AQI, PM2.5, and monitoring definitions"
+              >
+                <span>📖</span>
+                <span>Glossary</span>
+              </button>
             </div>
           </div>
 
-          {/* AQI & Severity */}
-          <div className="flex items-center gap-3.5 px-4 md:border-x min-w-[170px]" style={{ borderColor: 'var(--border)' }}>
-            <div
-              className="text-3xl lg:text-4xl font-black tracking-tight"
-              style={{
-                color: d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : d.aqi > 100 ? '#F5C542' : '#2EB872'
-              }}
-            >
-              {d.aqi}
-            </div>
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-wider tm">Index / Level</div>
-              <span
-                className="inline-flex text-xs font-black px-2.5 py-0.5 rounded-full mt-0.5"
+          {/* Main Advisory Row: AQI Multi-Channel Pill + Verdict Badge + Action & Cause */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+            {/* AQI + Multi-Channel Severity Badge (4 cols) */}
+            <div className="md:col-span-4 flex items-center gap-4 p-3 rounded-2xl bg-[var(--surface-alt)] border" style={{ borderColor: 'var(--border)' }}>
+              <div
+                className="text-4xl lg:text-5xl font-black tracking-tight"
                 style={{
-                  background: (d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542') + '18',
-                  color: d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542',
-                  border: `1px solid ${(d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542')}35`
+                  color: d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : d.aqi > 100 ? '#F5C542' : '#2EB872'
                 }}
               >
-                {d.status}
-              </span>
+                {d.aqi}
+              </div>
+              <div className="flex-1">
+                <div className="text-[10px] font-black uppercase tracking-wider tm">Index &amp; Severity</div>
+                <div
+                  className="inline-flex items-center gap-1.5 text-xs font-black px-2.5 py-1 rounded-full mt-0.5"
+                  style={{
+                    background: (d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542') + '18',
+                    color: d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542',
+                    border: `1px solid ${(d.aqi > 300 ? '#E5484D' : d.aqi > 200 ? '#F28C28' : '#F5C542')}40`
+                  }}
+                >
+                  <span>{d.aqi > 300 ? '🚨' : d.aqi > 200 ? '🔴' : d.aqi > 100 ? '🟠' : '🟢'}</span>
+                  <span>{d.status}</span>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Verdict */}
-          <div className="flex items-center min-w-[130px]">
-            <div
-              className="w-full text-center px-4 py-2 rounded-xl text-xs font-black tracking-wider uppercase shadow-sm"
-              style={{
-                background: d.verdict === 'STAY IN' ? '#E5484D' : d.verdict === 'CUT BACK' ? '#F28C28' : '#2EB872',
-                color: '#ffffff',
-              }}
-            >
-              {d.verdict}
-            </div>
-          </div>
+            {/* Authoritative Action & Health Recommendation (8 cols) */}
+            <div className="md:col-span-8 flex flex-col justify-center p-3.5 rounded-2xl border bg-[var(--surface-alt)]" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-white shadow-xs"
+                    style={{
+                      background: d.verdict === 'STAY IN' ? '#E5484D' : d.verdict === 'CUT BACK' ? '#F28C28' : '#2EB872',
+                    }}
+                  >
+                    {d.verdict}
+                  </span>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-indigo">
+                    Recommended Action
+                  </span>
+                </div>
+                <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  Best Window: {d.bestWindow}
+                </div>
+              </div>
 
-          {/* Reason */}
-          <div className="flex-1 md:max-w-md px-2">
-            <div className="text-[10px] font-black uppercase tracking-wider tm mb-0.5">Primary Reason</div>
-            <p className="text-xs font-bold t1 leading-snug line-clamp-2">
-              <span className="text-indigo font-extrabold">{d.why?.[0]?.label}:</span> {d.why?.[0]?.detail}
-            </p>
-          </div>
+              <p className="text-xs font-bold t1 leading-snug">
+                {d.recommendation}
+              </p>
 
-          {/* Recommended Action */}
-          <div
-            className="min-w-[240px] p-2.5 rounded-2xl border flex flex-col justify-center"
-            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
-          >
-            <div className="text-[10px] font-black uppercase tracking-wider text-indigo mb-0.5">Recommended Action</div>
-            <div className="text-xs font-bold t1 leading-tight line-clamp-2">{d.recommendation}</div>
-            <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 mt-1 flex items-center justify-between">
-              <span>Best Window: {d.bestWindow}</span>
-              <span className="t3 font-bold">Recheck {d.recheckAt}</span>
+              {/* Primary Cause in Plain English */}
+              <div className="mt-2 pt-1.5 border-t flex items-center justify-between gap-2 flex-wrap text-[11px] font-semibold" style={{ borderColor: 'var(--border)' }}>
+                <span className="t2">
+                  <strong className="text-indigo">Primary Driver:</strong> {d.why?.[0]?.label || 'Particulate Matter'} — {d.why?.[0]?.detail || 'High fine particle concentrations under calm surface winds.'}
+                </span>
+                <span className="text-[10px] font-bold tm">
+                  Recheck at {d.recheckAt}
+                </span>
+              </div>
             </div>
           </div>
         </section>
@@ -376,8 +693,8 @@ export default function App() {
 
         {/* ── 3. PRIMARY STATUS & WEATHER INTELLIGENCE ── */}
         <section id="weather" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6 scroll-mt-24">
-          {/* Card 1: AQI Gauge (4 cols) */}
-          <div className="lg:col-span-4 flex flex-col">
+          {/* Card 1: AQI Gauge */}
+          <div className={`${viewMode === 'advanced' ? 'lg:col-span-4' : 'lg:col-span-6'} flex flex-col`}>
             <AqiGauge
               aqi={d.aqi}
               status={d.status}
@@ -390,20 +707,22 @@ export default function App() {
             />
           </div>
 
-          {/* Card 2: Weather Intelligence & Correlation (4 cols) */}
-          <div className="lg:col-span-4 flex flex-col">
+          {/* Card 2: Weather Intelligence & Correlation */}
+          <div className={`${viewMode === 'advanced' ? 'lg:col-span-4' : 'lg:col-span-6'} flex flex-col`}>
             <WeatherCard weather={d.weather} aqi={d.aqi} />
           </div>
 
-          {/* Card 3: Air Flow Dynamics & Compass (4 cols) */}
-          <div className="lg:col-span-4 flex flex-col">
-            <AirFlowCard
-              speed={d.weather?.windSpeed != null ? String(d.weather.windSpeed) : (demoMode ? "3.2" : "8.5")}
-              unit="km/h"
-              direction={d.weather?.windDirection || (demoMode ? "NW" : "WNW")}
-              degrees={d.weather?.windDegrees || (demoMode ? 315 : 290)}
-            />
-          </div>
+          {/* Card 3: Air Flow Dynamics & Compass (Advanced Mode Only) */}
+          {viewMode === 'advanced' && (
+            <div className="lg:col-span-4 flex flex-col">
+              <AirFlowCard
+                speed={d.weather?.windSpeed != null ? String(d.weather.windSpeed) : (demoMode ? "3.2" : "8.5")}
+                unit="km/h"
+                direction={d.weather?.windDirection || (demoMode ? "NW" : "WNW")}
+                degrees={d.weather?.windDegrees || (demoMode ? 315 : 290)}
+              />
+            </div>
+          )}
         </section>
 
         {/* ── 4. MULTI-METRIC FORECAST CHART (Full Width) ── */}
@@ -412,38 +731,62 @@ export default function App() {
         </section>
 
         {/* ── 5. INTELLIGENCE, SCHOOL CARE & MOBILITY CORRIDORS ── */}
-        <section id="mobility" className="grid grid-cols-1 md:grid-cols-3 gap-6 scroll-mt-24">
-          {/* Card 1: Why is the air bad? */}
-          <div id="why" className="flex flex-col">
-            <WhyPanel
-              reasons={d.why}
-              dominantPollutant={d.dominantPollutant}
-            />
-          </div>
+        {viewMode === 'advanced' ? (
+          <section id="mobility" className="grid grid-cols-1 md:grid-cols-3 gap-6 scroll-mt-24">
+            {/* Card 1: Why is the air bad? */}
+            <div id="why" className="flex flex-col">
+              <WhyPanel
+                reasons={d.why}
+                dominantPollutant={d.dominantPollutant}
+              />
+            </div>
 
-          {/* Card 2: School Safety Protocol */}
-          <div id="school" className="flex flex-col">
-            <SchoolCard data={d.school} />
-          </div>
+            {/* Card 2: School Safety Protocol */}
+            <div id="school" className="flex flex-col">
+              <SchoolCard data={d.school} />
+            </div>
 
-          {/* Card 3: Mobility & Smog Impact Corridors */}
-          <div className="flex flex-col">
-            <MobilityCard traffic={d.traffic} />
+            {/* Card 3: Mobility & Smog Impact Corridors */}
+            <div className="flex flex-col">
+              <MobilityCard traffic={d.traffic} />
+            </div>
+          </section>
+        ) : (
+          <div className="card p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 bg-[var(--surface-alt)] shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔬</span>
+              <div>
+                <div className="text-xs font-black t1">Looking for deeper environmental diagnostics?</div>
+                <div className="text-[11px] font-semibold t3">
+                  Explore 6-pollutant telemetry, wind dynamics, pollution causality, and transit corridors in Advanced Mode.
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="btn-switch-advanced-prompt"
+              onClick={() => handleViewModeChange('advanced')}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo text-white hover:scale-105 active:scale-95 transition-all shrink-0 shadow-sm"
+            >
+              Switch to Advanced View ➔
+            </button>
           </div>
-        </section>
+        )}
 
-        {/* ── 6. POLLUTANTS BREAKDOWN ── */}
-        <section className="w-full">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h3 className="text-sm font-black t1 uppercase tracking-wider">
-              Pollutant Concentration Breakdown
-            </h3>
-            <span className="text-[11px] font-bold t3">
-              Standardized to CPCB / WHO Reference Thresholds
-            </span>
-          </div>
-          <PollutantCards pollutants={d.pollutants} />
-        </section>
+        {/* ── 6. POLLUTANTS BREAKDOWN (Advanced Mode Only) ── */}
+        {viewMode === 'advanced' && (
+          <section className="w-full">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h3 className="text-sm font-black t1 uppercase tracking-wider">
+                Pollutant Concentration Breakdown
+              </h3>
+              <span className="text-[11px] font-bold t3">
+                Standardized to CPCB / WHO Reference Thresholds
+              </span>
+            </div>
+            <PollutantCards pollutants={d.pollutants} />
+          </section>
+        )}
 
         {/* ── 7. AI COPILOT & PERSONAL WATCHLIST ── */}
         <section id="ask" className="grid grid-cols-1 lg:grid-cols-12 gap-6 scroll-mt-24">
@@ -453,6 +796,7 @@ export default function App() {
               lat={selectedCoords.lat}
               lon={selectedCoords.lon}
               demo={demoMode}
+              persona={userProfile?.persona || "General Public"}
             />
           </div>
 
@@ -465,17 +809,21 @@ export default function App() {
                   <h3 className="text-sm font-black t1">Monitored Locations</h3>
                 </div>
                 <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                  {demoMode ? 'All 3 In Red Zone' : 'All 3 In Moderate Zone'}
+                  {demoMode ? 'All In Red Zone' : 'Monitored'}
                 </span>
               </div>
               <p className="text-[11px] font-medium t3 mb-4">
-                Personalized tracking for family transit and workplaces.
+                Personalized tracking for family transit, home, and workplaces.
               </p>
 
               <div className="space-y-2">
                 <Watchlist
-                  items={d.watchlist}
+                  items={personalizedWatchlist}
                   onSelect={(lat, lon, name) => setSelectedCoords({ lat, lon, name })}
+                  onOpenSaveLocations={() => {
+                    setCurrentView('signup');
+                    window.location.hash = '#/signup';
+                  }}
                 />
               </div>
             </div>
@@ -490,7 +838,9 @@ export default function App() {
                 <span className="text-indigo font-bold">AQI &gt; 300</span>
               </div>
               <p className="text-[11px] font-medium t3">
-                Push notifications enabled for Saket (Home) &amp; Vasant Kunj (School).
+                {userProfile?.alerts_enabled
+                  ? 'Personal alerts enabled for saved locations.'
+                  : 'Push notifications enabled for Delhi-NCR critical air zones.'}
               </p>
             </div>
           </div>
@@ -535,6 +885,21 @@ export default function App() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ═══════════════ TECHNICAL GLOSSARY MODAL ═══════════════ */}
+      {glossaryOpen && (
+        <TechnicalGlossaryModal onClose={() => setGlossaryOpen(false)} />
+      )}
+
+      {/* ═══════════════ MANDATORY POST-REGISTRATION COMPLETE PROFILE MODAL ═══════════════ */}
+      {needsProfileCompletion && isAuthenticated && (
+        <CompleteProfileModal
+          onProfileCompleted={(p) => {
+            setUserProfile(p);
+            setNeedsProfileCompletion(false);
+          }}
+        />
       )}
 
       {/* ═══════════════ BOTTOM ACTION BAR ═══════════════ */}

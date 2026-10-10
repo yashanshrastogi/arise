@@ -67,7 +67,7 @@ function formToLocation(form, prefix, fallbackLabel) {
   return location;
 }
 
-export default function ProfileSettingsModal({ onClose }) {
+export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
   const { user, accessToken } = useAuth();
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(true);
@@ -155,8 +155,11 @@ export default function ProfileSettingsModal({ onClose }) {
         work_location: formToLocation(form, 'work', 'Work'),
       };
 
-      await updateUserProfile(accessToken, updates);
+      const saved = await updateUserProfile(accessToken, updates);
       setMessage('Your profile and preferences have been saved.');
+      if (onProfileSaved) {
+        onProfileSaved(saved || updates);
+      }
     } catch (err) {
       setError(err.message || 'Unable to save your profile.');
     } finally {
@@ -193,10 +196,53 @@ export default function ProfileSettingsModal({ onClose }) {
     );
   }
 
+  const [locatingPrefix, setLocatingPrefix] = useState(null);
+
+  function handleUseCurrentLocation(prefix) {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.');
+      return;
+    }
+    setError('');
+    setLocatingPrefix(prefix);
+    setMessage(`Requesting browser permission for ${prefix} location...`);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(4));
+        const lon = Number(pos.coords.longitude.toFixed(4));
+        setForm((prev) => ({
+          ...prev,
+          [`${prefix}_lat`]: String(lat),
+          [`${prefix}_lon`]: String(lon),
+          [`${prefix}_address`]: prev[`${prefix}_address`] || `${lat}°N, ${lon}°E (Current Area)`,
+        }));
+        setLocatingPrefix(null);
+        setMessage(`Coordinates obtained (${lat}, ${lon}). You can review and edit before saving.`);
+      },
+      (err) => {
+        setLocatingPrefix(null);
+        setError(`Unable to detect location: ${err.message}. Please enter address or coordinates manually.`);
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  }
+
   function locationSection(title, prefix) {
     return (
       <section className="space-y-3 rounded-xl border p-4" style={{ borderColor: 'var(--border)' }}>
-        <h3 className="text-sm font-bold t1">{title}</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold t1">{title}</h3>
+          <button
+            type="button"
+            onClick={() => handleUseCurrentLocation(prefix)}
+            disabled={locatingPrefix === prefix}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors disabled:opacity-60"
+          >
+            <span>📍</span>
+            <span>{locatingPrefix === prefix ? 'Detecting…' : 'Use my current location'}</span>
+          </button>
+        </div>
         <p className="text-xs tm">
           Optional. Leave blank if you do not want to save this location.
         </p>

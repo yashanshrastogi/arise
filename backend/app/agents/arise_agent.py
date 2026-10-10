@@ -19,8 +19,15 @@ from strands import Agent
 from strands.models.bedrock import BedrockModel
 
 from app.core.config import get_settings
+from app.core.secrets import get_secret
 from app.cache.repository import get_cache_repository
 from app.agents.schemas import AskAriseVerdictResponse, AskAriseRequest
+from app.agents.gemini_provider import (
+    invoke_gemini,
+    GeminiTimeoutError,
+    GeminiRateLimitError,
+    GeminiProviderError,
+)
 from app.agents.tools import (
     get_air_now,
     get_forecast,
@@ -397,10 +404,12 @@ class AriseAgent:
         except Exception as e:
             logger.warning(f"Error querying get_fire_signal: {e}")
 
-        # Check LLM_PROVIDER: When 'rule-based', do NOT call Bedrock at all (instant answer)
+        # Check LLM_PROVIDER
         provider_mode = (self.settings.LLM_PROVIDER or "rule-based").lower()
+
+        # 1. Rule-Based Mode: Bypasses all external LLMs entirely for instant response
         if provider_mode == "rule-based":
-            logger.info("LLM_PROVIDER is 'rule-based'. Bypassing Bedrock for immediate deterministic synthesis.")
+            logger.info("LLM_PROVIDER is 'rule-based'. Bypassing external models for immediate deterministic synthesis.")
             fallback_resp = _generate_grounded_fallback_response(
                 question=request.question,
                 verdict_data=verdict_data,
@@ -414,73 +423,155 @@ class AriseAgent:
                 logger.warning(f"Failed to cache chat response: {ce}")
             return fallback_resp
 
-        # When 'bedrock', check 10-minute circuit breaker on Bedrock failures
-        breaker_key = "bedrock_circuit_breaker:failure"
-        breaker_entry = self.cache.get(breaker_key, allow_stale=False)
-        if breaker_entry and breaker_entry.value:
-            logger.info("Bedrock is in 10-minute circuit breaker cooldown. Immediately using rule-based fallback.")
-            fallback_resp = _generate_grounded_fallback_response(
-                question=request.question,
-                verdict_data=verdict_data,
-                air_data=air_data,
-                fc_data=fc_data,
-                fire_data=fire_data,
-            )
-            try:
-                self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
-            except Exception as ce:
-                logger.warning(f"Failed to cache chat response: {ce}")
-            return fallback_resp
-
-        # Try Bedrock with a strict 5-second timeout
-        try:
-            model_id = self.settings.BEDROCK_MODEL_ID or "us.amazon.nova-lite-v1:0"
-            region_name = self.settings.AWS_REGION or "us-east-1"
-            model = BedrockModel(model_id=model_id, region_name=region_name)
-            agent = Agent(
-                model=model,
-                tools=self.tools,
-                system_prompt=SYSTEM_PROMPT,
-                structured_output_model=AskAriseVerdictResponse,
-            )
-            # 5-second timeout
-            timeout_sec = 5.0
-            result = await asyncio.wait_for(
-                agent.invoke_async(
-                    request.question,
-                    structured_output_model=AskAriseVerdictResponse,
-                ),
-                timeout=timeout_sec,
-            )
-            parsed = getattr(result, "structured_output", None) or result
-            if _is_usable_bedrock_response(parsed):
-                if verdict_data and verdict_data.get("verdict"):
-                    if parsed.verdict != verdict_data["verdict"]:
-                        logger.warning(
-                            f"LLM attempted to override verdict ({parsed.verdict} vs {verdict_data['verdict']}). Reverting to authoritative verdict."
-                        )
-                        parsed.verdict = verdict_data["verdict"]
-                parsed.provider = "bedrock"
-                parsed.assistant_label = f"Arise AI (Amazon Bedrock · {model_id})"
-                parsed.is_rule_based = False
-                if not getattr(parsed, "timestamp", None):
-                    parsed.timestamp = datetime.now(timezone.utc).strftime("%I:%M %p")
+        # 2. Google Gemini Mode
+        if provider_mode == "gemini":
+            breaker_key = "gemini_circuit_breaker:failure"
+            breaker_entry = self.cache.get(breaker_key, allow_stale=False)
+            if breaker_entry and breaker_entry.value:
+                logger.info("Gemini is in 10-minute circuit breaker cooldown. Immediately using rule-based fallback.")
+                fallback_resp = _generate_grounded_fallback_response(
+                    question=request.question,
+                    verdict_data=verdict_data,
+                    air_data=air_data,
+                    fc_data=fc_data,
+                    fire_data=fire_data,
+                )
                 try:
-                    self.cache.set(cache_key, parsed.model_dump(), ttl_seconds=1800, source="arise-chat")
+                    self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
                 except Exception as ce:
                     logger.warning(f"Failed to cache chat response: {ce}")
-                return parsed
-            else:
-                logger.warning("Bedrock returned empty or unusable response. Tripping breaker for 10 minutes.")
-                self.cache.set(breaker_key, {"failed": True, "reason": "unusable_response"}, ttl_seconds=600, source="circuit-breaker")
-        except asyncio.TimeoutError:
-            logger.warning("Bedrock invocation timed out (5s limit). Tripping breaker for 10 minutes.")
-            self.cache.set(breaker_key, {"failed": True, "reason": "timeout"}, ttl_seconds=600, source="circuit-breaker")
-        except Exception as e:
-            logger.info(f"Bedrock invocation failed ({type(e).__name__}: {e}). Tripping breaker for 10 minutes.")
-            self.cache.set(breaker_key, {"failed": True, "reason": str(e)}, ttl_seconds=600, source="circuit-breaker")
+                return fallback_resp
 
-        # Automatically fall back to rule-based answer
+            api_key = get_secret(self.settings.GEMINI_SECRET_ID, region_name=self.settings.AWS_REGION)
+            if not api_key:
+                logger.warning("GEMINI_API_KEY could not be retrieved from Secrets Manager or environment. Tripping breaker.")
+                self.cache.set(breaker_key, {"failed": True, "reason": "missing_api_key"}, ttl_seconds=600, source="circuit-breaker")
+            else:
+                model_id = self.settings.GEMINI_MODEL_ID or "gemini-3.5-flash-lite"
+                timeout_sec = float(self.settings.GEMINI_TIMEOUT_SECONDS or 5.0)
+                try:
+                    resp = await invoke_gemini(
+                        question=request.question,
+                        verdict_data=verdict_data,
+                        air_data=air_data,
+                        fc_data=fc_data,
+                        fire_data=fire_data,
+                        persona=request.persona,
+                        api_key=api_key,
+                        model_id=model_id,
+                        timeout_sec=timeout_sec,
+                    )
+                    # Enforce that authoritative verdict cannot be overridden
+                    if verdict_data.get("verdict") and resp.verdict != verdict_data["verdict"]:
+                        resp.verdict = verdict_data["verdict"]
+                    try:
+                        self.cache.set(cache_key, resp.model_dump(), ttl_seconds=1800, source="arise-chat")
+                    except Exception as ce:
+                        logger.warning(f"Failed to cache chat response: {ce}")
+                    return resp
+                except GeminiTimeoutError:
+                    logger.warning(f"Gemini timed out ({timeout_sec}s limit). Tripping breaker for 10 minutes.")
+                    self.cache.set(breaker_key, {"failed": True, "reason": "timeout"}, ttl_seconds=600, source="circuit-breaker")
+                except GeminiRateLimitError:
+                    logger.warning("Gemini rate limit exceeded. Tripping breaker for 10 minutes.")
+                    self.cache.set(breaker_key, {"failed": True, "reason": "rate_limit"}, ttl_seconds=600, source="circuit-breaker")
+                except Exception as e:
+                    logger.warning(f"Gemini invocation failed ({type(e).__name__}: {e}). Tripping breaker for 10 minutes.")
+                    self.cache.set(breaker_key, {"failed": True, "reason": str(e)}, ttl_seconds=600, source="circuit-breaker")
+
+            # Fallback to deterministic rule-based answer
+            fallback_resp = _generate_grounded_fallback_response(
+                question=request.question,
+                verdict_data=verdict_data,
+                air_data=air_data,
+                fc_data=fc_data,
+                fire_data=fire_data,
+            )
+            try:
+                self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
+            except Exception as ce:
+                logger.warning(f"Failed to cache chat response: {ce}")
+            return fallback_resp
+
+        # 3. Amazon Bedrock Mode
+        if provider_mode == "bedrock":
+            breaker_key = "bedrock_circuit_breaker:failure"
+            breaker_entry = self.cache.get(breaker_key, allow_stale=False)
+            if breaker_entry and breaker_entry.value:
+                logger.info("Bedrock is in 10-minute circuit breaker cooldown. Immediately using rule-based fallback.")
+                fallback_resp = _generate_grounded_fallback_response(
+                    question=request.question,
+                    verdict_data=verdict_data,
+                    air_data=air_data,
+                    fc_data=fc_data,
+                    fire_data=fire_data,
+                )
+                try:
+                    self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
+                except Exception as ce:
+                    logger.warning(f"Failed to cache chat response: {ce}")
+                return fallback_resp
+
+            try:
+                model_id = self.settings.BEDROCK_MODEL_ID or "us.amazon.nova-lite-v1:0"
+                region_name = self.settings.AWS_REGION or "us-east-1"
+                model = BedrockModel(model_id=model_id, region_name=region_name)
+                agent = Agent(
+                    model=model,
+                    tools=self.tools,
+                    system_prompt=SYSTEM_PROMPT,
+                    structured_output_model=AskAriseVerdictResponse,
+                )
+                timeout_sec = 5.0
+                result = await asyncio.wait_for(
+                    agent.invoke_async(
+                        request.question,
+                        structured_output_model=AskAriseVerdictResponse,
+                    ),
+                    timeout=timeout_sec,
+                )
+                parsed = getattr(result, "structured_output", None) or result
+                if _is_usable_bedrock_response(parsed):
+                    if verdict_data and verdict_data.get("verdict"):
+                        if parsed.verdict != verdict_data["verdict"]:
+                            logger.warning(
+                                f"LLM attempted to override verdict ({parsed.verdict} vs {verdict_data['verdict']}). Reverting to authoritative verdict."
+                            )
+                            parsed.verdict = verdict_data["verdict"]
+                    parsed.provider = "bedrock"
+                    parsed.assistant_label = f"Arise AI (Amazon Bedrock · {model_id})"
+                    parsed.is_rule_based = False
+                    if not getattr(parsed, "timestamp", None):
+                        parsed.timestamp = datetime.now(timezone.utc).strftime("%I:%M %p")
+                    try:
+                        self.cache.set(cache_key, parsed.model_dump(), ttl_seconds=1800, source="arise-chat")
+                    except Exception as ce:
+                        logger.warning(f"Failed to cache chat response: {ce}")
+                    return parsed
+                else:
+                    logger.warning("Bedrock returned empty or unusable response. Tripping breaker for 10 minutes.")
+                    self.cache.set(breaker_key, {"failed": True, "reason": "unusable_response"}, ttl_seconds=600, source="circuit-breaker")
+            except asyncio.TimeoutError:
+                logger.warning("Bedrock invocation timed out (5s limit). Tripping breaker for 10 minutes.")
+                self.cache.set(breaker_key, {"failed": True, "reason": "timeout"}, ttl_seconds=600, source="circuit-breaker")
+            except Exception as e:
+                logger.info(f"Bedrock invocation failed ({type(e).__name__}: {e}). Tripping breaker for 10 minutes.")
+                self.cache.set(breaker_key, {"failed": True, "reason": str(e)}, ttl_seconds=600, source="circuit-breaker")
+
+            fallback_resp = _generate_grounded_fallback_response(
+                question=request.question,
+                verdict_data=verdict_data,
+                air_data=air_data,
+                fc_data=fc_data,
+                fire_data=fire_data,
+            )
+            try:
+                self.cache.set(cache_key, fallback_resp.model_dump(), ttl_seconds=1800, source="arise-chat")
+            except Exception as ce:
+                logger.warning(f"Failed to cache chat response: {ce}")
+            return fallback_resp
+
+        # Fallback for unrecognized provider modes
         fallback_resp = _generate_grounded_fallback_response(
             question=request.question,
             verdict_data=verdict_data,

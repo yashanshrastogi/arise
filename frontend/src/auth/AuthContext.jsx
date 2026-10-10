@@ -3,34 +3,38 @@ import {
   AuthProvider as OidcAuthProvider,
   useAuth as useOidcAuth,
 } from 'react-oidc-context';
-
-const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'guest';
-const isCognito = AUTH_MODE === 'cognito-google';
+import {
+  DEFAULT_CLIENT_ID,
+  DEFAULT_AUTHORITY,
+  DEFAULT_COGNITO_DOMAIN,
+  getSharedUserManager,
+  createCognitoAuthRedirectUrl,
+} from './cognitoAuth';
 
 const AuthContext = createContext(null);
 
-const GUEST_AUTH_VALUE = {
+const GUEST_FALLBACK = {
   user: null,
   isAuthenticated: false,
   isGuest: true,
   accessToken: null,
-  authMode: AUTH_MODE,
+  idToken: null,
+  authMode: 'guest',
   loading: false,
   error: null,
-  authModalOpen: false,
-  setAuthModalOpen: () => {},
   loginWithGoogle: () => {},
+  loginWithEmailPassword: () => {},
   logout: () => {},
 };
 
 function CognitoBridge({ children }) {
   const oidc = useOidcAuth();
 
-  const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
-  const cognitoDomain = import.meta.env.VITE_COGNITO_DOMAIN;
+  const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || DEFAULT_CLIENT_ID;
+  const cognitoDomain = import.meta.env.VITE_COGNITO_DOMAIN || DEFAULT_COGNITO_DOMAIN;
   const logoutUri =
     import.meta.env.VITE_COGNITO_LOGOUT_URI ||
-    (typeof window !== 'undefined' ? window.location.origin + '/' : '/');
+    (typeof window !== 'undefined' ? `${window.location.origin}/` : 'http://localhost:5173/');
 
   const loginWithGoogle = useCallback(
     () =>
@@ -40,9 +44,36 @@ function CognitoBridge({ children }) {
     [oidc],
   );
 
+  const loginWithEmailPassword = useCallback(
+    async (screen = 'login', options = {}) => {
+      if (screen === 'signup') {
+        const manager = getSharedUserManager();
+        const { url } = await createCognitoAuthRedirectUrl({
+          screen: 'signup',
+          options,
+          manager,
+        });
+        if (typeof window !== 'undefined') {
+          window.location.assign(url);
+        }
+        return;
+      }
+
+      const extraQueryParams = {};
+      if (options.email) {
+        extraQueryParams.login_hint = options.email;
+      }
+      return oidc.signinRedirect({ extraQueryParams });
+    },
+    [oidc],
+  );
+
   const logout = useCallback(async () => {
-    // Clear the local OIDC session, then use Cognito's logout endpoint.
-    await oidc.removeUser();
+    try {
+      await oidc.removeUser();
+    } catch {
+      // ignore
+    }
 
     if (cognitoDomain && clientId && typeof window !== 'undefined') {
       const url = new URL(`${cognitoDomain}/logout`);
@@ -76,22 +107,24 @@ function CognitoBridge({ children }) {
           name,
           email: typeof profile.email === 'string' ? profile.email : '',
           initials,
-          provider: 'Google',
-          mode: 'Cognito Google OAuth',
+          provider:
+            profile?.identities?.[0]?.providerName ||
+            (profile?.['cognito:username']?.startsWith('Google') ? 'Google' : 'Cognito'),
+          mode: 'Cognito Authentication',
         }
       : null;
 
   const value = {
     user,
     isAuthenticated: Boolean(oidc.isAuthenticated && user),
-    isGuest: false,
-    accessToken: oidc.user?.access_token || null,
-    authMode: 'cognito-google',
+    isGuest: !oidc.isAuthenticated,
+    accessToken: oidc.user?.access_token || oidc.user?.id_token || null,
+    idToken: oidc.user?.id_token || null,
+    authMode: oidc.isAuthenticated ? 'cognito' : 'guest',
     loading: oidc.isLoading,
     error: oidc.error?.message || null,
-    authModalOpen: false,
-    setAuthModalOpen: () => {},
     loginWithGoogle,
+    loginWithEmailPassword,
     logout,
   };
 
@@ -103,41 +136,17 @@ function CognitoBridge({ children }) {
 }
 
 export function AuthProvider({ children }) {
-  if (!isCognito) {
-    return (
-      <AuthContext.Provider value={GUEST_AUTH_VALUE}>
-        {children}
-      </AuthContext.Provider>
-    );
-  }
-
-  const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID;
-  const logoutUri =
-    import.meta.env.VITE_COGNITO_LOGOUT_URI ||
-    (typeof window !== 'undefined' ? window.location.origin + '/' : '/');
-
-  const oidcConfig = {
-    authority: import.meta.env.VITE_COGNITO_AUTHORITY,
-    client_id: clientId,
-    redirect_uri:
-      import.meta.env.VITE_COGNITO_REDIRECT_URI ||
-      (typeof window !== 'undefined' ? window.location.origin + '/' : '/'),
-    post_logout_redirect_uri: logoutUri,
-    response_type: 'code',
-    scope: 'openid email profile',
-    automaticSilentRenew: false,
-  };
+  const manager = getSharedUserManager();
 
   return (
     <OidcAuthProvider
-      {...oidcConfig}
+      userManager={manager}
       onSigninCallback={() => {
-        // Remove OAuth code/state from the visible URL after processing.
         if (typeof window !== 'undefined') {
           window.history.replaceState(
             {},
             document.title,
-            window.location.pathname + window.location.hash,
+            window.location.pathname + (window.location.hash.startsWith('#code=') ? '' : window.location.hash),
           );
         }
       }}
@@ -152,5 +161,13 @@ export function useAuth() {
   if (context) {
     return context;
   }
-  return GUEST_AUTH_VALUE;
+  return GUEST_FALLBACK;
 }
+
+export {
+  DEFAULT_CLIENT_ID,
+  DEFAULT_AUTHORITY,
+  DEFAULT_COGNITO_DOMAIN,
+  getSharedUserManager,
+  createCognitoAuthRedirectUrl,
+};

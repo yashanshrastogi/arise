@@ -40,8 +40,11 @@ class Settings(BaseModel):
     API_GATEWAY_BASE_PATH: Optional[str] = None
     
     # AI / LLM Integration
-    LLM_PROVIDER: Literal["local", "ollama", "bedrock", "rule-based"] = "rule-based"
+    LLM_PROVIDER: Literal["local", "ollama", "bedrock", "gemini", "rule-based"] = "rule-based"
     BEDROCK_MODEL_ID: str = "us.amazon.nova-lite-v1:0"
+    GEMINI_SECRET_ID: str = "arise/gemini-api-key"
+    GEMINI_MODEL_ID: str = "gemini-3.5-flash-lite"
+    GEMINI_TIMEOUT_SECONDS: float = Field(default=5.0, gt=0.0, le=30.0)
     OLLAMA_HOST: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "llama3.2"
     
@@ -81,7 +84,7 @@ class Settings(BaseModel):
     def safe_dict(self) -> dict:
         """Export settings with sensitive credentials masked."""
         data = self.model_dump()
-        sensitive_keys = {"OPENAQ_API_KEY", "FIRMS_MAP_KEY", "CPCB_API_KEY"}
+        sensitive_keys = {"OPENAQ_API_KEY", "FIRMS_MAP_KEY", "CPCB_API_KEY", "GEMINI_API_KEY"}
         for k in sensitive_keys:
             if data.get(k):
                 data[k] = "******"
@@ -117,6 +120,9 @@ def get_settings() -> Settings:
         API_GATEWAY_BASE_PATH=os.getenv("API_GATEWAY_BASE_PATH"),
         LLM_PROVIDER=os.getenv("LLM_PROVIDER", "rule-based"),
         BEDROCK_MODEL_ID=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0"),
+        GEMINI_SECRET_ID=os.getenv("GEMINI_SECRET_ID", "arise/gemini-api-key"),
+        GEMINI_MODEL_ID=os.getenv("GEMINI_MODEL_ID", "gemini-3.5-flash-lite"),
+        GEMINI_TIMEOUT_SECONDS=float(os.getenv("GEMINI_TIMEOUT_SECONDS", "5.0")),
         OLLAMA_HOST=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         OLLAMA_MODEL=os.getenv("OLLAMA_MODEL", "llama3.2"),
     )

@@ -24,7 +24,7 @@ const VERDICT_COLORS = {
   GO: '#2EB872',
 };
 
-export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false }) {
+export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false, persona = 'General Public' }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -50,7 +50,7 @@ export default function AskArise({ lat = 28.6139, lon = 77.2090, demo = false })
           question: q,
           lat,
           lon,
-          persona: "General Public",
+          persona: persona || "General Public",
           demo,
         }),
         timeoutPromise,

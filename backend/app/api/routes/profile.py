@@ -28,6 +28,10 @@ class SavedLocation(BaseModel):
 
 class ProfileBootstrap(BaseModel):
     display_name: str = Field(min_length=1, max_length=120)
+    home_location: SavedLocation | None = None
+    work_location: SavedLocation | None = None
+    persona: str | None = Field(default="General Public", max_length=80)
+    alerts_enabled: bool | None = False
 
     @field_validator("display_name")
     @classmethod
@@ -89,6 +93,7 @@ def _public_profile(item: dict) -> dict:
         for key in (
             "user_id",
             "display_name",
+            "email",
             "home_location",
             "work_location",
             "persona",
@@ -118,6 +123,9 @@ def bootstrap_profile(
 ):
     # Ownership is strictly derived from the validated token 'sub'
     user_id = user["sub"]
+    # Verified email is strictly sourced from Cognito authentication, never from client body
+    verified_email = user.get("email")
+
     table = _get_profile_table()
     existing = _get_item(table, user_id)
     if existing:
@@ -127,10 +135,11 @@ def bootstrap_profile(
     item = {
         "user_id": user_id,
         "display_name": payload.display_name,
-        "home_location": None,
-        "work_location": None,
-        "persona": "General Public",
-        "alerts_enabled": False,
+        "email": verified_email,
+        "home_location": payload.home_location.model_dump(mode="json") if payload.home_location else None,
+        "work_location": payload.work_location.model_dump(mode="json") if payload.work_location else None,
+        "persona": payload.persona or "General Public",
+        "alerts_enabled": bool(payload.alerts_enabled),
         "created_at": now,
         "updated_at": now,
     }

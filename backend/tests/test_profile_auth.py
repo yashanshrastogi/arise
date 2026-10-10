@@ -49,7 +49,7 @@ def test_bootstrap_validation_empty_name():
         app.dependency_overrides.pop(get_current_user, None)
 
 
-def test_bootstrap_stores_no_email_and_uses_token_sub():
+def test_bootstrap_stores_verified_email_from_cognito_and_ignores_browser_email():
     mock_table = MagicMock()
     mock_table.get_item.return_value = {}  # Profile does not exist yet
 
@@ -58,21 +58,34 @@ def test_bootstrap_stores_no_email_and_uses_token_sub():
         with patch("app.api.routes.profile._get_profile_table", return_value=mock_table):
             response = client.post(
                 "/profile/bootstrap",
-                json={"display_name": "Alice Sharma", "email": "should_be_ignored@hack.com"},
+                json={
+                    "display_name": "Alice Sharma",
+                    "email": "should_be_ignored@hack.com",
+                    "home_location": {
+                        "label": "Home",
+                        "address": "Saket, New Delhi",
+                        "latitude": 28.5245,
+                        "longitude": 77.2066
+                    }
+                },
             )
             assert response.status_code == 200
             data = response.json()
             assert data["user_id"] == "user-uuid-1111"
             assert data["display_name"] == "Alice Sharma"
-            # Email must never be in storage or returned payload
-            assert "email" not in data
+            # Verified email from Cognito must be saved, browser-supplied email must be ignored
+            assert data["email"] == "userA@example.com"
+            assert data["email"] != "should_be_ignored@hack.com"
+            assert data["home_location"]["address"] == "Saket, New Delhi"
 
-            # Verify put_item was called with token sub and no email field
+            # Verify put_item was called with token sub and verified email
             mock_table.put_item.assert_called_once()
             put_call_kwargs = mock_table.put_item.call_args[1]
             stored_item = put_call_kwargs["Item"]
             assert stored_item["user_id"] == "user-uuid-1111"
-            assert "email" not in stored_item
+            assert stored_item["email"] == "userA@example.com"
+            assert stored_item["email"] != "should_be_ignored@hack.com"
+            assert stored_item["home_location"]["latitude"] == 28.5245
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 
@@ -157,5 +170,74 @@ def test_update_profile_uninitialized_returns_404():
             response = client.patch("/profile", json={"display_name": "New Name"})
             assert response.status_code == 404
             assert "Profile not initialized" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_location_validation_incomplete_coordinates():
+    app.dependency_overrides[get_current_user] = lambda: USER_A
+    try:
+        # Latitude without longitude must fail validation
+        response = client.post(
+            "/profile/bootstrap",
+            json={
+                "display_name": "Bob",
+                "home_location": {
+                    "label": "Home",
+                    "latitude": 28.5
+                }
+            }
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_location_validation_out_of_range_coordinates():
+    app.dependency_overrides[get_current_user] = lambda: USER_A
+    try:
+        # Latitude > 90 must fail validation
+        response = client.post(
+            "/profile/bootstrap",
+            json={
+                "display_name": "Bob",
+                "home_location": {
+                    "label": "Home",
+                    "latitude": 95.0,
+                    "longitude": 77.0
+                }
+            }
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+def test_get_profile_returns_verified_cognito_email():
+    mock_table = MagicMock()
+    mock_table.get_item.return_value = {
+        "Item": {
+            "user_id": "user-uuid-1111",
+            "display_name": "Alice Sharma",
+            "email": "userA@example.com",
+            "home_location": {"label": "Home", "address": "Delhi", "latitude": 28.6, "longitude": 77.2},
+            "work_location": {"label": "Work", "address": "Gurugram", "latitude": 28.4, "longitude": 77.0},
+            "persona": "Asthma / Respiratory Sensitive",
+            "alerts_enabled": True,
+            "created_at": "2026-10-10T00:00:00Z",
+            "updated_at": "2026-10-10T00:00:00Z",
+        }
+    }
+
+    app.dependency_overrides[get_current_user] = lambda: USER_A
+    try:
+        with patch("app.api.routes.profile._get_profile_table", return_value=mock_table):
+            response = client.get("/profile")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["email"] == "userA@example.com"
+            assert data["persona"] == "Asthma / Respiratory Sensitive"
+            assert data["home_location"]["address"] == "Delhi"
+            assert data["work_location"]["address"] == "Gurugram"
     finally:
         app.dependency_overrides.pop(get_current_user, None)

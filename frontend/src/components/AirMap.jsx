@@ -171,6 +171,7 @@ export default function AirMap({
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [layerDrawerOpen, setLayerDrawerOpen] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
   const layerDrawerRef = useRef(null);
   const [selectedStationName, setSelectedStationName] = useState('Delhi-NCR');
 
@@ -928,7 +929,23 @@ export default function AirMap({
           </div>
         )}
 
+        {/* ── Collapsible Map Overlays ── */}
+        {!controlsVisible && (
+          <button
+            type="button"
+            onClick={() => setControlsVisible(true)}
+            id="btn-restore-map-controls"
+            className="absolute top-3 left-3 z-[25] glass px-3 py-1.5 rounded-xl text-xs font-black t1 shadow-lg border hover:scale-105 active:scale-95 transition-all flex items-center gap-1.5"
+            style={{ borderColor: 'var(--border)' }}
+            title="Restore Map Controls & Layer Selector"
+          >
+            <span>🗺️</span>
+            <span>Show Map Controls</span>
+          </button>
+        )}
+
         {/* ── 1. Floating Structured Layer Selector (Top-Left) ── */}
+        {controlsVisible && (
         <div ref={layerDrawerRef} className="absolute top-3 left-3 z-[25] max-w-[225px]">
           <div className="glass rounded-2xl shadow-xl p-2.5 border transition-all" style={{ borderColor: 'var(--border)' }}>
             <div
@@ -1028,8 +1045,10 @@ export default function AirMap({
             )}
           </div>
         </div>
+        )}
 
         {/* ── 2. Floating Search & Station Dropdown (Top-Right) ── */}
+        {controlsVisible && (
         <div className="absolute top-3 right-3 z-[15] hidden sm:flex items-center gap-2">
           <div className="glass rounded-full pl-3.5 pr-1 py-1 flex items-center gap-2 shadow-lg border" style={{ borderColor: 'var(--border)' }}>
             <select
@@ -1053,8 +1072,10 @@ export default function AirMap({
             </button>
           </div>
         </div>
+        )}
 
         {/* ── 3. Floating Dynamic Legend (Bottom-Center, Non-overlapping) ── */}
+        {controlsVisible && (
         <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-[15] pointer-events-auto transition-opacity duration-200 ${
           layerDrawerOpen ? 'hidden md:flex' : 'flex'
         }`}>
@@ -1073,9 +1094,27 @@ export default function AirMap({
             </div>
           </div>
         </div>
+        )}
 
-        {/* ── 4. Floating Action Controls (Bottom-Right: Expand Map + Locate Me + Zoom) ── */}
+        {/* ── 4. Floating Action Controls (Bottom-Right: Expand Map + Locate Me + Zoom + Overlay Toggle) ── */}
         <div className="absolute bottom-3 right-3 z-[15] flex flex-col gap-1.5 items-center">
+          {/* Toggle Map Controls / Clear Canvas Button */}
+          <button
+            onClick={() => setControlsVisible(!controlsVisible)}
+            id="btn-toggle-map-controls"
+            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-lg border transition-all hover:scale-105 active:scale-95 ${
+              controlsVisible
+                ? 'glass t1 hover:bg-[var(--surface-alt)]'
+                : 'bg-indigo text-white border-indigo/40 shadow-indigo/20'
+            }`}
+            style={{ borderColor: 'var(--border)' }}
+            title={controlsVisible ? 'Collapse Overlays to Explore Map Canvas' : 'Show Map Controls & Layers'}
+            aria-label={controlsVisible ? 'Collapse map overlays' : 'Show map overlays'}
+            aria-pressed={!controlsVisible}
+          >
+            {controlsVisible ? '👁️' : '🗺️'}
+          </button>
+
           {/* Expand Map Button (Ride/Delivery pattern) */}
           <button
             onClick={() => setIsExpanded(!isExpanded)}
