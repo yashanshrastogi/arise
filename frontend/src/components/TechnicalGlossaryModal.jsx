@@ -1,9 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
-/**
- * Accessible Technical Terms & Environmental Glossary Modal.
- * Provides plain-English explanations for technical metrics (AQI, PM2.5, PM10, IDW, FIRMS).
- */
 const GLOSSARY_ITEMS = [
   {
     term: 'AQI (Air Quality Index)',
@@ -49,17 +45,38 @@ const GLOSSARY_ITEMS = [
   },
 ];
 
-export default function TechnicalGlossaryModal({ onClose }) {
+export default function TechnicalGlossaryModal({ isOpen = false, onClose }) {
+  // Support Escape key to close
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) {
+    return null;
+  }
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="glossary-title"
-      className="fixed inset-0 z-[3000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose?.();
+        }
+      }}
+      className="fixed inset-0 z-[3000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-180"
     >
       <div
         className="card max-w-xl w-full p-6 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
-        style={{ background: 'var(--surface)' }}
+        style={{ background: 'var(--card)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
@@ -69,15 +86,17 @@ export default function TechnicalGlossaryModal({ onClose }) {
               <h3 id="glossary-title" className="text-base font-black t1 leading-tight">
                 Environmental Metrics &amp; Definitions
               </h3>
-              <p className="text-[11px] font-semibold t3">
+              <p className="text-xs font-semibold t3">
                 Understand Delhi-NCR air quality indicators in plain English
               </p>
             </div>
           </div>
           <button
+            type="button"
+            id="btn-close-glossary-top"
             onClick={onClose}
             aria-label="Close glossary modal"
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold t3 hover:bg-[var(--surface-alt)] transition-colors"
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold t3 hover:bg-[var(--surface-alt)] transition-colors touch-target"
           >
             ✕
           </button>
@@ -96,7 +115,7 @@ export default function TechnicalGlossaryModal({ onClose }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <h4 className="text-xs font-black t1">{item.term}</h4>
-                    <span className="text-[10px] font-bold text-indigo bg-indigo/10 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
                       {item.subtitle}
                     </span>
                   </div>
@@ -111,12 +130,14 @@ export default function TechnicalGlossaryModal({ onClose }) {
 
         {/* Footer */}
         <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-          <span className="text-[10px] font-medium tm">
+          <span className="text-[11px] font-medium tm">
             CPCB / WHO Reference Standard Compliant
           </span>
           <button
+            type="button"
+            id="btn-close-glossary-bottom"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-indigo text-white font-extrabold text-xs shadow-md hover:scale-105 active:scale-95 transition-all"
+            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-md transition-all touch-target"
           >
             Got It
           </button>

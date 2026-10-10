@@ -635,10 +635,12 @@ export default function App() {
       )}
 
       {/* ═══════════════ TECHNICAL GLOSSARY MODAL ═══════════════ */}
-      <TechnicalGlossaryModal
-        isOpen={glossaryOpen}
-        onClose={() => setGlossaryOpen(false)}
-      />
+      {glossaryOpen && (
+        <TechnicalGlossaryModal
+          isOpen={glossaryOpen}
+          onClose={() => setGlossaryOpen(false)}
+        />
+      )}
 
       {/* ═══════════════ MANDATORY PROFILE COMPLETION MODAL ═══════════════ */}
       {needsProfileCompletion && (
