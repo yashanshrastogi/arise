@@ -20,7 +20,7 @@ confirm_changeset = false
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = [
     "Stage=\"prod\"",
-    "CorsOrigins=\"http://localhost:5173,*\""
+    "CorsOrigins=\"http://localhost:5173,https://frontend.dqmsa8e2klyso.amplifyapp.com\""
 ]
 
 [default.local_start_api]

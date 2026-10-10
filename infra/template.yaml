@@ -38,8 +38,18 @@ Parameters:
 
   CorsOrigins:
     Type: String
-    Default: "http://localhost:5173,*"
+    Default: "http://localhost:5173,https://frontend.dqmsa8e2klyso.amplifyapp.com"
     Description: Allowed CORS origins separated by comma.
+
+  CognitoUserPoolId:
+    Type: String
+    Default: "us-east-1_qm2818Iul"
+    Description: Existing Cognito user pool ID for access-token validation.
+
+  CognitoAppClientId:
+    Type: String
+    Default: "32g687pdc6dulejhh4tcvd69m7"
+    Description: Public Cognito SPA app client ID.
 
 Resources:
   # ==============================================================
@@ -66,19 +76,40 @@ Resources:
           Value: !Ref Stage
 
   # ==============================================================
-  # 2. HTTP API Gateway (FastAPI Proxy)
+  # 2. User Profile Table
+  # ==============================================================
+  UserProfileTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "arise-users-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Project
+          Value: Arise
+        - Key: Stage
+          Value: !Ref Stage
+
+  # ==============================================================
+  # 3. HTTP API Gateway (FastAPI Proxy)
   # ==============================================================
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: !Ref Stage
       CorsConfiguration:
-        AllowOrigins:
-          - "http://localhost:5173"
-          - "*"
+        AllowOrigins: !Split [",", !Ref CorsOrigins]
         AllowMethods:
           - GET
           - POST
+          - PATCH
           - OPTIONS
         AllowHeaders:
           - Content-Type
@@ -102,6 +133,9 @@ Resources:
           STAGE: !Ref Stage
           API_GATEWAY_BASE_PATH: !Sub "/${Stage}"
           DYNAMODB_TABLE_NAME: !Ref CacheTable
+          USER_PROFILE_TABLE_NAME: !Ref UserProfileTable
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_APP_CLIENT_ID: !Ref CognitoAppClientId
           OPENAQ_API_KEY: !Ref OpenAQAKey
           FIRMS_MAP_KEY: !Ref FirmsMapKey
           CORS_ORIGINS: !Ref CorsOrigins
@@ -110,6 +144,8 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref CacheTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserProfileTable
         - Statement:
             - Sid: BedrockInvokePolicy
               Effect: Allow
