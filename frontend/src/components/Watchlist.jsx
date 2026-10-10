@@ -14,11 +14,23 @@ const SEVERITY_ICON = aqi =>
   aqi > 100 ? '●' :
   aqi > 50  ? '●' : '✓';
 
+const KNOWN_COORDS = {
+  'Saket': { lat: 28.524, lon: 77.206 },
+  'Vasant Kunj': { lat: 28.529, lon: 77.154 },
+  'Connaught Pl.': { lat: 28.631, lon: 77.219 },
+  'Anand Vihar': { lat: 28.647, lon: 77.316 },
+  'ITO': { lat: 28.629, lon: 77.241 },
+  'Rohini': { lat: 28.749, lon: 77.067 },
+  'Noida': { lat: 28.572, lon: 77.355 },
+  'Gurugram': { lat: 28.459, lon: 77.026 },
+};
+
 export default function Watchlist({
   items = [],
   isGuest = true,
   onSelect = null,
   onOpenSaveLocations = null,
+  onOpenMap = null,
 }) {
   if (!items || items.length === 0) {
     return (
@@ -71,16 +83,20 @@ export default function Watchlist({
         const icon = w.name === 'Home' ? '🏠' : w.name === 'School' ? '🏫' : '🏢';
         const severityIcon = SEVERITY_ICON(w.aqi);
 
+        // Resolve coordinates
+        const resolvedLat = w.lat || (KNOWN_COORDS[w.location] ? KNOWN_COORDS[w.location].lat : 28.6139);
+        const resolvedLon = w.lon || (KNOWN_COORDS[w.location] ? KNOWN_COORDS[w.location].lon : 77.2090);
+
         return (
           <div
             key={w.name}
             role="button"
             tabIndex={0}
-            onClick={() => onSelect && w.lat && w.lon && onSelect(w.lat, w.lon, `${w.name} (${w.location})`)}
+            onClick={() => onSelect && onSelect(resolvedLat, resolvedLon, `${w.name} (${w.location})`)}
             onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && onSelect && w.lat && w.lon) {
+              if ((e.key === 'Enter' || e.key === ' ') && onSelect) {
                 e.preventDefault();
-                onSelect(w.lat, w.lon, `${w.name} (${w.location})`);
+                onSelect(resolvedLat, resolvedLon, `${w.name} (${w.location})`);
               }
             }}
             aria-label={`Select ${w.name}: AQI ${w.aqi}, status ${w.status}`}

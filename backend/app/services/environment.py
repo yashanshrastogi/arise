@@ -162,20 +162,23 @@ class EnvironmentService:
                 })
 
         # Stations for AirMap.jsx
+        stations_pool = snapshot.contributing_stations
         stations_ui = [
             {
-                "id": st.station_id,
+                "id": getattr(st, "station_id", idx + 1),
                 "name": st.name,
                 "lat": st.latitude,
                 "lng": st.longitude,
-                "aqi": st.aqi or snapshot.aqi,
-                "pm25": st.pollutants.get("PM2.5").value if "PM2.5" in st.pollutants else 140.0,
-                "pm10": st.pollutants.get("PM10").value if "PM10" in st.pollutants else 200.0,
+                "aqi": getattr(st, "aqi", None) or snapshot.aqi,
+                "pm25": (st.pollutants.get("PM2.5").value if (getattr(st, "pollutants", None) and "PM2.5" in st.pollutants) else 140.0),
+                "pm10": (st.pollutants.get("PM10").value if (getattr(st, "pollutants", None) and "PM10" in st.pollutants) else 200.0),
                 "temp": snapshot.weather.temperature if snapshot.weather else 28,
                 "rain": 10,
-                "wind": snapshot.weather.wind_speed if snapshot.weather else 3.2
+                "wind": snapshot.weather.wind_speed if snapshot.weather else 3.2,
+                "source": getattr(st, "source", "CPCB"),
+                "isDominant": (st.name == (snapshot.contributing_stations[0].name if snapshot.contributing_stations else ""))
             }
-            for st in snapshot.contributing_stations
+            for idx, st in enumerate(stations_pool)
         ]
 
         # Fires for AirMap.jsx
@@ -238,9 +241,9 @@ class EnvironmentService:
                 "ventilation": "Recirculating (Simulated Demo)"
             },
             "watchlist": [
-                {"name": "Home", "location": "Saket", "aqi": snapshot.aqi, "status": snapshot.aqi_category},
-                {"name": "School", "location": "Vasant Kunj", "aqi": min(500, snapshot.aqi + 8), "status": snapshot.aqi_category},
-                {"name": "Office", "location": "Connaught Pl.", "aqi": max(50, snapshot.aqi - 17), "status": snapshot.aqi_category}
+                {"name": "Home", "location": "Saket", "lat": 28.524, "lon": 77.206, "aqi": snapshot.aqi, "status": snapshot.aqi_category},
+                {"name": "School", "location": "Vasant Kunj", "lat": 28.529, "lon": 77.154, "aqi": min(500, snapshot.aqi + 8), "status": snapshot.aqi_category},
+                {"name": "Office", "location": "Connaught Pl.", "lat": 28.631, "lon": 77.219, "aqi": max(50, snapshot.aqi - 17), "status": snapshot.aqi_category}
             ],
             "traffic": {
                 "corridors": [

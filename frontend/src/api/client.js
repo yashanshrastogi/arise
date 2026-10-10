@@ -33,12 +33,20 @@ export async function fetchEnvironment({ lat = 28.6139, lon = 77.2090, persona =
       signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
-      return await res.json();
+      const data = await res.json();
+      try {
+        localStorage.setItem('arise_cached_env', JSON.stringify({ ...data, _cachedAt: Date.now() }));
+      } catch {}
+      return data;
     }
     console.warn(`Backend /environment returned status ${res.status}`);
   } catch (err) {
-    console.warn('Failed to fetch from backend /environment, falling back:', err.message);
+    console.warn('Failed to fetch from backend /environment, checking cache:', err.message);
   }
+  try {
+    const cached = localStorage.getItem('arise_cached_env');
+    if (cached) return JSON.parse(cached);
+  } catch {}
   return null;
 }
 

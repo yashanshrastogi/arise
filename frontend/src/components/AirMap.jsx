@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
+import DelhiNcrVectorMap from './DelhiNcrVectorMap';
 
 /**
  * Google Maps styling with POI / business suppression.
@@ -161,12 +162,21 @@ export default function AirMap({
   weather = null,
   traffic = null,
   onLocationSelect = null,
+  onSwitchToToday = null,
+  fullHeight = true,
+  className = '',
 }) {
   const mapRef = useRef(null);
   const googleMapInstance = useRef(null);
   const infoWindowRef = useRef(null);
   const markersRef = useRef({ stations: [], fires: [], central: null, userGps: null });
   const overlaysRef = useRef([]);
+
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const [mapMode, setMapMode] = useState(() => {
+    return (!apiKey || apiKey.trim() === '') ? 'vector' : 'google';
+  });
+  const [inspectedStation, setInspectedStation] = useState(null);
 
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -197,8 +207,6 @@ export default function AirMap({
   });
 
   const toggleSignal = key => setSignals(prev => ({ ...prev, [key]: !prev[key] }));
-
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   // Listen for Escape key to exit expanded mode
   useEffect(() => {
@@ -246,8 +254,9 @@ export default function AirMap({
   // Hook global Google Maps auth failure for graceful resilience
   useEffect(() => {
     window.gm_authFailure = () => {
-      console.warn('Google Maps authentication or quota failure.');
-      setLoadError('Google Maps service unavailable (Demo Key quota limit reached). Operating in station telemetry mode.');
+      console.warn('Google Maps authentication or quota failure. Switching to Vector Map.');
+      setLoadError('Google Maps key quota limit reached. Vector Map active.');
+      setMapMode('vector');
     };
     return () => {
       delete window.gm_authFailure;
@@ -373,13 +382,15 @@ export default function AirMap({
         }, 100);
       }).catch(err => {
         if (!isMounted) return;
-        console.error('Google Maps Load Error:', err);
+        console.warn('Google Maps Load Error, falling back to Vector Map:', err);
         setLoadError(err.message || 'Failed to initialize Google Maps.');
+        setMapMode('vector');
       });
     } catch (err) {
       if (isMounted) {
-        console.error('Google Maps Setup Error:', err);
+        console.warn('Google Maps Setup Error, falling back to Vector Map:', err);
         setLoadError(err.message || 'Failed to initialize Google Maps.');
+        setMapMode('vector');
       }
     }
 
@@ -868,8 +879,8 @@ export default function AirMap({
       className={`w-full transition-all duration-300 ${
         isExpanded
           ? 'fixed inset-0 z-[9999] w-screen h-screen p-3 sm:p-5 bg-black/85 backdrop-blur-md flex flex-col'
-          : 'relative card overflow-hidden h-[320px] lg:h-[340px] shadow-sm'
-      }`}
+          : `relative card overflow-hidden ${fullHeight ? 'h-full min-h-[580px] lg:min-h-[640px]' : 'h-[320px] lg:h-[340px]'} shadow-sm`
+      } ${className}`}
     >
       {/* ── Expanded Mode Top Bar ── */}
       {isExpanded && (
@@ -1050,6 +1061,28 @@ export default function AirMap({
         {/* ── 2. Floating Search & Station Dropdown (Top-Right) ── */}
         {controlsVisible && (
         <div className="absolute top-3 right-3 z-[15] hidden sm:flex items-center gap-2">
+          {/* Mode Switcher Button */}
+          <button
+            type="button"
+            id="btn-toggle-map-engine"
+            onClick={() => {
+              if (mapMode === 'vector' && (!apiKey || loadError)) {
+                setGeoStatus({ type: 'info', message: 'Google Maps key not available. Interactive Vector Map active.' });
+                setTimeout(() => setGeoStatus(null), 3500);
+                return;
+              }
+              setMapMode(m => m === 'vector' ? 'google' : 'vector');
+            }}
+            className="glass px-2.5 py-1 rounded-full border text-[11px] font-black t1 flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all"
+            style={{ borderColor: 'var(--border)' }}
+            title="Switch between Vector Map and Google Maps"
+          >
+            <span>{mapMode === 'vector' ? '🗺️ Vector' : '🛰️ Google'}</span>
+            <span className="text-[9px] font-bold text-indigo px-1 py-0.2 rounded-full bg-indigo/10 uppercase">
+              Toggle
+            </span>
+          </button>
+
           <div className="glass rounded-full pl-3.5 pr-1 py-1 flex items-center gap-2 shadow-lg border" style={{ borderColor: 'var(--border)' }}>
             <select
               value={selectedStationName}
@@ -1187,80 +1220,118 @@ export default function AirMap({
           </div>
         </div>
 
-        {/* ── 5. Graceful Fallback (Message + Station List) if Maps Fails ── */}
-        {(!apiKey || apiKey.trim() === '' || loadError) ? (
-          <div className="w-full h-full flex flex-col p-4 sm:p-6 overflow-y-auto" style={{ background: 'var(--surface-alt)' }}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo/10 text-indigo flex items-center justify-center text-xl flex-shrink-0">
-                  📍
-                </div>
-                <div>
-                  <h3 className="text-sm font-black t1">Regional Monitoring Station Network</h3>
-                  <p className="text-[11px] font-semibold t3">
-                    {loadError ? 'Map operating in resilient station mode' : 'Interactive cartography offline'} · {stations.length} active telemetry stations available
-                  </p>
-                </div>
-              </div>
-              <span
-                className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full border self-start sm:self-auto"
-                style={{ background: 'var(--surface)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-              >
-                Live Station Telemetry Mode
-              </span>
-            </div>
-
-            {/* Stations List */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 flex-1">
-              {stations.map(st => {
-                const col = st.aqi > 300 ? '#E5484D' : st.aqi > 200 ? '#F28C28' : st.aqi > 100 ? '#F5C542' : '#2EB872';
-                return (
-                  <div
-                    key={st.id || st.name}
-                    onClick={() => {
-                      setSelectedStationName(st.name);
-                      if (onLocationSelect) onLocationSelect(st.lat, st.lng, st.name);
-                    }}
-                    className="card p-3.5 flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.02] border"
-                    style={{ borderColor: 'var(--border)' }}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-xs font-black t1">{st.name}</h4>
-                        <p className="text-[10px] font-semibold tm">
-                          {st.lat ? `${Number(st.lat).toFixed(3)}°N, ${Number(st.lng).toFixed(3)}°E` : 'Ground Telemetry'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-lg font-black" style={{ color: col }}>{st.aqi}</span>
-                        <span
-                          className="block text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase"
-                          style={{ background: `${col}18`, color: col }}
-                        >
-                          {st.aqi > 300 ? 'Very Poor' : st.aqi > 200 ? 'Poor' : st.aqi > 100 ? 'Moderate' : 'Good'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t text-[11px] font-medium t2" style={{ borderColor: 'var(--border)' }}>
-                      <div>PM2.5: <strong className="t1">{st.pm25} µg/m³</strong></div>
-                      <div>PM10: <strong className="t1">{st.pm10} µg/m³</strong></div>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="mt-3 w-full py-1.5 rounded-xl text-[10px] font-bold text-center border transition-colors hover:bg-[var(--surface)]"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-                    >
-                      Select Station Location →
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+        {/* ── 5. Canvas Area: Interactive Vector Map OR Google Maps Canvas ── */}
+        {mapMode === 'vector' ? (
+          <div className="absolute inset-0 w-full h-full z-0">
+            <DelhiNcrVectorMap
+              stations={stations}
+              fires={fires}
+              weather={weather}
+              traffic={traffic}
+              dark={dark}
+              primaryLayer={primaryLayer}
+              signals={signals}
+              selectedStationName={selectedStationName}
+              userLocation={userLocation}
+              onSelectStation={(st) => {
+                setSelectedStationName(st.name);
+                setInspectedStation(st);
+                if (onLocationSelect) {
+                  onLocationSelect(st.lat, st.lng, st.name);
+                }
+              }}
+            />
           </div>
         ) : (
           <div ref={mapRef} className="map-canvas-container absolute inset-0 w-full h-full z-0" />
+        )}
+
+        {/* ── 6. Floating Inspected Station Telemetry Card ── */}
+        {inspectedStation && (
+          <div
+            className="absolute bottom-16 sm:bottom-4 left-3 z-[28] max-w-[320px] w-full card p-3.5 shadow-2xl border animate-in fade-in slide-in-from-bottom-2 duration-200"
+            style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
+          >
+            <div className="flex items-start justify-between gap-2 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs">📍</span>
+                  <h4 className="text-xs font-black t1">{inspectedStation.name}</h4>
+                </div>
+                <p className="text-[10px] font-semibold t3 mt-0.5">
+                  {inspectedStation.lat ? `${Number(inspectedStation.lat).toFixed(3)}°N, ${Number(inspectedStation.lng).toFixed(3)}°E` : 'Regional Grid'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectedStation(null)}
+                className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold t3 hover:t1 hover:bg-[var(--surface-alt)]"
+                title="Close Inspector"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-baseline justify-between mt-2.5">
+              <div className="flex items-baseline gap-1.5">
+                <span
+                  className="text-2xl font-black"
+                  style={{ color: AQI_COLOR(inspectedStation.aqi || 312) }}
+                >
+                  {inspectedStation.aqi || 312}
+                </span>
+                <span className="text-[10px] font-extrabold uppercase t3">AQI</span>
+              </div>
+              <span
+                className="text-[9.5px] font-black px-2 py-0.5 rounded-full uppercase"
+                style={{
+                  background: `${AQI_COLOR(inspectedStation.aqi || 312)}18`,
+                  color: AQI_COLOR(inspectedStation.aqi || 312),
+                }}
+              >
+                {(inspectedStation.aqi || 312) > 300 ? 'Very Poor' : (inspectedStation.aqi || 312) > 200 ? 'Poor' : 'Moderate'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t text-[11px] font-semibold t2" style={{ borderColor: 'var(--border)' }}>
+              <div>PM2.5: <strong className="t1">{inspectedStation.pm25 || 142.5} µg/m³</strong></div>
+              <div>PM10: <strong className="t1">{inspectedStation.pm10 || 210.3} µg/m³</strong></div>
+              <div>Temp: <strong className="t1">{inspectedStation.temp || weather?.temp || 28}°C</strong></div>
+              <div>Wind: <strong className="t1">{inspectedStation.wind || weather?.windSpeed || 3.2} km/h</strong></div>
+            </div>
+
+            <div className="mt-3 pt-2 border-t flex flex-col gap-1.5" style={{ borderColor: 'var(--border)' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onLocationSelect) {
+                    onLocationSelect(inspectedStation.lat, inspectedStation.lng, inspectedStation.name);
+                  }
+                  setGeoStatus({ type: 'success', message: `Active location set to ${inspectedStation.name}` });
+                  setTimeout(() => setGeoStatus(null), 3000);
+                }}
+                className="w-full py-1.5 rounded-xl text-[11px] font-black bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shadow-xs text-center"
+              >
+                📍 Set as Active Location
+              </button>
+
+              {onSwitchToToday && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onLocationSelect) {
+                      onLocationSelect(inspectedStation.lat, inspectedStation.lng, inspectedStation.name);
+                    }
+                    onSwitchToToday();
+                  }}
+                  className="w-full py-1.5 rounded-xl text-[11px] font-black border hover:bg-[var(--surface-alt)] transition-colors text-center t1"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  View on Today Dashboard →
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -99,7 +99,9 @@ export default function BasicAccordions({ data }) {
         {openHourly && (
           <div className="p-5 pt-0 border-t space-y-3 mt-2" style={{ borderColor: 'var(--border)' }}>
             <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
-              Expected to stay very bad between 318 and 331 throughout the day.
+              {forecast.length > 0
+                ? `Expected range between ${Math.min(...forecast.map(f => Number(f.aqi) || 0))} and ${Math.max(...forecast.map(f => Number(f.aqi) || 0))} AQI across the forecast window.`
+                : 'Expected to stay elevated throughout the day.'}
             </p>
 
             <div className="overflow-x-auto pb-2 -mx-1 px-1">
@@ -115,7 +117,7 @@ export default function BasicAccordions({ data }) {
                         borderColor: 'var(--border)',
                       }}
                     >
-                      <span className="text-xs font-bold t3">{item.hour}</span>
+                      <span className="text-xs font-bold t3">{item.time || item.hour || `+${index}h`}</span>
                       <span className="text-base font-black my-1" style={{ color: b.color }}>
                         {item.aqi}
                       </span>

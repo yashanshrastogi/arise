@@ -21,10 +21,7 @@ export default function PersonaSelector({ currentPersona = 'General Public', onS
 
       <div className="flex items-center gap-1.5 flex-wrap">
         {PERSONAS.map(p => {
-          const isSelected =
-            currentPersona === p.id ||
-            (p.id === 'School Administration' && currentPersona === 'Children & Schools') ||
-            (p.id === 'General Public' && (!currentPersona || currentPersona === 'General Public'));
+          const isSelected = currentPersona === p.id || (p.id === 'General Public' && !currentPersona);
 
           return (
             <button

@@ -6,8 +6,9 @@ import React from 'react';
  * and air-informed commute recommendations.
  * Explicitly labeled as Simulated/Demo Data for Phase 1.
  */
-export default function MobilityCard({ traffic }) {
-  if (!traffic || !traffic.corridors) return null;
+export default function MobilityCard({ traffic, corridors }) {
+  const corridorList = corridors || traffic?.corridors;
+  if (!corridorList || corridorList.length === 0) return null;
 
   return (
     <div className="card p-5 h-full flex flex-col justify-between">
@@ -30,9 +31,9 @@ export default function MobilityCard({ traffic }) {
 
       {/* Corridor Cards List */}
       <div className="space-y-2.5 my-1">
-        {traffic.corridors.map(c => {
-          const isHeavy = c.status === 'Heavy';
-          const isMod = c.status === 'Moderate';
+        {corridorList.map(c => {
+          const isHeavy = c.status?.includes('Heavy');
+          const isMod = c.status?.includes('Moderate');
           const badgeColor = isHeavy ? '#E5484D' : isMod ? '#F28C28' : '#2EB872';
 
           return (

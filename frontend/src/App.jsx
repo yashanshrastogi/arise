@@ -86,16 +86,36 @@ export default function App() {
     }
   }, [largeText]);
 
-  // Hash routing (#/login, #/signup, #/dashboard)
+  // Escape key listener for health tips modal
+  useEffect(() => {
+    if (!healthTipsOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setHealthTipsOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [healthTipsOpen]);
+
+  // Hash routing (#/login, #/signup, #/today, #/map, #/ask, #/more)
   useEffect(() => {
     const handleHash = () => {
-      const hash = window.location.hash;
-      if (hash === '#/login') {
+      const raw = window.location.hash || '';
+      const clean = raw.replace(/^#\/?/, '').toLowerCase().trim();
+      if (clean === 'login') {
         setCurrentView('login');
-      } else if (hash === '#/signup') {
+      } else if (clean === 'signup') {
         setCurrentView('signup');
       } else {
         setCurrentView('dashboard');
+        if (clean === 'map') {
+          setActiveTab('map');
+        } else if (clean === 'ask') {
+          setActiveTab('ask');
+        } else if (clean === 'more') {
+          setActiveTab('more');
+        } else if (clean === 'today' || clean === 'dashboard') {
+          setActiveTab('today');
+        }
       }
     };
 
@@ -103,6 +123,21 @@ export default function App() {
     handleHash();
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    if (currentView !== 'dashboard') {
+      setCurrentView('dashboard');
+    }
+    const targetHash = `#/${tabId}`;
+    if (window.location.hash !== targetHash) {
+      try {
+        window.history.pushState(null, '', targetHash);
+      } catch {
+        window.location.hash = targetHash;
+      }
+    }
+  };
 
   // Fetch authenticated profile
   useEffect(() => {
@@ -140,10 +175,15 @@ export default function App() {
         const payload = await fetchEnvironment({
           lat: selectedCoords.lat,
           lon: selectedCoords.lon,
+          persona,
           demo: demoMode,
         });
         if (active && payload) {
           setEnvData(payload);
+          // If selectedCoords.name is generic coords, sync to payload.location
+          if (payload.location && (!selectedCoords.name || selectedCoords.name.includes('°'))) {
+            setSelectedCoords(prev => ({ ...prev, name: payload.location }));
+          }
         }
       } catch {
         // Fall back gracefully
@@ -153,7 +193,7 @@ export default function App() {
     }
     loadData();
     return () => { active = false; };
-  }, [selectedCoords.lat, selectedCoords.lon, demoMode]);
+  }, [selectedCoords.lat, selectedCoords.lon, persona, demoMode]);
 
   // Merge live backend data with fallback state
   const fallbackData = demoMode ? mockData : mockDataModerate;
@@ -240,7 +280,7 @@ export default function App() {
             href="#today"
             onClick={(e) => {
               e.preventDefault();
-              setActiveTab('today');
+              handleTabChange('today');
             }}
             className="flex items-center gap-2.5 select-none cursor-pointer group flex-shrink-0"
             title="Arise · Is the air safe today?"
@@ -276,7 +316,7 @@ export default function App() {
                   role="tab"
                   id={`tab-${tab.id}`}
                   aria-selected={isActive}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all touch-target ${
                     isActive
                       ? 'bg-indigo-600 text-white shadow-xs'
@@ -396,7 +436,9 @@ export default function App() {
                 forecast={d.forecast}
                 recheckAt={d.recheckAt}
                 persona={persona}
+                isLoading={loadingEnv}
                 onOpenAdvisory={() => setHealthTipsOpen(true)}
+                onOpenMap={() => handleTabChange('map')}
               />
 
               {/* Single Ask Arise Box with Quick Chips */}
@@ -405,7 +447,7 @@ export default function App() {
                 lon={selectedCoords.lon}
                 persona={persona}
                 demo={demoMode}
-                onOpenFullChat={() => setActiveTab('ask')}
+                onOpenFullChat={() => handleTabChange('ask')}
               />
 
               {/* 3 Progressive Accordions (Why / Hour by hour / What's in the air) */}
@@ -459,7 +501,9 @@ export default function App() {
                     forecast={d.forecast}
                     recheckAt={d.recheckAt}
                     persona={persona}
+                    isLoading={loadingEnv}
                     onOpenAdvisory={() => setHealthTipsOpen(true)}
+                    onOpenMap={() => handleTabChange('map')}
                   />
                 </div>
                 <div className="md:col-span-6 lg:col-span-4 flex flex-col">
@@ -519,24 +563,37 @@ export default function App() {
         {/* ── TAB 2: MAP (Full Delhi-NCR Interactive Map) ── */}
         {activeTab === 'map' && (
           <div className="w-full max-w-[1400px] space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-black t1">Air Quality &amp; Fire Map</h2>
                 <p className="text-xs font-medium t3">Official CPCB sensors and satellite fire signals across Delhi-NCR</p>
               </div>
-              <DataStatusPopover hasLiveFires={hasLiveFires} />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  id="btn-map-back-to-today"
+                  onClick={() => handleTabChange('today')}
+                  className="px-3 py-1.5 rounded-xl border text-xs font-black t2 hover:t1 hover:bg-[var(--surface-alt)] transition-colors flex items-center gap-1.5 shadow-xs"
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  <span>←</span>
+                  <span>Back to Today</span>
+                </button>
+                <DataStatusPopover hasLiveFires={hasLiveFires} />
+              </div>
             </div>
-            <div className="w-full h-[640px] rounded-2xl overflow-hidden card">
+            <div className="w-full h-[640px] rounded-2xl overflow-hidden card" style={{ background: 'var(--card)' }}>
               <AirMap
                 stations={d.stations}
                 fires={d.fires}
                 weather={d.weather}
                 traffic={d.traffic}
                 dark={dark}
+                fullHeight={true}
                 onLocationSelect={(lat, lon, name) => {
                   setSelectedCoords({ lat, lon, name: name || 'Selected Area' });
-                  setActiveTab('today');
                 }}
+                onSwitchToToday={() => handleTabChange('today')}
               />
             </div>
           </div>
@@ -566,8 +623,9 @@ export default function App() {
                   isGuest={!isAuthenticated}
                   onSelect={(lat, lon, name) => {
                     setSelectedCoords({ lat, lon, name });
-                    setActiveTab('today');
+                    handleTabChange('today');
                   }}
+                  onOpenMap={() => handleTabChange('map')}
                   onOpenSaveLocations={() => {
                     setCurrentView('signup');
                     window.location.hash = '#/signup';
@@ -582,8 +640,15 @@ export default function App() {
 
       {/* ═══════════════ HEALTH TIPS / ADVISORY MODAL ═══════════════ */}
       {healthTipsOpen && (
-        <div className="fixed inset-0 z-[3000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="card max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-180" style={{ background: 'var(--card)' }}>
+        <div
+          className="fixed inset-0 z-[3000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setHealthTipsOpen(false)}
+        >
+          <div
+            className="card max-w-lg w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-180"
+            style={{ background: 'var(--card)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-2xl" aria-hidden="true">🫁</span>

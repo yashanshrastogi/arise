@@ -84,7 +84,9 @@ export default function VerdictHero({
   forecast = [],
   recheckAt = '4:00 PM',
   persona = 'General Public',
+  isLoading = false,
   onOpenAdvisory = null,
+  onOpenMap = null,
 }) {
   const currentAqi = Number(aqi) || 0;
   const bandInfo = getAqiBandInfo(currentAqi);
@@ -105,7 +107,7 @@ export default function VerdictHero({
 
   // Person-tailored 3-bullet advice
   const bullets = React.useMemo(() => {
-    if (persona === 'Children & Schools') {
+    if (persona === 'Children & Schools' || persona === 'School Administration') {
       return [
         'Move sports, recess, and morning assemblies indoors.',
         'Keep windows shut and run classroom air filtration.',
@@ -146,17 +148,39 @@ export default function VerdictHero({
     >
       {/* Top Meta Line: Location & Live Status */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xl" aria-hidden="true">📍</span>
           <span className="text-base font-extrabold t1">{locationName}</span>
+          {onOpenMap && (
+            <button
+              type="button"
+              onClick={onOpenMap}
+              className="text-[11px] font-black px-2.5 py-0.5 rounded-lg border bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 transition-colors flex items-center gap-1 shadow-2xs"
+              style={{ borderColor: 'var(--border)' }}
+              title="Open Delhi-NCR interactive map"
+            >
+              <span>🗺️</span>
+              <span>Map view</span>
+            </button>
+          )}
         </div>
-        <span
-          className="text-xs font-bold px-3 py-1 rounded-full border flex items-center gap-1.5"
-          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-        >
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-          <span>Updated 10 minutes ago</span>
-        </span>
+        <div className="flex items-center gap-2">
+          {isLoading && (
+            <span
+              className="text-[11px] font-black px-2.5 py-0.5 rounded-full border border-indigo-400/40 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 animate-pulse flex items-center gap-1.5"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
+              <span>Fetching telemetry…</span>
+            </span>
+          )}
+          <span
+            className="text-xs font-bold px-3 py-1 rounded-full border flex items-center gap-1.5"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+            <span>Updated 10 minutes ago</span>
+          </span>
+        </div>
       </div>
 
       {/* Main Verdict Row: Huge AQI & Plain-Language Status */}
@@ -234,16 +258,28 @@ export default function VerdictHero({
           )}
         </div>
 
-        {onOpenAdvisory && (
-          <button
-            type="button"
-            onClick={onOpenAdvisory}
-            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 touch-target"
-          >
-            <span>What should I do? (Full advisory)</span>
-            <span>→</span>
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {onOpenMap && (
+            <button
+              type="button"
+              onClick={onOpenMap}
+              className="text-xs font-black text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 touch-target"
+            >
+              <span>Explore regional map</span>
+              <span>🗺️</span>
+            </button>
+          )}
+          {onOpenAdvisory && (
+            <button
+              type="button"
+              onClick={onOpenAdvisory}
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 touch-target"
+            >
+              <span>What should I do? (Full advisory)</span>
+              <span>→</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
