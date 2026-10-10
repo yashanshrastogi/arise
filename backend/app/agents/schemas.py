@@ -46,6 +46,14 @@ class AskAriseVerdictResponse(BaseModel):
         default=True,
         description="True if rule-based fallback engine was used, False if AI-generated."
     )
+    provider: Literal["bedrock", "rule-based"] = Field(
+        default="rule-based",
+        description="Provider backing this answer: 'bedrock' or 'rule-based'."
+    )
+    timestamp: Optional[str] = Field(
+        default=None,
+        description="Current formatted timestamp of response generation."
+    )
 
 
 class AskAriseRequest(BaseModel):

@@ -1,11 +1,13 @@
 """
 Unit and Integration Tests for Strands Ask Arise Agent and /chat API.
 Tests tool correctness, schema validation, non-causal fire language,
-and query answering.
+query answering, Bedrock success, Bedrock exceptions, Bedrock empty responses,
+Bedrock timeouts, and unavailable environmental data handling.
 """
 
 import unittest
 import asyncio
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 
 from app.agents.schemas import AskAriseRequest, AskAriseVerdictResponse
@@ -146,14 +148,50 @@ class TestChatApiRoute(unittest.TestCase):
         self.assertIn("sources", data)
         self.assertEqual(data.get("assistant_label"), "Arise Assistant (rule-based)")
         self.assertTrue(data.get("is_rule_based"))
+        self.assertEqual(data.get("provider"), "rule-based")
         self.assertIn("Arise Assistant (rule-based)", data.get("sources", []))
+
+    def test_chat_bedrock_success(self):
+        """
+        Verify that when Bedrock succeeds, its response is preserved,
+        labeled as Bedrock AI with is_rule_based=False.
+        """
+        mock_bedrock_resp = AskAriseVerdictResponse(
+            verdict="STAY_IN",
+            headline="Severe particulate accumulation requires indoor stay today.",
+            aqi=312,
+            category="Very Poor",
+            why=["Ground telemetry indicates elevated PM2.5 concentrations."],
+            do=["Remain indoors and operate HEPA purifiers."],
+            best_window="3 PM – 5 PM",
+            recheck_at="4:00 PM",
+            sources=["CPCB / OpenAQ Ground Stations"],
+            provider="bedrock",
+        )
+
+        with patch("app.agents.arise_agent.Agent.invoke_async", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = mock_bedrock_resp
+            payload = {
+                "question": "Can I go out now?",
+                "lat": 28.6139,
+                "lon": 77.2090,
+                "persona": "General Public",
+                "demo": True,
+            }
+            res = self.client.post("/chat", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertIn("Amazon Bedrock", data.get("assistant_label", ""))
+            self.assertFalse(data.get("is_rule_based"))
+            self.assertEqual(data.get("provider"), "bedrock")
+            self.assertEqual(data.get("headline"), "Severe particulate accumulation requires indoor stay today.")
+            self.assertEqual(data.get("verdict"), "STAY_IN")
 
     def test_chat_bedrock_exception_fallback(self):
         """
         Verify that on any Bedrock exception, /chat automatically falls back to
         a rule-based answer labeled 'Arise Assistant (rule-based)', never returning 500.
         """
-        from unittest.mock import patch
         payload = {
             "question": "Can my kid play outside today?",
             "lat": 28.6139,
@@ -167,8 +205,98 @@ class TestChatApiRoute(unittest.TestCase):
             data = res.json()
             self.assertEqual(data.get("assistant_label"), "Arise Assistant (rule-based)")
             self.assertTrue(data.get("is_rule_based"))
+            self.assertEqual(data.get("provider"), "rule-based")
             self.assertIn("verdict", data)
             self.assertIn("headline", data)
+            self.assertIn("Arise Assistant (rule-based)", data.get("sources", []))
+
+    def test_chat_bedrock_empty_response_fallback(self):
+        """
+        Verify that if Bedrock returns an empty or unusable response,
+        it automatically falls back to a rule-based answer labeled 'Arise Assistant (rule-based)'.
+        """
+        unusable_resp = AskAriseVerdictResponse(
+            verdict="STAY_IN",
+            headline="   ",  # empty headline
+            why=[],
+            do=[],
+            best_window="",
+            recheck_at="",
+        )
+
+        with patch("app.agents.arise_agent.Agent.invoke_async", new_callable=AsyncMock) as mock_invoke:
+            mock_invoke.return_value = unusable_resp
+            payload = {
+                "question": "Why is the AQI bad today?",
+                "lat": 28.6139,
+                "lon": 77.2090,
+                "persona": "General Public",
+                "demo": True,
+            }
+            res = self.client.post("/chat", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertEqual(data.get("assistant_label"), "Arise Assistant (rule-based)")
+            self.assertTrue(data.get("is_rule_based"))
+            self.assertTrue(len(data.get("headline", "").strip()) > 0)
+            self.assertIn("Arise Assistant (rule-based)", data.get("sources", []))
+
+    def test_chat_bedrock_timeout_fallback(self):
+        """
+        Verify that if Bedrock times out, /chat automatically falls back to
+        a rule-based answer.
+        """
+        with patch("app.agents.arise_agent.Agent.invoke_async", side_effect=asyncio.TimeoutError()):
+            payload = {
+                "question": "What is the best time to go outside?",
+                "lat": 28.6139,
+                "lon": 77.2090,
+                "persona": "General Public",
+                "demo": True,
+            }
+            res = self.client.post("/chat", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertEqual(data.get("assistant_label"), "Arise Assistant (rule-based)")
+            self.assertTrue(data.get("is_rule_based"))
+            self.assertIn("Arise Assistant (rule-based)", data.get("sources", []))
+
+    def test_chat_environmental_data_unavailable(self):
+        """
+        Verify that if environmental telemetry is unavailable, the fallback response
+        truthfully states data is unavailable, rather than inventing measurements,
+        conditions, or forecasts.
+        """
+        with patch("app.agents.arise_agent.get_verdict", return_value={}), \
+             patch("app.agents.arise_agent.get_air_now", return_value={}), \
+             patch("app.agents.arise_agent.get_forecast", return_value={}), \
+             patch("app.agents.arise_agent.get_fire_signal", return_value={}):
+
+            payload = {
+                "question": "Can I go out now?",
+                "lat": 28.6139,
+                "lon": 77.2090,
+                "persona": "General Public",
+                "demo": False,
+            }
+            res = self.client.post("/chat", json=payload)
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+
+            # Must visibly identify as rule-based fallback
+            self.assertEqual(data.get("assistant_label"), "Arise Assistant (rule-based)")
+            self.assertTrue(data.get("is_rule_based"))
+
+            # Must NOT invent AQI
+            self.assertIsNone(data.get("aqi"))
+
+            # Must state data is unavailable
+            self.assertIn("unavailable", data.get("headline", "").lower())
+            self.assertTrue(any("unreachable" in w.lower() or "unavailable" in w.lower() for w in data.get("why", [])))
+
+            # Must not invent unmeasured sources
+            self.assertEqual(data.get("sources"), ["Arise Assistant (rule-based)"])
+            self.assertEqual(data.get("best_window"), "No recommended outdoor window")
 
     def test_chat_endpoint_empty_question(self):
         payload = {
