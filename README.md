@@ -1,35 +1,30 @@
-# Arise — Delhi-NCR Atmospheric & Environmental Intelligence Platform
+# Arise
 
-> **AWS x WeMakeDevs "Environmental Hacks" — Air Track Submission**  
-> **One-Line Pitch:** Not "what is the AQI", but *"should I go out, what should my kid/school do, and why"* — delivered in plain language with scientific precision.
+Arise is an environmental intelligence platform that turns live air quality and weather signals into practical guidance for people, families, schools, and outdoor activity planning.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![FastAPI](https://img.shields.io/badge/FastAPI-2.0-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
 [![AWS](https://img.shields.io/badge/AWS-Serverless-FF9900.svg?logo=amazon-aws&logoColor=white)](https://aws.amazon.com)
-[![Google Gemini](https://img.shields.io/badge/Google%20Gemini-Flash%20Lite-8E75B2.svg)](https://ai.google.dev)
-
----
 
 ## Live Deployments
 
-- **Live Production Application:** [https://frontend.dqmsa8e2klyso.amplifyapp.com/](https://frontend.dqmsa8e2klyso.amplifyapp.com/)
-- **Live Backend REST API:** [https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod](https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod)
-- **API Health Check Endpoint:** [https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod/health](https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod/health)
+- Frontend: https://frontend.dqmsa8e2klyso.amplifyapp.com/
+- Backend API: https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod
+- Health Check: https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod/health
 
----
+## Core Capabilities
 
-## Detailed Documentation
-
-- **System Architecture & Data Flows:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with Mermaid diagrams)
-- **Product & Design Specification:** [docs/DESIGN.md](docs/DESIGN.md) (personas, bands, screens, and design tokens)
-- **End-to-End Project Execution Report:** [docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md) (sanitized milestone history)
-
----
+- Regional air-quality synthesis from ground-station data using IDW interpolation and CPCB-style pollutant sub-indices.
+- Persona-specific verdicts (`GO`, `BE SMART`, `CUT BACK`, `STAY IN`) with concrete precautions and safer time windows.
+- Grounded “Ask Arise” AI assistant with structured outputs and deterministic fallback behavior.
+- Satellite fire-signal and weather ingestion (NASA FIRMS + Open-Meteo) for context-aware recommendations.
+- Responsive UI with dual map rendering (Google Maps plus offline-capable SVG fallback).
 
 ## Screenshots
 
-### Desktop Experience
+### Desktop
+
 | Today Dashboard | Interactive Air Map |
 | :---: | :---: |
 | ![Today Dashboard](docs/screenshots/today-desktop.png) | ![Air Map](docs/screenshots/map-desktop.png) |
@@ -38,125 +33,82 @@
 | :---: |
 | ![Ask Arise Desktop](docs/screenshots/ask-desktop.png) |
 
-### Mobile & Responsive Experience
+### Mobile
+
 | Mobile Today (Light) | Mobile Ask Copilot | Dark Mode Mobile |
 | :---: | :---: | :---: |
 | ![Mobile Today](docs/screenshots/today-mobile.png) | ![Mobile Ask](docs/screenshots/ask-mobile.png) | ![Dark Mode](docs/screenshots/theme-dark-mobile.png) |
 
----
-
-## Core Capabilities
-
-1. **Hyper-Local Atmospheric Synthesis:**
-   - Multi-station spatial interpolation using Inverse Distance Weighting (IDW, power = 2) across live CPCB and OpenAQ ground stations.
-   - Computes individual sub-indices for PM2.5, PM10, NO2, SO2, CO, and O3 following official Central Pollution Control Board (CPCB) NAQI formulations.
-
-2. **Persona-Tailored Decision Verdicts:**
-   - Evaluates real-time exposure risk across 5 distinct personas: *General Public*, *Sensitive / Asthma*, *Elderly*, *Athletes / Runners*, and *Schools / Children*.
-   - Outputs decisive status verdicts (`GO`, `BE SMART`, `CUT BACK`, `STAY IN`) with specific outdoor precautions and diurnal safe windows.
-
-3. **Grounded AI Copilot ("Ask Arise"):**
-   - Grounded conversational assistant powered by Google Gemini with strict pre-flight domain guardrails.
-   - Enforces structured JSON responses (`verdict`, `headline`, `why`, `do`, `best_window`, `sources`).
-   - Includes a deterministic rule-based safety fallback engine for sub-second, zero-downtime reliability.
-
-4. **Satellite & Atmospheric Telemetry:**
-   - Ingests NASA FIRMS (VIIRS/MODIS) satellite thermal anomalies to detect active agricultural stubble burning in the upwind Punjab/Haryana airshed.
-   - Pulls hourly Open-Meteo weather forecasts, boundary layer mixing heights, and astronomical sunrise/sunset.
-
-5. **Universal Responsive Design:**
-   - Audited across 13 viewports (320px–2560px) with 0px horizontal overflow.
-   - Dual map engine: Google Maps JavaScript API with an automatic, offline-capable SVG vector map fallback (`DelhiNcrVectorMap`).
-
----
-
-## Quickstart & Local Setup
+## Local Setup
 
 ### Prerequisites
-- **Python:** 3.12+
-- **Node.js:** 20+ (Node 24 recommended)
-- **Git**
 
----
+- Python 3.12+
+- Node.js 20.12+
+- Git
 
-### Backend Setup
+### Backend (`/home/runner/work/arise/arise/backend`)
 
-1. **Navigate to the backend directory and set up a virtual environment:**
-   ```bash
-   cd backend
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+```bash
+cd /home/runner/work/arise/arise/backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp ../.env.example .env
+uvicorn main:app --reload --port 8000
+```
 
-2. **Configure environment variables:**
-   ```bash
-   cp ../.env.example .env
-   ```
-   *(Optional for local development: set `OPENAQ_API_KEY` or leave empty to use built-in fallback stations).*
+Run backend tests:
 
-3. **Start the local FastAPI development server:**
-   ```bash
-   uvicorn main:app --reload --port 8000
-   ```
-   The API will be available at `http://localhost:8000` (docs at `http://localhost:8000/docs`).
+```bash
+cd /home/runner/work/arise/arise/backend
+pytest tests/
+```
 
-4. **Run backend automated tests:**
-   ```bash
-   pytest tests/
-   ```
+### Frontend (`/home/runner/work/arise/arise/frontend`)
 
----
+```bash
+cd /home/runner/work/arise/arise/frontend
+npm ci
+cp .env.example .env.local
+npm run dev
+```
 
-### Frontend Setup
+Run frontend checks:
 
-1. **Navigate to the frontend directory and install dependencies:**
-   ```bash
-   cd frontend
-   npm install
-   ```
+```bash
+cd /home/runner/work/arise/arise/frontend
+npm test
+npm run build
+```
 
-2. **Configure environment variables:**
-   ```bash
-   cp .env.example .env.local
-   ```
-   *(Default points to local API `http://localhost:8000` or production API).*
+## AWS Deployment Overview
 
-3. **Start the Vite development server:**
-   ```bash
-   npm run dev
-   ```
-   The frontend will be running at `http://localhost:5173/`.
+Arise is deployed as a serverless stack on AWS:
 
-4. **Run frontend tests and production build:**
-   ```bash
-   npm test
-   npm run build
-   ```
+- AWS Amplify hosts the React SPA.
+- API Gateway fronts FastAPI running on Lambda (via Mangum).
+- A scheduled ingestion Lambda (EventBridge) refreshes telemetry.
+- DynamoDB stores cached telemetry and user records.
+- Cognito handles authentication.
+- Secrets Manager stores AI provider credentials.
 
----
+## Documentation
 
-## AWS Serverless Architecture
+- Architecture & data flow: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Product/design details: [docs/DESIGN.md](docs/DESIGN.md)
+- AWS architecture: [docs/AWS_ARCHITECTURE.md](docs/AWS_ARCHITECTURE.md)
+- Deployment report: [docs/AWS_DEPLOYMENT_REPORT.md](docs/AWS_DEPLOYMENT_REPORT.md)
+- Service-level AWS notes: [docs/AWS_SERVICE_EXPLANATION.md](docs/AWS_SERVICE_EXPLANATION.md)
+- Project report: [docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md)
+- Responsive UI validation: [docs/RESPONSIVE_UI_REPORT.md](docs/RESPONSIVE_UI_REPORT.md)
+- Infrastructure (SAM): [infra/README.md](infra/README.md)
 
-Arise is deployed to production using AWS Serverless Application Model (SAM):
-- **AWS Amplify Hosting:** Global CDN delivering the React 19 single-page application.
-- **Amazon API Gateway (HTTP API v2):** Low-latency entry point with strict CORS policies.
-- **AWS Lambda (`ApiFunction`):** Python 3.12 running FastAPI through the Mangum ASGI adapter.
-- **AWS Lambda (`IngestionFunction`):** Scheduled hourly ingestion of OpenAQ stations and NASA FIRMS fire signals.
-- **Amazon EventBridge Scheduler:** Automates hourly ingestion.
-- **Amazon DynamoDB:** `arise-cache-prod` (with TTL auto-expiration) and `arise-users-prod` (with Server-Side Encryption).
-- **Amazon Cognito:** User authentication and profile management via PKCE OAuth 2.0 flow.
-- **AWS Secrets Manager:** Secure storage for Google Gemini API credentials.
+## Contributors
 
----
-
-## Authors & Contributors
-
-- **Yashansh Rastogi (@yashanshrastogi)**
-- **Satyam Kumar (@SatyamSinghRajput04)** — frontend / UI and testing
-
----
+- Yashansh Rastogi ([@yashanshrastogi](https://github.com/yashanshrastogi))
+- Satyam Kumar ([@SatyamSinghRajput04](https://github.com/SatyamSinghRajput04))
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
