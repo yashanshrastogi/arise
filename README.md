@@ -153,7 +153,7 @@ Arise is deployed to production using AWS Serverless Application Model (SAM):
 ## Authors & Contributors
 
 - **Yashansh Rastogi (@yashanshrastogi)**
-- **<FRIEND_NAME> (@<FRIEND_HANDLE>)**
+- **Satyam Kumar (@SatyamSinghRajput04)** — frontend / UI and testing
 
 ---
 
