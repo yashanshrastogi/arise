@@ -62,6 +62,9 @@ mangum_handler = Mangum(
 )
 
 
+import asyncio
+
+
 @logger.inject_lambda_context(log_event=False)
 def handler(event, context):
     """
@@ -69,6 +72,15 @@ def handler(event, context):
     Executes identical business logic and domain services as local development.
     Dynamically aligns Mangum's base path with the incoming request stage if needed.
     """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     base_path = resolve_api_gateway_base_path(event)
     if mangum_handler.config.get("api_gateway_base_path") != base_path:
         mangum_handler.config["api_gateway_base_path"] = base_path

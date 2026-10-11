@@ -306,15 +306,84 @@ class TestChatApiRoute(unittest.TestCase):
             self.assertEqual(data.get("sources"), ["Arise Assistant (rule-based)"])
             self.assertEqual(data.get("best_window"), "No recommended outdoor window")
 
-    def test_chat_endpoint_empty_question(self):
+    def test_chat_temperature_query(self):
+        """Verify temperature queries return short, crisp ambient temperature & conditions."""
         payload = {
-            "question": "",
+            "question": "What is the temperature right now?",
             "lat": 28.6139,
             "lon": 77.2090,
+            "persona": "General Public",
+            "demo": True,
         }
         res = self.client.post("/chat", json=payload)
-        self.assertEqual(res.status_code, 422)  # Validation error
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("°C", data.get("headline", ""))
+        self.assertIn("temperature", data.get("headline", "").lower())
+
+    def test_chat_python_code_query(self):
+        """Verify python coding queries return useful automation code instead of refusing."""
+        payload = {
+            "question": "Can you write a Python script to fetch air quality data?",
+            "lat": 28.6139,
+            "lon": 77.2090,
+            "persona": "General Public",
+            "demo": True,
+        }
+        res = self.client.post("/chat", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("Python script", data.get("headline", ""))
+        # Verify code is present in 'do' action recommendations
+        self.assertTrue(any("import requests" in item or "requests.get" in item for item in data.get("do", [])))
+
+    def test_chat_work_persona_query(self):
+        """Verify queries regarding work/commute receive targeted occupational guidance."""
+        payload = {
+            "question": "Is it safe for my outdoor work shift and commute today?",
+            "lat": 28.6139,
+            "lon": 77.2090,
+            "persona": "Work",
+            "demo": True,
+        }
+        res = self.client.post("/chat", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(any(term in data.get("headline", "").lower() for term in ("work", "commute", "transit", "shift")))
+
+    def test_chat_future_forecast_query(self):
+        """Verify queries asking about future days (e.g. after 2 days) return predicted temperature, not current."""
+        payload = {
+            "question": "what will be temp after 2 days",
+            "lat": 28.6139,
+            "lon": 77.2090,
+            "persona": "General Public",
+            "demo": True,
+        }
+        res = self.client.post("/chat", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        headline = data.get("headline", "").lower()
+        self.assertIn("predicted temperature", headline)
+        self.assertIn("after 2 days", headline)
+        self.assertNotIn("current temperature is", headline)
+
+    def test_chat_tomorrow_forecast_query(self):
+        """Verify queries asking about tomorrow return predicted forecast."""
+        payload = {
+            "question": "what is the temperature tomorrow?",
+            "lat": 28.6139,
+            "lon": 77.2090,
+            "persona": "General Public",
+            "demo": True,
+        }
+        res = self.client.post("/chat", json=payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        headline = data.get("headline", "").lower()
+        self.assertIn("predicted temperature tomorrow", headline)
 
 
 if __name__ == "__main__":
     unittest.main()
+

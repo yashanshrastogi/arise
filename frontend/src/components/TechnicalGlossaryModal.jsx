@@ -75,19 +75,19 @@ export default function TechnicalGlossaryModal({ isOpen = false, onClose }) {
       className="fixed inset-0 z-[3000] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-180"
     >
       <div
-        className="card max-w-xl w-full p-6 shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+        className="card max-w-2xl sm:max-w-3xl w-full p-6 sm:p-7 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden rounded-3xl"
         style={{ background: 'var(--card)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl" aria-hidden="true">📖</span>
+        <div className="flex items-center justify-between pb-3.5 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-3xl" aria-hidden="true">📖</span>
             <div>
-              <h3 id="glossary-title" className="text-base font-black t1 leading-tight">
+              <h3 id="glossary-title" className="text-lg sm:text-xl font-black t1 leading-tight">
                 Environmental Metrics &amp; Definitions
               </h3>
-              <p className="text-xs font-semibold t3">
-                Understand Delhi-NCR air quality indicators in plain English
+              <p className="text-xs sm:text-sm font-semibold tm mt-0.5">
+                Understand Delhi-NCR air quality indicators in plain, actionable English
               </p>
             </div>
           </div>
@@ -96,30 +96,31 @@ export default function TechnicalGlossaryModal({ isOpen = false, onClose }) {
             id="btn-close-glossary-top"
             onClick={onClose}
             aria-label="Close glossary modal"
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold t3 hover:bg-[var(--surface-alt)] transition-colors touch-target"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold t3 hover:bg-[var(--surface-alt)] transition-colors touch-target border"
+            style={{ borderColor: 'var(--border)' }}
           >
             ✕
           </button>
         </div>
 
         {/* Scrollable Definition Cards */}
-        <div className="flex-1 overflow-y-auto space-y-3 py-4 pr-1">
+        <div className="flex-1 overflow-y-auto space-y-3.5 py-4 pr-1">
           {GLOSSARY_ITEMS.map((item, idx) => (
             <div
               key={idx}
-              className="p-3.5 rounded-2xl border transition-colors"
+              className="p-4 rounded-2xl border transition-colors hover:bg-[var(--surface-alt)]"
               style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
             >
-              <div className="flex items-start gap-2.5">
-                <span className="text-xl shrink-0 mt-0.5" aria-hidden="true">{item.icon}</span>
+              <div className="flex items-start gap-3.5">
+                <span className="text-2xl shrink-0 mt-0.5" aria-hidden="true">{item.icon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <h4 className="text-xs font-black t1">{item.term}</h4>
-                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                    <h4 className="text-sm sm:text-base font-black t1">{item.term}</h4>
+                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20">
                       {item.subtitle}
                     </span>
                   </div>
-                  <p className="text-xs font-medium t2 leading-relaxed mt-1.5">
+                  <p className="text-xs sm:text-sm font-medium t2 leading-relaxed mt-2">
                     {item.definition}
                   </p>
                 </div>
@@ -129,15 +130,15 @@ export default function TechnicalGlossaryModal({ isOpen = false, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="pt-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-          <span className="text-[11px] font-medium tm">
-            CPCB / WHO Reference Standard Compliant
+        <div className="pt-3.5 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+          <span className="text-xs font-semibold tm">
+            CPCB / WHO Reference Standard Compliant Telemetry
           </span>
           <button
             type="button"
             id="btn-close-glossary-bottom"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-md transition-all touch-target"
+            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all touch-target"
           >
             Got It
           </button>

@@ -57,7 +57,7 @@ const METRIC_CONFIG = {
   },
 };
 
-function CustomTooltip({ active, payload, label, activeMetric }) {
+function CustomTooltip({ active, payload, label, activeMetric, location = 'Delhi-NCR' }) {
   if (!active || !payload?.length) return null;
   const val = payload[0].value;
   if (val === undefined || val === null) return null;
@@ -67,7 +67,7 @@ function CustomTooltip({ active, payload, label, activeMetric }) {
 
   return (
     <div className="glass rounded-2xl p-3 shadow-xl border border-gray-200/60 dark:border-slate-700 min-w-[140px] text-center">
-      <div className="text-[11px] font-bold t3 mb-1">{label} · Delhi-NCR</div>
+      <div className="text-[11px] font-bold t3 mb-1">{label} · {location}</div>
       <div className="flex items-center justify-center gap-2">
         <div
           className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-black shadow-sm"
@@ -95,7 +95,7 @@ function CustomTooltip({ active, payload, label, activeMetric }) {
   );
 }
 
-export default function ForecastChart({ data = [], data7Day = [], currentAqi = null }) {
+export default function ForecastChart({ data = [], data7Day = [], currentAqi = null, location = 'Delhi-NCR' }) {
   const [metric, setMetric] = useState('aqi');
   const [period, setPeriod] = useState('24h'); // '24h' | '7d'
   const [selectedPoint, setSelectedPoint] = useState(null);
@@ -103,32 +103,38 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
   const cfg = METRIC_CONFIG[metric];
 
   // Current time index and reference point
-  const nowIdx = data.findIndex(d => !d.past);
-  const nowTime = nowIdx > 0 ? data[nowIdx - 1].time : data[0]?.time || '10 AM';
+  const nowIdx = (() => {
+    const currIdx = data.findIndex(d => d.isCurrent);
+    if (currIdx !== -1) return currIdx;
+    const firstFuture = data.findIndex(d => !d.past);
+    return firstFuture !== -1 ? firstFuture : 0;
+  })();
+  const nowTime = (data[nowIdx] && data[nowIdx].time) ? data[nowIdx].time : data[0]?.time || '12 PM';
   const nowVal = (metric === 'aqi' && currentAqi != null)
     ? currentAqi
-    : (nowIdx > 0 ? data[nowIdx - 1][cfg.dataKey] : data[0]?.[cfg.dataKey] || 0);
+    : (data[nowIdx]?.[cfg.dataKey] || data[0]?.[cfg.dataKey] || 0);
 
   // Process 24h data for solid past and dashed future, anchoring now reference to currentAqi if provided
-  const targetIdx = nowIdx > 0 ? nowIdx - 1 : 0;
   const merged24h = data.map((d, i) => {
-    const itemVal = (metric === 'aqi' && currentAqi != null && i === targetIdx)
+    const itemVal = (metric === 'aqi' && currentAqi != null && i === nowIdx)
       ? currentAqi
       : d[cfg.dataKey];
     return {
       ...d,
-      pastVal: d.past ? itemVal : null,
-      futureVal: !d.past || (nowIdx > 0 && i === nowIdx - 1) ? itemVal : null,
+      pastVal: d.past ? itemVal : (i === nowIdx ? itemVal : null),
+      futureVal: !d.past || i === nowIdx ? itemVal : null,
     };
   });
 
-  // Best window bounds and truth check (>= 15% improvement or better band)
-  const bwStart = data.find(d => d.bestWindow)?.time;
-  const bwItems = data.filter(d => d.bestWindow);
+  // Best window bounds strictly within upcoming/future points
+  const bwItems = data.filter(d => d.bestWindow && !d.past);
+  const bwStart = bwItems[0]?.time;
   const bwEnd = bwItems[bwItems.length - 1]?.time;
 
-  // Lowest AQI item
-  const minAqiItem = data.reduce((min, cur) => cur.aqi < min.aqi ? cur : min, data[0] || { aqi: 0, time: '' });
+  // Lowest AQI future item
+  const futurePoints = data.filter(d => !d.past);
+  const candidatePoints = futurePoints.length > 0 ? futurePoints : data;
+  const minAqiItem = candidatePoints.reduce((min, cur) => cur.aqi < min.aqi ? cur : min, candidatePoints[0] || { aqi: 0, time: '' });
   const currentVal = currentAqi != null ? Number(currentAqi) : (nowVal || 329);
   const minAqi = minAqiItem?.aqi || currentVal;
   const percentImprovement = currentVal > 0 ? (currentVal - minAqi) / currentVal : 0;
@@ -169,9 +175,10 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                 onClick={() => setMetric(m.id)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all ${
                   metric === m.id
-                    ? 'bg-indigo text-white shadow-sm'
-                    : 't3 hover:text-[var(--text-primary)] hover:bg-[var(--border-subtle)]'
+                    ? 'bg-[var(--surface)] t1 shadow-sm border'
+                    : 't3 hover:text-[var(--text-primary)]'
                 }`}
+                style={{ borderColor: metric === m.id ? 'var(--border)' : 'transparent' }}
               >
                 {m.label}
               </button>
@@ -202,27 +209,28 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
       </div>
 
       {/* Main Chart Area */}
-      <div className="flex items-stretch gap-3 flex-1 min-h-[220px]">
-        <div className="flex-1 min-h-[220px]">
+      <div className="flex items-stretch gap-3 w-full min-w-0 h-[260px] sm:h-[300px] my-1">
+        <div className="flex-1 min-w-0 h-full">
           <ResponsiveContainer width="100%" height="100%">
-            {period === '24h' ? (
-              <AreaChart data={merged24h} margin={{ top: 15, right: 10, left: -16, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="metricAreaFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={cfg.color} stopOpacity={0.25} />
-                    <stop offset="100%" stopColor={cfg.color} stopOpacity={0.01} />
-                  </linearGradient>
-                </defs>
+          {period === '24h' ? (
+            <AreaChart data={merged24h} margin={{ top: 15, right: 10, left: -16, bottom: 0 }}>
+              <defs>
+                <linearGradient id="metricAreaFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={cfg.color} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={cfg.color} stopOpacity={0.01} />
+                </linearGradient>
+              </defs>
 
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.6} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.6} />
 
-                <XAxis
-                  dataKey="time"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--text-tertiary)' }}
-                  dy={8}
-                />
+              <XAxis
+                dataKey="time"
+                axisLine={false}
+                tickLine={false}
+                minTickGap={14}
+                tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--text-tertiary)' }}
+                dy={8}
+              />
 
                 <YAxis
                   domain={[minVal, maxVal]}
@@ -231,17 +239,20 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                   tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--text-tertiary)' }}
                 />
 
-                <Tooltip content={<CustomTooltip activeMetric={metric} />} />
+                <Tooltip
+                  content={<CustomTooltip activeMetric={metric} location={location} />}
+                  cursor={{ stroke: 'rgba(99, 102, 241, 0.45)', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                />
 
-                {/* Best Outdoor Window (Green highlight, only shown if truly >=15% better or better band) */}
-                {metric === 'aqi' && hasRealSafeWindow && bwStart && bwEnd && (
+                {/* Best Outdoor Window (Light green highlight) */}
+                {metric === 'aqi' && bwStart && bwEnd && (
                   <ReferenceArea
                     x1={bwStart}
                     x2={bwEnd}
-                    fill="#067647"
-                    fillOpacity={0.14}
-                    stroke="#067647"
-                    strokeOpacity={0.5}
+                    fill="#10B981"
+                    fillOpacity={0.18}
+                    stroke="#10B981"
+                    strokeOpacity={0.45}
                     strokeDasharray="4 4"
                   />
                 )}
@@ -300,6 +311,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                   dataKey="day"
                   axisLine={false}
                   tickLine={false}
+                  minTickGap={10}
                   tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--text-tertiary)' }}
                   dy={8}
                 />
@@ -309,7 +321,10 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                   tickLine={false}
                   tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--text-tertiary)' }}
                 />
-                <Tooltip content={<CustomTooltip activeMetric={metric} />} />
+                <Tooltip
+                  content={<CustomTooltip activeMetric={metric} location={location} />}
+                  cursor={{ stroke: 'rgba(99, 102, 241, 0.45)', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+                />
                 <Area
                   type="monotone"
                   dataKey={cfg.dataKey}
@@ -379,17 +394,17 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                 aria-label={`${label}: ${val} ${cfg.unit}${isBest ? ' (Optimal outdoor window)' : ''}`}
                 className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-left border transition-all text-xs focus-visible:ring-2 focus-visible:ring-indigo ${
                   isSelected
-                    ? 'bg-indigo text-white border-indigo shadow-md scale-105'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-105'
                     : isBest
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 hover:scale-102'
+                    ? 'bg-emerald-100/90 dark:bg-emerald-950/60 border-emerald-400 dark:border-emerald-700 text-emerald-950 dark:text-emerald-100 font-black shadow-2xs hover:scale-102 ring-1 ring-emerald-400/30'
                     : 'bg-[var(--surface-alt)] border-[var(--border)] hover:bg-[var(--surface)] hover:scale-102'
                 }`}
               >
                 <div className="flex items-center gap-1 font-bold">
-                  <span className={isSelected ? 'text-white' : 't3'}>{label}</span>
-                  {isBest && !isSelected && <span className="text-[9px]">🌟</span>}
+                  <span className={isSelected ? 'text-white' : isBest ? 'text-emerald-950 dark:text-emerald-100 font-black' : 't3'}>{label}</span>
+                  {isBest && !isSelected && <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-black">🌟</span>}
                 </div>
-                <div className={`text-xs font-black ${isSelected ? 'text-white' : 't1'}`}>
+                <div className={`text-xs font-black ${isSelected ? 'text-white' : isBest ? 'text-emerald-900 dark:text-emerald-200' : 't1'}`}>
                   {val != null ? `${val} ${cfg.unit}` : '—'}
                 </div>
               </button>
@@ -410,10 +425,10 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
               <span className="text-xl">📍</span>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-black text-indigo">
+                  <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
                     {period === '24h' ? `Forecast for ${selectedPoint.time}` : `${selectedPoint.day} Forecast`}
                   </span>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo/15 text-indigo">
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
                     {selectedPoint[cfg.dataKey]} {cfg.unit}
                   </span>
                   {selectedPoint.bestWindow && hasRealSafeWindow && (

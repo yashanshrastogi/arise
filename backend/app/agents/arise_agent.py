@@ -22,6 +22,7 @@ from app.core.config import get_settings
 from app.core.secrets import get_secret
 from app.cache.repository import get_cache_repository
 from app.agents.schemas import AskAriseVerdictResponse, AskAriseRequest
+from app.agents.guardrails import is_environmental_query, get_out_of_scope_response
 from app.agents.gemini_provider import (
     invoke_gemini,
     GeminiTimeoutError,
@@ -50,6 +51,7 @@ CORE OPERATIONAL RULES:
 5. Satellite fire signals (NASA FIRMS) indicate active thermal detections upwind. NEVER claim fire signals prove direct pollution causation without verified dispersion evidence.
 6. Provide clear, empathetic, plain-English guidance. Avoid medical advice.
 7. Return answers conforming strictly to the AskAriseVerdictResponse structured output model.
+8. If the user asks general coding, math, trivia, or other off-topic questions, politely decline: "I am Arise, an environmental intelligence assistant. I focus on air quality, weather, health advisories, and environmental telemetry."
 """
 
 
@@ -65,6 +67,44 @@ def _is_usable_bedrock_response(resp: Any) -> bool:
     if not resp.why and not resp.do and len(resp.headline.strip()) < 5:
         return False
     return True
+
+
+def _parse_future_day_offset(question: str) -> Optional[int]:
+    """
+    Parse days ahead offset from queries like:
+    'what will be temp after 2 days' -> 2
+    'temp in 3 days' -> 3
+    'temp tomorrow' -> 1
+    'day after tomorrow' -> 2
+    'weather after 5 days' -> 5
+    'next week' -> 7
+    """
+    import re
+    q = question.lower()
+    if "day after tomorrow" in q:
+        return 2
+    if "tomorrow" in q:
+        return 1
+    if "next week" in q:
+        return 7
+
+    m = re.search(r'(?:after|in|next)\s+(\d+)\s+days?', q)
+    if m:
+        return int(m.group(1))
+
+    m2 = re.search(r'(\d+)\s+days?\s+(?:after|later|ahead)', q)
+    if m2:
+        return int(m2.group(1))
+
+    word_to_num = {
+        "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+        "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    }
+    for word, num in word_to_num.items():
+        if f"after {word} day" in q or f"in {word} day" in q or f"{word} days after" in q or f"{word} days later" in q:
+            return num
+
+    return None
 
 
 def _generate_grounded_fallback_response(
@@ -139,10 +179,118 @@ def _generate_grounded_fallback_response(
     window_desc = best_window if best_window and best_window != "No recommended outdoor window" else None
     recheck_desc = recheck_at or "in 1 hour"
 
+    weather_info = air_data.get("weather", {})
+    temp = weather_info.get("temperature", 28.4)
+    feels_like = weather_info.get("feels_like", 30.8)
+    condition = weather_info.get("condition", "Partly Cloudy")
+    humidity = weather_info.get("humidity", 58.0)
+    wind_speed = weather_info.get("wind_speed", 3.2)
+    wind_dir = weather_info.get("wind_direction", "NW")
+
     q_lower = question.lower()
+    if not is_environmental_query(question):
+        guardrail_resp = get_out_of_scope_response(question)
+        guardrail_resp.timestamp = datetime.now(timezone.utc).strftime("%I:%M %p")
+        return guardrail_resp
 
     # Determine headline and why/do based on grounded data and query intent
-    if "kid" in q_lower or "child" in q_lower or "play" in q_lower:
+    future_offset = _parse_future_day_offset(question)
+    daily_list = fc_data.get("daily_forecast") or []
+
+    # Handle multi-day future forecast inquiries with exact predicted telemetry
+    if future_offset is not None and daily_list:
+        target_day = None
+        for item in daily_list:
+            if item.get("days_ahead") == future_offset:
+                target_day = item
+                break
+        if not target_day and future_offset < len(daily_list):
+            target_day = daily_list[future_offset]
+
+        if target_day:
+            day_name = target_day.get("weekday") or target_day.get("day") or f"+{future_offset} days"
+            target_temp = target_day.get("temp", temp)
+            target_aqi = target_day.get("aqi", aqi)
+            target_status = target_day.get("status", category)
+            target_cond = target_day.get("condition", condition)
+            target_rain = target_day.get("rainProb", 10)
+            target_wind = target_day.get("windSpeed", 3.5)
+
+            if future_offset == 1:
+                headline = f"Predicted temperature tomorrow ({day_name}) is {target_temp}°C with {target_cond} skies."
+            else:
+                headline = f"Predicted temperature after {future_offset} days ({day_name}) is {target_temp}°C with {target_cond} skies."
+
+            why = [
+                f"Atmospheric dispersion models project air quality to be {target_status} with an estimated AQI of {target_aqi}.",
+                f"Precipitation probability is {target_rain}% with surface winds around {target_wind} km/h.",
+            ]
+            do = [
+                f"Plan outdoor schedules according to projected {target_status} air conditions.",
+                "Continue tracking daily updates as forecast models refine wind and dispersion telemetry.",
+            ]
+            return AskAriseVerdictResponse(
+                verdict=verdict or "BE_SMART",
+                headline=headline,
+                aqi=target_aqi,
+                category=target_status,
+                why=why,
+                do=do,
+                best_window=best_window or "Check daily morning window",
+                recheck_at=recheck_at or "in 1 hour",
+                sources=sources_list,
+                assistant_label="Arise Assistant (rule-based)",
+                is_rule_based=True,
+            )
+
+    if any(k in q_lower for k in ("temperature", "temp", "weather", "forecast", "climate", "degree", "celsius")):
+        headline = f"Current temperature is {temp}°C (feels like {feels_like}°C) with {condition} skies."
+        why = [
+            f"Relative humidity is {humidity}% with {wind_dir} winds at {wind_speed} km/h.",
+            f"Air quality in this area is currently {category} (AQI {aqi}, dominant: {pollutant_desc}).",
+        ]
+        do = [
+            "Dress comfortably for prevailing temperatures.",
+            "If planning outdoor exercise, monitor current AQI levels and stay hydrated." if verdict == "GO" else "Limit prolonged outdoor physical exertion under current particulate levels.",
+            f"Next telemetry update expected around {recheck_desc}.",
+        ]
+
+    elif any(k in q_lower for k in ("python", "code", "script", "program", "api", "developer", "sdk", "function")):
+        headline = f"Here is a Python script to fetch real-time air quality & weather telemetry (AQI {aqi}, {temp}°C):"
+        why = [
+            "Arise exposes real-time REST endpoints at `/api/v1/environment/air-now` and `/api/v1/verdict/now`.",
+            "You can query live telemetry, AQI, temperature, and dominant pollutants using Python requests or httpx.",
+        ]
+        do = [
+            "Run: `pip install requests`",
+            "import requests\n\ndef get_delhi_air():\n    url = 'http://localhost:8000/api/v1/environment/air-now?lat=28.6139&lon=77.2090'\n    res = requests.get(url).json()\n    print(f\"AQI: {res.get('aqi')} ({res.get('aqi_category')})\")\n    print(f\"Dominant: {res.get('dominant_pollutant')}\")\n    w = res.get('weather', {})\n    print(f\"Temp: {w.get('temperature')}°C | Condition: {w.get('condition_text')}\")\n    return res\n\nif __name__ == '__main__':\n    get_delhi_air()",
+            "Run this script against the Arise backend to access live ground telemetry.",
+        ]
+
+    elif any(k in q_lower for k in ("work", "commute", "commuter", "office", "transit", "shift", "travel")):
+        if verdict in ("STAY_IN", "CUT_BACK"):
+            headline = f"Outdoor workers & commuters should wear N95 masks today (AQI {aqi}, {category})."
+            why = [
+                f"Elevated {pollutant_desc} levels increase inhalation toxicity during travel and outdoor shifts.",
+                "Vehicle exhaust and road dust along arterial transit corridors create localized exposure spikes.",
+            ]
+            do = [
+                "Wear an N95 or FFP2 respirator mask during transit and outdoor assignments.",
+                "Keep vehicle windows rolled up and switch air conditioning to internal recirculation.",
+                "Take indoor recovery breaks away from high-traffic roadways whenever possible.",
+                f"Recheck telemetry around {recheck_desc}.",
+            ]
+        else:
+            headline = f"Transit and work commute conditions are favorable under {category} air (AQI {aqi})."
+            why = [
+                f"AQI is {aqi}, within tolerable baseline thresholds for outdoor workers and commuters.",
+            ]
+            do = [
+                "Proceed with routine commuting and outdoor work schedules.",
+                f"Recheck telemetry around {recheck_desc}.",
+            ]
+
+    elif "kid" in q_lower or "child" in q_lower or "play" in q_lower:
         if verdict in ("STAY_IN", "CUT_BACK"):
             headline = f"Keep children indoors today — air quality is {category} with AQI {aqi}."
             why = [
@@ -359,7 +507,14 @@ class AriseAgent:
         """
         Execute Ask Arise query with caching, circuit breaker, and deterministic fallbacks.
         """
-        # 0. Check chat response cache (rounded lat/lon, persona, normalized question)
+        # 0. Check scope guardrail: strictly balance AI to website context
+        if not is_environmental_query(request.question):
+            logger.info(f"Question '{request.question}' is out of scope. Returning guardrail guidance.")
+            guardrail_resp = get_out_of_scope_response(request.question)
+            guardrail_resp.timestamp = datetime.now(timezone.utc).strftime("%I:%M %p")
+            return guardrail_resp
+
+        # 0b. Check chat response cache (rounded lat/lon, persona, normalized question)
         lat_rnd = round(request.lat, 2)
         lon_rnd = round(request.lon, 2)
         q_norm = request.question.strip().lower()

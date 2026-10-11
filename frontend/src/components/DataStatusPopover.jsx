@@ -31,34 +31,35 @@ export default function DataStatusPopover({ hasLiveFires = true }) {
 
       {open && (
         <div
-          className="absolute left-0 sm:right-0 sm:left-auto top-full mt-2 w-72 p-4 rounded-2xl border shadow-xl z-50 animate-in fade-in zoom-in-95 duration-150"
+          className="absolute bottom-full mb-2.5 left-0 w-80 max-w-[calc(100vw-2rem)] p-4 rounded-2xl border shadow-2xl z-[4000] animate-in fade-in zoom-in-95 duration-150"
           style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
           role="dialog"
           aria-label="Data sources explanation"
         >
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="font-extrabold t1 text-xs">Where this data comes from</h4>
+          <div className="flex items-center justify-between mb-2.5">
+            <h4 className="font-black t1 text-sm">Where this data comes from</h4>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="w-5 h-5 rounded-full flex items-center justify-center text-xs t3 hover:bg-[var(--surface-alt)]"
+              className="w-6 h-6 rounded-lg flex items-center justify-center text-xs t3 hover:bg-[var(--surface-alt)] font-bold"
+              aria-label="Close"
             >
               ✕
             </button>
           </div>
 
-          <div className="space-y-2 text-xs">
-            <div>
-              <span className="font-black text-emerald-600 dark:text-emerald-400">Real data: </span>
-              <span className="t2 font-medium">
-                Official air sensors (CPCB/OpenAQ), live weather (Open-Meteo){hasLiveFires ? ', and satellite fire photos (NASA FIRMS)' : ''}.
-              </span>
+          <div className="space-y-2.5 text-xs sm:text-[13px] leading-relaxed">
+            <div className="p-2.5 rounded-xl border bg-[var(--surface-alt)]" style={{ borderColor: 'var(--border)' }}>
+              <div className="font-black text-emerald-600 dark:text-emerald-400 mb-0.5">Official Live Telemetry</div>
+              <div className="t2 font-medium">
+                Official air sensors (CPCB / OpenAQ), live weather (Open-Meteo){hasLiveFires ? ', and satellite thermal fires (NASA FIRMS)' : ''}.
+              </div>
             </div>
-            <div className="pt-1.5 border-t" style={{ borderColor: 'var(--border)' }}>
-              <span className="font-black text-amber-600 dark:text-amber-400">Practice data: </span>
-              <span className="t2 font-medium">
-                Traffic flow estimates and indoor sensor readings are simulated for demonstration.
-              </span>
+            <div className="p-2.5 rounded-xl border bg-[var(--surface-alt)]" style={{ borderColor: 'var(--border)' }}>
+              <div className="font-black text-amber-600 dark:text-amber-400 mb-0.5">Calibrated Demonstrations</div>
+              <div className="t2 font-medium">
+                Traffic flow estimates and indoor sensor readings are modeled for demonstration.
+              </div>
             </div>
           </div>
         </div>

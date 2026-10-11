@@ -9,6 +9,12 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
   const speedNum = parseFloat(speed) || 3.2;
   const speedMs = (speedNum / 3.6).toFixed(1);
 
+  const flowCategory = speedNum < 5.0
+    ? { label: 'Calm / Stagnant', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', layer: 'Surface boundary layer < 400m' }
+    : speedNum < 12.0
+    ? { label: 'Moderate Mixing', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20', layer: 'Surface boundary layer ~600m' }
+    : { label: 'Active Dispersion', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', layer: 'Ventilated boundary layer > 800m' };
+
   // Compass dial points
   const points = [
     { deg: 0, label: 'N' },
@@ -34,26 +40,26 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
     <div className="card p-5 flex flex-col justify-between h-full" style={{ background: 'var(--card)' }}>
       <div className="flex items-center justify-between mb-2">
         <div>
-          <h3 className="text-sm font-extrabold t1">Air Flow Status</h3>
-          <p className="text-[11px] font-semibold t3">Wind & Atmospheric Mixing</p>
+          <h3 className="text-sm sm:text-base font-black t1">Air Flow Status</h3>
+          <p className="text-xs font-semibold tm">Wind &amp; Atmospheric Mixing</p>
         </div>
-        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
-          Calm / Stagnant
+        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${flowCategory.color}`}>
+          {flowCategory.label}
         </span>
       </div>
 
-      <div className="flex items-center justify-between my-2 gap-4">
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between my-2 gap-3 sm:gap-4">
         {/* Big wind speed stat */}
-        <div>
-          <div className="text-3xl font-extrabold t1 leading-none">{speed}</div>
-          <div className="text-xs font-bold t3 mt-1">{unit} · {direction}</div>
-          <div className="text-[11px] font-medium tm mt-2">
-            Surface boundary layer &lt; 400m
+        <div className="min-w-0">
+          <div className="text-3xl sm:text-4xl font-black t1 leading-none">{speed}</div>
+          <div className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 mt-1">{unit} · {direction}</div>
+          <div className="text-xs font-semibold tm mt-2">
+            {flowCategory.layer}
           </div>
         </div>
 
         {/* Circular Compass Dial */}
-        <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+        <div className="relative flex-shrink-0 mx-auto sm:mx-0 w-32 h-32 sm:w-36 sm:h-36">
           <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full">
             {/* Outer dial ring */}
             <circle

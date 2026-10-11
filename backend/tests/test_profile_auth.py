@@ -85,7 +85,7 @@ def test_bootstrap_stores_verified_email_from_cognito_and_ignores_browser_email(
             assert stored_item["user_id"] == "user-uuid-1111"
             assert stored_item["email"] == "userA@example.com"
             assert stored_item["email"] != "should_be_ignored@hack.com"
-            assert stored_item["home_location"]["latitude"] == 28.5245
+            assert float(stored_item["home_location"]["latitude"]) == 28.5245
     finally:
         app.dependency_overrides.pop(get_current_user, None)
 

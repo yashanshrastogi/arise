@@ -14,6 +14,7 @@ lint = true
 [default.deploy]
 [default.deploy.parameters]
 stack_name = "arise-production"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-ngyibeul3fsd"
 s3_prefix = "arise-production"
 region = "us-east-1"
 confirm_changeset = false
@@ -21,7 +22,7 @@ capabilities = "CAPABILITY_IAM"
 parameter_overrides = [
     "Stage=\"prod\"",
     "CorsOrigins=\"http://localhost:5173,https://frontend.dqmsa8e2klyso.amplifyapp.com\"",
-    "LlmProvider=\"rule-based\""
+    "LlmProvider=\"gemini\""
 ]
 
 [default.local_start_api]

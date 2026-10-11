@@ -57,18 +57,18 @@ def test_secrets_manager_cold_and_warm_retrieval():
     mock_sm_client = MagicMock()
     mock_boto.client.return_value = mock_sm_client
     mock_sm_client.get_secret_value.return_value = {
-        "SecretString": "AIzaSyFakeGeminiApiKey12345"
+        "SecretString": "fake_test_gemini_api_key_12345"
     }
 
     with patch("app.core.secrets.boto3", mock_boto):
         # Cold start invocation
         key1 = get_secret("arise/gemini-api-key")
-        assert key1 == "AIzaSyFakeGeminiApiKey12345"
+        assert key1 == "fake_test_gemini_api_key_12345"
         assert mock_sm_client.get_secret_value.call_count == 1
 
         # Warm start invocation (must read from memory without re-querying Secrets Manager)
         key2 = get_secret("arise/gemini-api-key")
-        assert key2 == "AIzaSyFakeGeminiApiKey12345"
+        assert key2 == "fake_test_gemini_api_key_12345"
         assert mock_sm_client.get_secret_value.call_count == 1  # Still 1
 
 
@@ -78,12 +78,12 @@ def test_secrets_manager_json_payload_extraction():
     mock_sm_client = MagicMock()
     mock_boto.client.return_value = mock_sm_client
     mock_sm_client.get_secret_value.return_value = {
-        "SecretString": json.dumps({"GEMINI_API_KEY": "AIzaSyParsedFromJsonKey999"})
+        "SecretString": json.dumps({"GEMINI_API_KEY": "fake_test_gemini_json_key_999"})
     }
 
     with patch("app.core.secrets.boto3", mock_boto):
         key = get_secret("arise/gemini-api-key")
-        assert key == "AIzaSyParsedFromJsonKey999"
+        assert key == "fake_test_gemini_json_key_999"
 
 
 def test_secrets_manager_failure_returns_none_gracefully():

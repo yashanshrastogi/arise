@@ -1,29 +1,42 @@
-.venv/
-node_modules/
+# Environment and secrets
 .env*
 !.env.example
+*.key
+*.pem
+
+# Dependencies and virtual environments
+node_modules/
+.venv/
 __pycache__/
+*.pyc
+
+# Build outputs and deployment bundles
 .aws-sam/
 dist/
-*.pyc
-data/cache/
-backend/data/cache/
+dist-ssr/
 *.zip
-changeset_details.json
-create_t8_changeset.sh
-compare_env.py
-new_changeset.json
-create_f1_changeset.sh
-f1_changeset*.json
-check_stack_params.sh
-inspect_f1_changeset.py.sh
-compare_live_env.py.sh
-check_live_environment.py
-time_warm_chat.py
-create_review_changeset.sh
-review_changeset*.json
-inspect_changeset.py
-create_gemini_changeset.sh
-gemini_changeset*.json
-inspect_gemini_changeset.py
-verify_deployment.py
+changeset*.json
+artifacts/
+
+# Local data and cache
+data/
+backend/data/
+
+# Design references and mock samples
+design/
+
+# Agent, IDE and tool clutter
+.gemini/
+.claude/
+.cursor/
+.agent/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+TOOLS.md
+PHASE*.md
+gitleaks-report.json
+
+# Logs
+*.log
+logs/

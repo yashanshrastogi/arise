@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { askAriseChat } from '../api/client';
+import { isEnvironmentalQuery, getOutOfScopeGuardrailResponse } from '../utils/guardrails';
+import FormattedBotText from './FormattedBotText';
+import { useAuth } from '../auth/AuthContext';
 
 const QUICK_CHIPS = [
+  "Can I go out now?",
   "Can my kid play outside?",
-  "Why is the air bad today?",
-  "Is it safe to exercise?",
-  "What mask should I wear?",
+  "Why is the AQI bad today?",
 ];
 
 export default function AskBar({
@@ -15,13 +17,35 @@ export default function AskBar({
   demo = false,
   onOpenFullChat = null,
 }) {
+  const { isAuthenticated } = useAuth();
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleAsk = async (queryText) => {
+    if (!isAuthenticated) {
+      window.location.hash = '#/login';
+      return;
+    }
+
     const q = queryText || question;
     if (!q.trim() || loading) return;
+
+    // Pre-flight Guardrail: strictly restrict AI to website environmental context
+    // Do NOT make API call if question is off-topic!
+    if (!isEnvironmentalQuery(q)) {
+      const guardrailRes = getOutOfScopeGuardrailResponse(q);
+      setAnswer({
+        question: q,
+        headline: guardrailRes.headline,
+        verdict: guardrailRes.verdict,
+        why: guardrailRes.why,
+        do: guardrailRes.do,
+        assistant_label: guardrailRes.assistant_label,
+        is_rule_based: true,
+      });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -70,43 +94,85 @@ export default function AskBar({
         <div className="flex items-center gap-2">
           <span className="text-lg">💬</span>
           <span className="text-sm font-extrabold t1">Ask Arise</span>
-          <span className="text-xs font-semibold t3">· Uses today's live data</span>
+          <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">· Atmospheric Intelligence</span>
         </div>
-        <span
-          className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border"
-          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
-          title="Google Gemini 2.5 Flash Lite with automatic rule-based fallback"
-        >
-          Gemini + Rule-based Fallback
-        </span>
+        {!isAuthenticated ? (
+          <button
+            type="button"
+            onClick={() => { window.location.hash = '#/login'; }}
+            className="text-xs font-black px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shadow-2xs hover:border-indigo-400 dark:hover:border-indigo-500 transition-all cursor-pointer"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
+          >
+            <span>🔒</span>
+            <span>Sign in to ask</span>
+          </button>
+        ) : (
+          <span
+            className="text-xs font-black px-2.5 py-0.5 rounded-full border flex items-center gap-1.5"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+            title="Google Gemini with automatic rule-based safety verdict grounding"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>✦ Arise Intelligence</span>
+          </span>
+        )}
       </div>
 
-      {/* Input Bar */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleAsk();
-        }}
-        className="flex items-center gap-2"
-      >
-        <input
-          id="input-ask-bar"
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder='Ask a question, e.g. "Can my kid play outside?"'
-          className="flex-1 px-4 py-3 rounded-xl border text-sm font-medium t1 outline-none transition-all focus:ring-2 focus:ring-indigo-500/30 touch-target"
-          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
-        />
-        <button
-          id="btn-ask-submit"
-          type="submit"
-          disabled={loading || !question.trim()}
-          className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-md transition-all active:scale-95 disabled:opacity-50 touch-target flex items-center gap-1.5"
+      {/* Input Bar or Guest CTA */}
+      {!isAuthenticated ? (
+        <div
+          id="guest-askbar-cta"
+          onClick={() => { window.location.hash = '#/login'; }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && (window.location.hash = '#/login')}
+          className="flex items-center justify-between gap-3 p-2.5 rounded-xl border cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-600 transition-all bg-[var(--surface-alt)] shadow-xs"
+          style={{ borderColor: 'var(--border)' }}
         >
-          {loading ? 'Thinking…' : 'Ask ➤'}
-        </button>
-      </form>
+          <div className="flex items-center gap-2.5 pl-2">
+            <span className="text-base text-indigo-500">🔒</span>
+            <span className="text-xs sm:text-sm font-semibold tm">
+              Sign in to ask a question, e.g. "Can my kid play outside?"
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.location.hash = '#/login';
+            }}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black shadow-xs transition-all active:scale-95 shrink-0"
+          >
+            Sign In
+          </button>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleAsk();
+          }}
+          className="flex items-center gap-2"
+        >
+          <input
+            id="input-ask-bar"
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder='Ask a question, e.g. "Can my kid play outside?"'
+            className="flex-1 px-4 py-3 rounded-xl border text-sm font-medium t1 outline-none transition-all focus:ring-2 focus:ring-indigo-500/30 touch-target"
+            style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+          />
+          <button
+            id="btn-ask-submit"
+            type="submit"
+            disabled={loading || !question.trim()}
+            className="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-md transition-all active:scale-95 disabled:opacity-50 touch-target flex items-center gap-1.5"
+          >
+            {loading ? 'Thinking…' : 'Ask ➤'}
+          </button>
+        </form>
+      )}
 
       {/* Quick Prompt Chips */}
       <div className="flex items-center gap-2 flex-wrap pt-1">
@@ -116,14 +182,20 @@ export default function AskBar({
             key={chip}
             type="button"
             onClick={() => {
+              if (!isAuthenticated) {
+                window.location.hash = '#/login';
+                return;
+              }
               setQuestion(chip);
               handleAsk(chip);
             }}
             disabled={loading}
-            className="text-xs font-bold px-3 py-1.5 rounded-full border t2 hover:bg-[var(--surface-alt)] transition-all touch-target"
+            className="text-xs font-bold px-3 py-1.5 rounded-full border t2 hover:bg-[var(--surface-alt)] transition-all touch-target flex items-center gap-1"
             style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+            title={!isAuthenticated ? "Sign in to ask this question" : chip}
           >
-            {chip}
+            {!isAuthenticated && <span className="text-[10px] opacity-60">🔒</span>}
+            <span>{chip}</span>
           </button>
         ))}
       </div>
@@ -143,16 +215,16 @@ export default function AskBar({
             </span>
           </div>
 
-          <p className="text-sm font-bold t1 leading-snug">
-            {answer.headline}
-          </p>
+          <div className="text-sm font-bold t1 leading-snug">
+            <FormattedBotText text={answer.headline} />
+          </div>
 
           {answer.do && answer.do.length > 0 && (
-            <ul className="text-xs font-semibold t2 space-y-1 pt-1">
+            <ul className="text-xs font-semibold t2 space-y-1.5 pt-1">
               {answer.do.map((item, idx) => (
                 <li key={idx} className="flex items-start gap-1.5">
-                  <span className="text-indigo-500 font-bold">•</span>
-                  <span>{item}</span>
+                  <span className="text-indigo-500 font-bold mt-0.5">•</span>
+                  <span><FormattedBotText text={item} /></span>
                 </li>
               ))}
             </ul>

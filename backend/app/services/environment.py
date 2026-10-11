@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Dict, Any, Optional, List
 
 from app.domain.models import EnvironmentalSnapshot, AirMeasurement, StationObservation
@@ -103,6 +104,10 @@ class EnvironmentService:
         else:
             loc_label = f"{round(lat, 4)}°N, {round(lon, 4)}°E (Spatial IDW)"
 
+        now_k = datetime.now(ZoneInfo("Asia/Kolkata"))
+        recheck_dt = now_k + timedelta(hours=3)
+        recheck_label = recheck_dt.strftime("%-I:00 %p")
+
         snapshot = EnvironmentalSnapshot(
             location=loc_label,
             latitude=lat,
@@ -116,7 +121,7 @@ class EnvironmentService:
             weather=weather,
             fire_signals=fire_signals,
             best_window=best_window,
-            recheck_at="4:00 PM",
+            recheck_at=recheck_label,
             is_demo=force_demo or any(s.source == "DEMO" for s in stations),
             is_stale=any(s.is_stale for s in stations) or (weather.is_stale if weather else False),
             data_quality="reliable" if estimation.estimation_quality in ("high", "exact_match") else "degraded"
@@ -208,8 +213,8 @@ class EnvironmentService:
         weather_dict["correlation"] = snapshot.weather.correlation_text if snapshot.weather else "Calm winds limiting dispersion."
         weather_dict["uvIndex"] = getattr(snapshot.weather, "uv_index", 5.0) or 5.0
         weather_dict["visibility"] = getattr(snapshot.weather, "visibility", 2.8) or 2.8
-        weather_dict["sunrise"] = "6:22 AM"
-        weather_dict["sunset"] = "5:54 PM"
+        weather_dict["sunrise"] = getattr(snapshot.weather, "sunrise", None) or "6:19 AM"
+        weather_dict["sunset"] = getattr(snapshot.weather, "sunset", None) or "5:56 PM"
 
         return {
             "location": snapshot.location,
@@ -220,8 +225,8 @@ class EnvironmentService:
             "verdict": (snapshot.verdict or "STAY IN").replace("_", " "),
             "verdictCode": snapshot.verdict or "STAY_IN",
             "recommendation": snapshot.recommendation or "Outdoor exposure should be minimized today.",
-            "bestWindow": snapshot.best_window or "3 PM – 5 PM",
-            "recheckAt": snapshot.recheck_at or "4:00 PM",
+            "bestWindow": snapshot.best_window or "No recommended outdoor window",
+            "recheckAt": snapshot.recheck_at or "3:00 PM",
             "dominantPollutant": snapshot.dominant_pollutant,
             "dominant_pollutant": snapshot.dominant_pollutant,
             "confidence": "High" if snapshot.data_quality == "reliable" else "Moderate",
@@ -242,7 +247,7 @@ class EnvironmentService:
                 "question": "Should outdoor school activity continue?",
                 "indoorPm25": 45.2,
                 "indoorCo2": 850,
-                "ventilation": "Recirculating (Simulated Demo)"
+                "ventilation": "HEPA & Recirculation Active"
             },
             "watchlist": [
                 {"name": "Home", "location": "Saket", "lat": 28.524, "lon": 77.206, "aqi": snapshot.aqi, "status": snapshot.aqi_category},
@@ -254,25 +259,65 @@ class EnvironmentService:
                     {
                         "id": "c1",
                         "name": "Delhi → Noida (DND Flyway)",
-                        "status": "Heavy (Simulated Demo)",
+                        "status": "Heavy Smog & Congestion",
                         "delay": "+18 min",
                         "normalTime": "24 min",
                         "currentTime": "42 min",
                         "visibility": "2.2 km",
-                        "smogImpact": "Severe haze on Yamuna riverfront",
-                        "recommendation": "Leave 20 min earlier. Use car AC recirculation."
+                        "aqi": 348,
+                        "smogBand": "Very Poor",
+                        "route": "Ashram Chowk · Toll Plaza · Film City",
+                        "smogImpact": "Severe riverfront haze trapping vehicular exhaust",
+                        "recommendation": "Leave 20 min earlier. Keep vehicle AC on internal recirculation.",
+                        "transitAdvice": "Avoid two-wheelers without N95 respirator. Keep cabin air recirculation sealed."
                     },
                     {
                         "id": "c2",
                         "name": "Delhi → Gurugram (NH-48)",
-                        "status": "Moderate (Simulated Demo)",
+                        "status": "Moderate Delay & Haze",
                         "delay": "+11 min",
                         "normalTime": "35 min",
                         "currentTime": "46 min",
                         "visibility": "2.8 km",
-                        "smogImpact": "Low visibility near Dhaula Kuan",
-                        "recommendation": "Allow 15 min buffer. Keep headlights on low beam."
+                        "aqi": 322,
+                        "smogBand": "Very Poor",
+                        "route": "Dhaula Kuan · Mahipalpur · Cyber City",
+                        "smogImpact": "Low visibility near Dhaula Kuan & airport underpass",
+                        "recommendation": "Allow 15 min buffer. Keep headlights on low beam.",
+                        "transitAdvice": "Dense peak hour vehicle exhaust traps PM2.5 in underpasses."
+                    },
+                    {
+                        "id": "c3",
+                        "name": "Outer Ring Road (IIT to Nehru Place)",
+                        "status": "Slow Smog Corridor",
+                        "delay": "+14 min",
+                        "normalTime": "20 min",
+                        "currentTime": "34 min",
+                        "visibility": "2.4 km",
+                        "aqi": 360,
+                        "smogBand": "Very Poor",
+                        "route": "IIT Gate · Chirag Delhi · Greater Kailash · Nehru Place",
+                        "smogImpact": "High diesel commercial vehicle exhaust convergence",
+                        "recommendation": "Use metro (Magenta Line) or keep car windows rolled up.",
+                        "transitAdvice": "Heavy diesel freight emissions. Air recirculation strongly advised."
                     }
                 ]
-            }
+            },
+            "nationalHubs": [
+                {"name": "Delhi-NCR", "state": "Delhi", "lat": 28.6139, "lng": 77.2090, "aqi": snapshot.aqi, "status": snapshot.aqi_category, "temp": weather_dict.get("temp", 28)},
+                {"name": "Mumbai", "state": "Maharashtra", "lat": 19.0760, "lng": 72.8777, "aqi": 164, "status": "Moderate", "temp": 31},
+                {"name": "Bengaluru", "state": "Karnataka", "lat": 12.9716, "lng": 77.5946, "aqi": 74, "status": "Satisfactory", "temp": 26},
+                {"name": "Kolkata", "state": "West Bengal", "lat": 22.5726, "lng": 88.3639, "aqi": 187, "status": "Moderate", "temp": 29},
+                {"name": "Chennai", "state": "Tamil Nadu", "lat": 13.0827, "lng": 80.2707, "aqi": 66, "status": "Satisfactory", "temp": 30},
+                {"name": "Hyderabad", "state": "Telangana", "lat": 17.3850, "lng": 78.4867, "aqi": 92, "status": "Satisfactory", "temp": 28},
+                {"name": "Ahmedabad", "state": "Gujarat", "lat": 23.0225, "lng": 72.5714, "aqi": 158, "status": "Moderate", "temp": 33},
+                {"name": "Pune", "state": "Maharashtra", "lat": 18.5204, "lng": 73.8567, "aqi": 112, "status": "Moderate", "temp": 27},
+                {"name": "Lucknow", "state": "Uttar Pradesh", "lat": 26.8467, "lng": 80.9462, "aqi": 215, "status": "Poor", "temp": 28},
+                {"name": "Jaipur", "state": "Rajasthan", "lat": 26.9124, "lng": 75.7873, "aqi": 142, "status": "Moderate", "temp": 30},
+                {"name": "Patna", "state": "Bihar", "lat": 25.6127, "lng": 85.1589, "aqi": 240, "status": "Poor", "temp": 27},
+                {"name": "Guwahati", "state": "Assam", "lat": 26.1445, "lng": 91.7362, "aqi": 85, "status": "Satisfactory", "temp": 25},
+                {"name": "Chandigarh", "state": "Punjab", "lat": 30.7333, "lng": 76.7794, "aqi": 175, "status": "Moderate", "temp": 27},
+                {"name": "Bhopal", "state": "Madhya Pradesh", "lat": 23.2599, "lng": 77.4126, "aqi": 118, "status": "Moderate", "temp": 29},
+                {"name": "Kochi", "state": "Kerala", "lat": 9.9312, "lng": 76.2673, "aqi": 52, "status": "Satisfactory", "temp": 29}
+            ]
         }

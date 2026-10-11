@@ -96,8 +96,8 @@ class ForecastService:
         # Calibrate hourly forecast points against live ground telemetry current_aqi
         now_idx = 0
         for idx, pt in enumerate(raw_points):
-            if not pt.past:
-                now_idx = max(0, idx - 1)
+            if getattr(pt, "is_current", False) or not pt.past:
+                now_idx = idx
                 break
 
         model_now_aqi = raw_points[now_idx].aqi if now_idx < len(raw_points) else None
@@ -127,15 +127,17 @@ class ForecastService:
         # Format 24-hour forecast for Recharts
         hourly_chart_data = [
             {
+                "timestamp": p.timestamp,
                 "time": p.time_label,
                 "aqi": p.aqi,
                 "temp": round(p.temperature),
                 "rainProb": round(p.rain_probability),
                 "windSpeed": round(p.wind_speed, 1),
                 "past": p.past,
+                "isCurrent": (i == now_idx) or getattr(p, "is_current", False),
                 "bestWindow": p.best_window,
             }
-            for p in tagged_points
+            for i, p in enumerate(tagged_points)
         ]
 
         # 7-Day outlook from real Open-Meteo daily data

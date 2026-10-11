@@ -21,6 +21,7 @@ export default function DelhiNcrVectorMap({
   traffic: _traffic = null,
   dark = false,
   primaryLayer = 'aqi',
+  weatherLayer = null,
   signals = { stations: true, fires: true, traffic: false },
   selectedStationName = 'Delhi-NCR',
   userLocation = null,
@@ -157,8 +158,19 @@ export default function DelhiNcrVectorMap({
           </g>
         )}
 
+        {/* Secondary Weather Overlays */}
+        {weatherLayer === 'temp' && (
+          <circle cx="490" cy="350" r="160" fill="#f97316" fillOpacity="0.12" stroke="#f97316" strokeWidth="2" strokeDasharray="6 4" pointerEvents="none" />
+        )}
+        {weatherLayer === 'rain' && (
+          <circle cx="450" cy="300" r="140" fill="#3b82f6" fillOpacity="0.12" stroke="#3b82f6" strokeWidth="2" strokeDasharray="4 4" pointerEvents="none" />
+        )}
+        {weatherLayer === 'clouds' && (
+          <circle cx="500" cy="330" r="200" fill="#94a3b8" fillOpacity="0.15" stroke="#64748b" strokeWidth="1.5" pointerEvents="none" />
+        )}
+
         {/* Live Wind Vector Arrows */}
-        {(weather || primaryLayer === 'wind') && (
+        {(weatherLayer === 'wind' || primaryLayer === 'wind') && (
           <g opacity="0.4" stroke={textColor} strokeWidth="1.5" strokeLinecap="round">
             {[
               { x: 300, y: 150 },

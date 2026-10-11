@@ -81,7 +81,9 @@ def get_current_user(
     if not claims.get("email") and token_use == "access":
         try:
             import boto3
-            cognito_client = boto3.client("cognito-idp", region_name=region)
+            from botocore.config import Config
+            fast_boto = Config(connect_timeout=3, read_timeout=3, retries={"max_attempts": 1})
+            cognito_client = boto3.client("cognito-idp", region_name=region, config=fast_boto)
             user_info = cognito_client.get_user(AccessToken=credentials.credentials)
             for attr in user_info.get("UserAttributes", []):
                 if attr.get("Name") == "email":
@@ -92,5 +94,9 @@ def get_current_user(
                     claims["name"] = attr.get("Value")
         except Exception as e:
             logger.debug(f"Cognito GetUser user attributes query skipped: {e}")
+            # Graceful local fallback for email claim if available in username
+            username = claims.get("cognito:username") or claims.get("username")
+            if username and "@" in str(username):
+                claims["email"] = str(username)
 
     return claims

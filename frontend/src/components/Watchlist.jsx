@@ -79,9 +79,16 @@ export default function Watchlist({
       </div>
 
       {items.map(w => {
-        const col = AQI_COLOR(w.aqi);
-        const icon = w.name === 'Home' ? '🏠' : w.name === 'School' ? '🏫' : '🏢';
+        const lowerName = (w.name || '').toLowerCase();
+        const icon = lowerName.includes('home')
+          ? '🏠'
+          : lowerName.includes('school') || lowerName.includes('campus')
+          ? '🏫'
+          : lowerName.includes('parent')
+          ? '🫁'
+          : '💼';
         const severityIcon = SEVERITY_ICON(w.aqi);
+        const col = AQI_COLOR(w.aqi);
 
         // Resolve coordinates
         const resolvedLat = w.lat || (KNOWN_COORDS[w.location] ? KNOWN_COORDS[w.location].lat : 28.6139);
@@ -104,19 +111,19 @@ export default function Watchlist({
               onSelect ? 'cursor-pointer hover:border-indigo-400/50 hover:shadow-xs active:scale-[0.99] touch-target' : ''
             }`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
               <div
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm flex-shrink-0"
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 shadow-2xs"
                 style={{ background: `${col}18`, color: col }}
                 aria-hidden="true"
               >
                 {icon}
               </div>
               <div className="min-w-0">
-                <div className="text-xs font-black t1 leading-tight truncate">
-                  {w.name} <span className="font-semibold tm text-[11px]">({w.location})</span>
+                <div className="text-sm font-black t1 leading-tight truncate">
+                  {w.name} <span className="font-semibold tm text-xs">({w.location})</span>
                 </div>
-                <div className="text-[10px] font-bold t3 mt-0.5 flex items-center gap-1.5">
+                <div className="text-xs font-semibold t3 mt-0.5 flex items-center gap-1.5">
                   {w.lat && w.lon ? (
                     <span>{w.lat.toFixed(2)}°, {w.lon.toFixed(2)}°</span>
                   ) : (
@@ -130,12 +137,12 @@ export default function Watchlist({
 
             <div className="flex items-center gap-2 flex-shrink-0">
               <div className="text-right">
-                <div className="text-sm font-black flex items-center gap-1 justify-end" style={{ color: col }}>
+                <div className="text-base font-black flex items-center gap-1 justify-end" style={{ color: col }}>
                   <span aria-hidden="true" className="text-xs">{severityIcon}</span>
                   <span>{w.aqi}</span>
                 </div>
                 <span
-                  className="inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase"
+                  className="inline-block text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-tight"
                   style={{ background: `${col}18`, color: col }}
                 >
                   {w.status}

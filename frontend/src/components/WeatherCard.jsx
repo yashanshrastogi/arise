@@ -43,50 +43,50 @@ export default function WeatherCard({ weather, aqi }) {
         </div>
       </div>
 
-      {/* Weather Grid Indicators (Plain-Language rewrites) */}
+      {/* Weather Grid Indicators */}
       <div
-        className="grid grid-cols-4 gap-2 p-2.5 rounded-2xl border my-2 text-center"
+        className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-2xl border my-2 text-center"
         style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
       >
         <div>
-          <div className="text-[10px] font-bold uppercase tm">Chance of rain</div>
-          <div className="text-xs font-black t1 mt-0.5">{weather.rainProb}%</div>
+          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Chance of rain</div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.rainProb}%</div>
         </div>
         <div>
-          <div className="text-[10px] font-bold uppercase tm">Cloud cover</div>
-          <div className="text-xs font-black t1 mt-0.5">{weather.cloudCover}%</div>
+          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Cloud cover</div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.cloudCover}%</div>
         </div>
         <div>
-          <div className="text-[10px] font-bold uppercase tm">Humidity</div>
-          <div className="text-xs font-black t1 mt-0.5">{weather.humidity}%</div>
+          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Humidity</div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.humidity}%</div>
         </div>
         <div>
-          <div className="text-[10px] font-bold uppercase tm">Sun strength</div>
-          <div className="text-xs font-black t1 mt-0.5">{weather.uvIndex != null ? `${weather.uvIndex} (UV)` : '5.0 (UV)'}</div>
+          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Sun strength</div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.uvIndex != null ? `${weather.uvIndex} (UV)` : '5.0 (UV)'}</div>
         </div>
       </div>
 
       {/* Weather Correlation Box */}
       <div
-        className="p-3 rounded-2xl border text-xs leading-snug"
+        className="p-3.5 rounded-2xl border text-xs sm:text-sm leading-snug"
         style={{
           background: aqi > 300 ? 'var(--poor-bg)' : 'var(--good-bg)',
           borderColor: aqi > 300 ? 'var(--poor)' : 'var(--good)',
         }}
       >
         <div className="flex items-center gap-1.5 font-black mb-1" style={{ color: aqi > 300 ? 'var(--poor-ink)' : 'var(--good-ink)' }}>
-          <span>ⓘ</span>
-          <span className="text-[10px] uppercase tracking-wider font-extrabold">
+          <span aria-hidden="true">ⓘ</span>
+          <span className="text-xs uppercase tracking-wider font-extrabold">
             {aqi > 300 ? 'Why the air is trapped' : 'Atmospheric Dispersion'}
           </span>
         </div>
-        <p className="text-xs font-semibold t1 leading-tight">
+        <p className="text-xs sm:text-sm font-semibold t1 leading-relaxed">
           {weather.correlation || (aqi > 300 ? 'Calm surface wind under 4 km/h prevents smoke and dust from dispersing.' : 'Active winds help ventilate the surface layer.')}
         </p>
       </div>
 
       {/* Sunrise / Sunset */}
-      <div className="flex items-center justify-between text-xs font-bold tm pt-2 mt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center justify-between text-xs font-semibold tm pt-2 mt-2 border-t" style={{ borderColor: 'var(--border)' }}>
         <span>🌅 Sunrise: {weather.sunrise || '6:22 AM'}</span>
         <span>🌇 Sunset: {weather.sunset || '5:54 PM'}</span>
       </div>

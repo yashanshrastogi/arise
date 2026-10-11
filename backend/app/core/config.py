@@ -30,6 +30,9 @@ class Settings(BaseModel):
     CACHE_TTL_SECONDS: int = Field(default=1800, ge=1, le=86400)
     CACHE_DIR: str = "data/cache"
     DYNAMODB_TABLE_NAME: str = "arise-cache"
+    USER_PROFILE_TABLE_NAME: str = "arise-users-prod"
+    COGNITO_USER_POOL_ID: Optional[str] = "us-east-1_qm2818Iul"
+    COGNITO_APP_CLIENT_ID: Optional[str] = "32g687pdc6dulejhh4tcvd69m7"
     API_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0.0, le=60.0)
     
     # Operational & Observability Flags

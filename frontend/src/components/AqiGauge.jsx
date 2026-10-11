@@ -62,10 +62,11 @@ export default function AqiGauge({
           <div className="text-[10px] font-bold tm">{country}</div>
         </div>
         <span
-          className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border"
-          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-secondary)' }}
+          className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shadow-2xs"
+          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         >
-          Updated 10 minutes ago
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
+          <span className="font-extrabold tracking-wide uppercase text-[10px] text-emerald-600 dark:text-emerald-400">Live</span>
         </span>
       </div>
 

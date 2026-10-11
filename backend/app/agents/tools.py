@@ -51,6 +51,14 @@ def get_air_now(lat: float = 28.6139, lon: float = 77.2090, demo: bool = False) 
         ],
         "station_count": len(snapshot.contributing_stations),
         "source": "CPCB / OpenAQ Ground Telemetry" if not snapshot.is_demo else "Saved Severe Event (Demo)",
+        "weather": {
+            "temperature": round(snapshot.weather.temperature, 1) if snapshot.weather else 28.4,
+            "feels_like": round(snapshot.weather.feels_like, 1) if snapshot.weather else 30.8,
+            "humidity": round(snapshot.weather.humidity, 1) if snapshot.weather else 58.0,
+            "wind_speed": round(snapshot.weather.wind_speed, 1) if snapshot.weather else 3.2,
+            "wind_direction": snapshot.weather.wind_direction if snapshot.weather else "NW",
+            "condition": snapshot.weather.condition_text if snapshot.weather else "Partly Cloudy",
+        },
     }
 
 
@@ -63,6 +71,7 @@ def get_forecast(lat: float = 28.6139, lon: float = 77.2090, demo: bool = False)
     fc_svc = ForecastService()
     snapshot = _run_async(env_svc.get_environmental_snapshot(lat=lat, lon=lon, force_demo=demo))
     bundle = _run_async(fc_svc.get_forecast(lat=lat, lon=lon, current_aqi=snapshot.aqi, force_demo=demo))
+    daily_list = bundle.get("forecast7Day") or []
     return {
         "best_window": bundle.get("bestWindow", snapshot.best_window or "No recommended outdoor window"),
         "recheck_at": snapshot.recheck_at or "4:00 PM",
@@ -73,8 +82,9 @@ def get_forecast(lat: float = 28.6139, lon: float = 77.2090, demo: bool = False)
                 "temp": pt.get("temp"),
                 "rain_prob": pt.get("rainProb"),
             }
-            for pt in bundle.get("hourly", [])[:8]
+            for pt in bundle.get("hourly", [])
         ],
+        "daily_forecast": daily_list,
     }
 
 

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import ProfileSettingsModal from './ProfileSettingsModal';
 
-export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated }) {
+export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOpenProfile }) {
   const {
     user,
     isAuthenticated,
@@ -49,7 +49,7 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated }) {
           id="btn-header-login"
           type="button"
           onClick={handleGoToLogin}
-          className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all hover:bg-[var(--surface-alt)] shadow-xs"
+          className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all hover:bg-[var(--surface-alt)] shadow-xs touch-target"
           style={{
             background: 'var(--surface)',
             borderColor: 'var(--border)',
@@ -64,11 +64,10 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated }) {
           id="btn-header-signup"
           type="button"
           onClick={handleGoToSignUp}
-          className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-all active:scale-[0.98] flex items-center gap-1.5"
-          title="Registered users can save Home and Work locations to personalize environmental insights"
+          className="hidden sm:flex px-3.5 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-all active:scale-[0.98] items-center gap-1.5 touch-target"
+          title="Sign up to save Home and Work locations across devices"
         >
-          <span className="hidden sm:inline">Save my places</span>
-          <span className="sm:hidden">Sign Up</span>
+          <span>Sign Up</span>
         </button>
 
         {error && (
@@ -136,11 +135,14 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated }) {
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold t1">Account Security</span>
               <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                Cognito
+                AWS Cognito
               </span>
             </div>
-            <p className="text-xs tm mt-1.5">
-              Provider: <span className="font-semibold">{user.provider || 'Cognito'}</span>
+            <p className="text-xs tm mt-1.5 flex items-center gap-1">
+              <span>Powered by</span>
+              <span className="font-bold t1">Google</span>
+              <span>&amp;</span>
+              <span className="font-bold t1">AWS Cognito</span>
             </p>
           </div>
 
@@ -149,7 +151,11 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated }) {
             type="button"
             onClick={() => {
               setMenuOpen(false);
-              setProfileOpen(true);
+              if (onOpenProfile) {
+                onOpenProfile();
+              } else {
+                setProfileOpen(true);
+              }
             }}
             className="w-full mb-2 rounded-xl border px-3 py-2.5 text-xs font-bold hover:bg-[var(--surface-alt)] transition-colors text-left flex items-center justify-between"
             style={{

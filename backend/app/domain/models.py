@@ -68,6 +68,8 @@ class WeatherSnapshot(BaseModel):
     is_stale: bool = False
     condition_text: Optional[str] = "Haze"
     correlation_text: Optional[str] = None
+    sunrise: Optional[str] = None
+    sunset: Optional[str] = None
 
 
 class ForecastPoint(BaseModel):
@@ -82,6 +84,7 @@ class ForecastPoint(BaseModel):
     wind_speed: float = Field(default=0.0, ge=0.0)
     wind_direction: Optional[str] = None
     past: bool = False
+    is_current: bool = False
     best_window: bool = False
     source: str = "Open-Meteo"
     confidence: Literal["high", "moderate", "low"] = "moderate"

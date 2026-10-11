@@ -9,6 +9,8 @@ import {
   DEFAULT_COGNITO_DOMAIN,
   getSharedUserManager,
   createCognitoAuthRedirectUrl,
+  directCognitoSignIn,
+  storeCognitoTokensInUserManager,
 } from './cognitoAuth';
 
 const AuthContext = createContext(null);
@@ -24,6 +26,7 @@ const GUEST_FALLBACK = {
   error: null,
   loginWithGoogle: () => {},
   loginWithEmailPassword: () => {},
+  loginWithDirectCredentials: () => {},
   logout: () => {},
 };
 
@@ -44,8 +47,22 @@ function CognitoBridge({ children }) {
     [oidc],
   );
 
+  const loginWithDirectCredentials = useCallback(
+    async (email, password) => {
+      const tokens = await directCognitoSignIn({ email, password, clientId });
+      const manager = getSharedUserManager();
+      const user = await storeCognitoTokensInUserManager(tokens, manager);
+      return user;
+    },
+    [clientId],
+  );
+
   const loginWithEmailPassword = useCallback(
     async (screen = 'login', options = {}) => {
+      if (options.password) {
+        return loginWithDirectCredentials(options.email, options.password);
+      }
+
       if (screen === 'signup') {
         const manager = getSharedUserManager();
         const { url } = await createCognitoAuthRedirectUrl({
@@ -65,7 +82,7 @@ function CognitoBridge({ children }) {
       }
       return oidc.signinRedirect({ extraQueryParams });
     },
-    [oidc],
+    [oidc, loginWithDirectCredentials],
   );
 
   const logout = useCallback(async () => {
@@ -118,13 +135,14 @@ function CognitoBridge({ children }) {
     user,
     isAuthenticated: Boolean(oidc.isAuthenticated && user),
     isGuest: !oidc.isAuthenticated,
-    accessToken: oidc.user?.access_token || oidc.user?.id_token || null,
+    accessToken: oidc.user?.id_token || oidc.user?.access_token || null,
     idToken: oidc.user?.id_token || null,
     authMode: oidc.isAuthenticated ? 'cognito' : 'guest',
     loading: oidc.isLoading,
     error: oidc.error?.message || null,
     loginWithGoogle,
     loginWithEmailPassword,
+    loginWithDirectCredentials,
     logout,
   };
 

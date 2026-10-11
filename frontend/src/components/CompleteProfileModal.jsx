@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { bootstrapUserProfile } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 
-export default function CompleteProfileModal({ onProfileCompleted }) {
+export default function CompleteProfileModal({ onProfileCompleted, onProfileSaved }) {
   const { user, accessToken } = useAuth();
   const [displayName, setDisplayName] = useState(user?.name || '');
   const [persona, setPersona] = useState('General Public');
+  const [configuredPersonas, setConfiguredPersonas] = useState(['General Public']);
   const [alertsEnabled, setAlertsEnabled] = useState(false);
 
   // Home location
@@ -71,6 +73,7 @@ export default function CompleteProfileModal({ onProfileCompleted }) {
       const payload = {
         display_name: displayName.trim(),
         persona,
+        configured_personas: configuredPersonas,
         alerts_enabled: alertsEnabled,
       };
 
@@ -92,8 +95,19 @@ export default function CompleteProfileModal({ onProfileCompleted }) {
         };
       }
 
-      const res = await bootstrapUserProfile(accessToken, payload);
-      onProfileCompleted(res);
+      try {
+        localStorage.setItem('arise_user_profile', JSON.stringify(payload));
+      } catch {}
+
+      const handleComplete = onProfileCompleted || onProfileSaved;
+
+      try {
+        const res = await bootstrapUserProfile(accessToken, payload);
+        if (handleComplete) handleComplete(res || payload);
+      } catch (cloudErr) {
+        console.warn('Bootstrap cloud sync failed, completing locally:', cloudErr.message);
+        if (handleComplete) handleComplete(payload);
+      }
     } catch (err) {
       setError(err.message || 'Failed to complete profile. Please try again.');
     } finally {
@@ -101,13 +115,13 @@ export default function CompleteProfileModal({ onProfileCompleted }) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[6000] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[6000] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 overflow-y-auto">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="complete-profile-title"
-        className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl"
+        className="w-full max-w-xl max-h-[88vh] my-auto overflow-y-auto rounded-3xl border p-6 sm:p-8 shadow-2xl"
         style={{
           background: 'var(--surface)',
           borderColor: 'var(--border)',
@@ -167,28 +181,59 @@ export default function CompleteProfileModal({ onProfileCompleted }) {
             </p>
           </div>
 
-          {/* Persona */}
+          {/* Personas to check for */}
           <div>
-            <label className="block text-xs font-semibold t1 mb-1">Health & Activity Profile</label>
-            <select
-              id="select-profile-persona"
-              value={persona}
-              onChange={(e) => setPersona(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-              style={{
-                background: 'var(--surface-alt)',
-                borderColor: 'var(--border)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              <option>General Public</option>
-              <option>Child / Parent</option>
-              <option>Older Adult</option>
-              <option>Asthma / Respiratory Sensitive</option>
-              <option>Outdoor Worker</option>
-              <option>Athlete</option>
-              <option>School Administrator</option>
-            </select>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold t1">
+                Who do you check air quality for?
+              </label>
+              <span className="text-[10px] tm">Select all that apply</span>
+            </div>
+            <p className="text-[11px] tm mb-2.5">
+              Choose which personas appear in your daily dashboard check. You can stay with just Me, or add Child, Parent, Work, or School.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                { id: 'General Public', label: '👤 Me (General)', desc: 'Standard adult outdoors & commute' },
+                { id: 'Children & Schools', label: '🎒 My Child', desc: 'Recess, outdoor playtime & school sports' },
+                { id: 'Elderly & Respiratory', label: '🫁 My Parent / Senior', desc: 'Vulnerable seniors & respiratory care' },
+                { id: 'Work & Outdoor Labor', label: '💼 Work & Commute', desc: 'Commuter & field work shift safety' },
+                { id: 'School Administration', label: '🏫 School Admin', desc: 'Campus outdoor activity & assembly decisions' },
+              ].map((p) => {
+                const checked = configuredPersonas.includes(p.id) || p.id === 'General Public';
+                return (
+                  <label
+                    key={p.id}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                      checked
+                        ? 'persona-card-active ring-1 ring-indigo-400/30 shadow-xs'
+                        : 'border-[var(--border)] hover:bg-[var(--surface-alt)]'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={p.id === 'General Public'}
+                      onChange={() => {
+                        if (p.id === 'General Public') return;
+                        setConfiguredPersonas((prev) =>
+                          prev.includes(p.id) ? prev.filter((x) => x !== p.id) : [...prev, p.id]
+                        );
+                      }}
+                      className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div className="min-w-0">
+                      <span className={`text-xs block truncate ${checked ? 'persona-title font-black' : 'font-bold t1'}`}>
+                        {p.label}
+                      </span>
+                      <span className={`text-[11px] block leading-tight mt-0.5 ${checked ? 'persona-desc font-semibold' : 't2 font-medium'}`}>
+                        {p.desc}
+                      </span>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
           </div>
 
           {/* Location Status Message */}
@@ -207,9 +252,9 @@ export default function CompleteProfileModal({ onProfileCompleted }) {
                 type="button"
                 onClick={() => handleUseCurrentLocation('home')}
                 disabled={locatingPrefix === 'home'}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors disabled:opacity-60"
+                className="location-btn-theme inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all shadow-2xs disabled:opacity-60 cursor-pointer active:scale-[0.98] shrink-0"
               >
-                <span>📍</span>
+                <span aria-hidden="true">📍</span>
                 <span>{locatingPrefix === 'home' ? 'Detecting…' : 'Use my current location'}</span>
               </button>
             </div>
@@ -252,9 +297,9 @@ export default function CompleteProfileModal({ onProfileCompleted }) {
                 type="button"
                 onClick={() => handleUseCurrentLocation('work')}
                 disabled={locatingPrefix === 'work'}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors disabled:opacity-60"
+                className="location-btn-theme inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border transition-all shadow-2xs disabled:opacity-60 cursor-pointer active:scale-[0.98] shrink-0"
               >
-                <span>📍</span>
+                <span aria-hidden="true">📍</span>
                 <span>{locatingPrefix === 'work' ? 'Detecting…' : 'Use my current location'}</span>
               </button>
             </div>
@@ -317,4 +362,6 @@ export default function CompleteProfileModal({ onProfileCompleted }) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

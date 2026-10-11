@@ -42,9 +42,9 @@ class FirmsFireProvider:
                 return [FireSignal(**s) for s in cached.value]
 
             if self.map_key:
-                # Regional bounding box for Punjab, Haryana, Delhi-NCR & Western UP: W,S,E,N
-                bbox = "74.0,27.0,78.5,32.0"
-                url = f"{self.BASE_URL}/{self.map_key}/VIIRS_SNPP_NRT/{bbox}/3"
+                # Whole India Bounding Box: 68.0°E, 8.0°N, 97.0°E, 37.0°N (W,S,E,N)
+                bbox = "68.0,8.0,97.0,37.0"
+                url = f"{self.BASE_URL}/{self.map_key}/VIIRS_SNPP_NRT/{bbox}/1"
                 try:
                     async with httpx.AsyncClient(timeout=self.timeout) as client:
                         resp = await client.get(url)
@@ -53,7 +53,7 @@ class FirmsFireProvider:
                             signals: List[FireSignal] = []
                             now_iso = datetime.now(timezone.utc).isoformat()
                             if len(lines) > 1:
-                                for line in lines[1:30]:  # Sample representative regional detections
+                                for line in lines[1:80]:  # Sample representative national satellite detections
                                     parts = [p.strip() for p in line.split(",")]
                                     if len(parts) >= 3:
                                         try:

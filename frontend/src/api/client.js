@@ -4,10 +4,20 @@
  * Provides resilient fallbacks and graceful degradation.
  */
 
-const RAW_API_URL =
-  import.meta.env.VITE_API_URL ||
-  'https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod';
-const API_BASE_URL = RAW_API_URL.replace(/\/+$/, '');
+function resolveApiBaseUrl() {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    if (!envUrl || envUrl.includes('execute-api') || envUrl.includes('amazonaws.com')) {
+      return 'http://localhost:8000';
+    }
+  }
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+  return 'https://ll84ry8heh.execute-api.us-east-1.amazonaws.com/prod';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export async function checkBackendHealth() {
   try {
@@ -116,7 +126,22 @@ export async function askAriseChat({ question, lat = 28.6139, lon = 77.2090, per
     }
     console.warn(`Backend /chat returned status ${res.status}`);
   } catch (err) {
-    console.warn('Failed to post /chat, falling back:', err.message);
+    console.warn('Failed to post /chat, checking local retry:', err.message);
+    if (
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+      !API_BASE_URL.startsWith('http://localhost:8000')
+    ) {
+      try {
+        const localRes = await fetch('http://localhost:8000/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, lat, lon, persona, demo }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (localRes.ok) return await localRes.json();
+      } catch {}
+    }
   }
   return null;
 }
@@ -136,21 +161,49 @@ function profileHeaders(accessToken, json = false) {
 }
 
 async function profileRequest(path, accessToken, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers: {
-      ...profileHeaders(accessToken, Boolean(options.body)),
-      ...(options.headers || {}),
-    },
-    signal: AbortSignal.timeout(8000),
-  });
+  const url = `${API_BASE_URL}${path}`;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...profileHeaders(accessToken, Boolean(options.body)),
+        ...(options.headers || {}),
+      },
+      signal: AbortSignal.timeout(10000),
+    });
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || `Profile API failed (${response.status}).`);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Profile API failed (${response.status}).`);
+    }
+
+    return await response.json();
+  } catch (err) {
+    // If remote endpoint failed while in local dev, retry with localhost:8000
+    if (
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+      !url.startsWith('http://localhost:8000')
+    ) {
+      try {
+        const localResponse = await fetch(`http://localhost:8000${path}`, {
+          ...options,
+          headers: {
+            ...profileHeaders(accessToken, Boolean(options.body)),
+            ...(options.headers || {}),
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (localResponse.ok) {
+          return await localResponse.json();
+        }
+      } catch {}
+    }
+    if (err.name === 'AbortError' || /signal timed out|timeout/i.test(err.message || '')) {
+      throw new Error('Connection timed out. Please check your network and try again.');
+    }
+    throw err;
   }
-
-  return response.json();
 }
 
 export function getUserProfile(accessToken) {
@@ -164,9 +217,20 @@ export function bootstrapUserProfile(accessToken, profile) {
   });
 }
 
-export function updateUserProfile(accessToken, updates) {
-  return profileRequest("/profile", accessToken, {
-    method: "PATCH",
-    body: JSON.stringify(updates),
-  });
+export async function updateUserProfile(accessToken, updates) {
+  try {
+    return await profileRequest("/profile", accessToken, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+  } catch (err) {
+    // If profile not yet bootstrapped, seamlessly bootstrap it with updates
+    if (/not initialized/i.test(err.message || '')) {
+      return await bootstrapUserProfile(accessToken, {
+        display_name: updates.display_name || "Arise User",
+        ...updates,
+      });
+    }
+    throw err;
+  }
 }

@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import nodeCrypto from 'node:crypto';
+if (!globalThis.crypto) {
+  globalThis.crypto = nodeCrypto.webcrypto;
+}
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts';
 import {
   DEFAULT_CLIENT_ID,

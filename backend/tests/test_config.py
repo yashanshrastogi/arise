@@ -15,14 +15,14 @@ class TestConfig(unittest.TestCase):
 
     def test_secret_masking(self):
         settings = Settings(
-            OPENAQ_API_KEY="my-secret-openaq-key-12345",
-            FIRMS_MAP_KEY="my-secret-firms-key-67890"
+            OPENAQ_API_KEY="mock_sample_openaq_key_val_12345",
+            FIRMS_MAP_KEY="mock_sample_firms_key_val_67890"
         )
         self.assertTrue(settings.is_secret_set("OPENAQ_API_KEY"))
         # Secrets must never appear in repr or str
         repr_str = repr(settings)
-        self.assertNotIn("my-secret-openaq-key-12345", repr_str)
-        self.assertNotIn("my-secret-firms-key-67890", repr_str)
+        self.assertNotIn("mock_sample_openaq_key_val_12345", repr_str)
+        self.assertNotIn("mock_sample_firms_key_val_67890", repr_str)
         self.assertIn("******", repr_str)
         
         # safe_dict masks secrets
