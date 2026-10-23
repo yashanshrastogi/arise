@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from app.domain.models import StationObservation, AirMeasurement
+from app.domain.models import StationObservation, AirMeasurement, WeatherSnapshot, ForecastPoint
 
 
 class BaseAirQualityProvider(ABC):
@@ -23,4 +23,14 @@ class BaseAirQualityProvider(ABC):
         station_id: str
     ) -> Optional[StationObservation]:
         """Retrieve detailed measurements for a single station."""
+        pass
+
+
+class BaseWeatherProvider(ABC):
+    """Abstract interface for meteorological data providers."""
+    name: str = "BaseWeatherProvider"
+
+    @abstractmethod
+    async def get_current_weather(self, lat: float, lon: float) -> WeatherSnapshot:
+        """Retrieve normalized current surface weather snapshot."""
         pass

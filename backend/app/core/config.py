@@ -25,15 +25,31 @@ class Settings(BaseModel):
     OPENAQ_API_KEY: Optional[str] = None
     FIRMS_MAP_KEY: Optional[str] = None
     CPCB_API_KEY: Optional[str] = None
-    
+    OPENWEATHER_API_KEY: Optional[str] = None
+    OPENWEATHER_SECRET_ID: str = "arise/openweather-api-key"
+    TOMORROW_API_KEY: Optional[str] = None
+    TOMORROW_SECRET_ID: str = "arise/tomorrow-api-key"
+    # OpenRouteService — used for commute route geometry (home→work polyline).
+    # Free tier: 2,000 req/day. Get a key at openrouteservice.org.
+    ORS_API_KEY: Optional[str] = None
+    ORS_SECRET_ID: str = "arise/ors-api-key"
+
+    # Trust Boundary & Cryptographic Provenance
+    PROVENANCE_SECRET_ID: str = "arise/provenance-key"
+    PROVENANCE_SECRET_KEY: Optional[str] = None
+
     # Caching & Timeouts
     CACHE_TTL_SECONDS: int = Field(default=1800, ge=1, le=86400)
+    WEATHER_FRESH_SECONDS: int = Field(default=150, ge=10, le=86400)
+    WEATHER_GRACE_SECONDS: int = Field(default=1800, ge=60, le=604800)
+    WEATHER_GRID_RESOLUTION_DEG: float = Field(default=0.02, gt=0.0, le=1.0)
     CACHE_DIR: str = "data/cache"
     DYNAMODB_TABLE_NAME: str = "arise-cache"
     USER_PROFILE_TABLE_NAME: str = "arise-users-prod"
     COGNITO_USER_POOL_ID: Optional[str] = "us-east-1_qm2818Iul"
     COGNITO_APP_CLIENT_ID: Optional[str] = "32g687pdc6dulejhh4tcvd69m7"
     API_TIMEOUT_SECONDS: float = Field(default=10.0, gt=0.0, le=60.0)
+
     
     # Operational & Observability Flags
     DEMO_MODE_DEFAULT: bool = False
@@ -87,7 +103,10 @@ class Settings(BaseModel):
     def safe_dict(self) -> dict:
         """Export settings with sensitive credentials masked."""
         data = self.model_dump()
-        sensitive_keys = {"OPENAQ_API_KEY", "FIRMS_MAP_KEY", "CPCB_API_KEY", "GEMINI_API_KEY"}
+        sensitive_keys = {
+            "OPENAQ_API_KEY", "FIRMS_MAP_KEY", "CPCB_API_KEY", "OPENWEATHER_API_KEY",
+            "TOMORROW_API_KEY", "GEMINI_API_KEY", "ORS_API_KEY", "PROVENANCE_SECRET_KEY",
+        }
         for k in sensitive_keys:
             if data.get(k):
                 data[k] = "******"
@@ -112,7 +131,18 @@ def get_settings() -> Settings:
         OPENAQ_API_KEY=os.getenv("OPENAQ_API_KEY") or None,
         FIRMS_MAP_KEY=os.getenv("FIRMS_MAP_KEY") or None,
         CPCB_API_KEY=os.getenv("CPCB_API_KEY") or None,
+        OPENWEATHER_API_KEY=os.getenv("OPENWEATHER_API_KEY") or None,
+        OPENWEATHER_SECRET_ID=os.getenv("OPENWEATHER_SECRET_ID", "arise/openweather-api-key"),
+        TOMORROW_API_KEY=os.getenv("TOMORROW_API_KEY") or None,
+        TOMORROW_SECRET_ID=os.getenv("TOMORROW_SECRET_ID", "arise/tomorrow-api-key"),
+        ORS_API_KEY=os.getenv("ORS_API_KEY") or None,
+        ORS_SECRET_ID=os.getenv("ORS_SECRET_ID", "arise/ors-api-key"),
+        PROVENANCE_SECRET_ID=os.getenv("PROVENANCE_SECRET_ID", "arise/provenance-key"),
+        PROVENANCE_SECRET_KEY=os.getenv("PROVENANCE_SECRET_KEY") or os.getenv("PROVENANCE_KEY") or None,
         CACHE_TTL_SECONDS=int(os.getenv("CACHE_TTL_SECONDS", "1800")),
+        WEATHER_FRESH_SECONDS=int(os.getenv("WEATHER_FRESH_SECONDS", "150")),
+        WEATHER_GRACE_SECONDS=int(os.getenv("WEATHER_GRACE_SECONDS", "1800")),
+        WEATHER_GRID_RESOLUTION_DEG=float(os.getenv("WEATHER_GRID_RESOLUTION_DEG", "0.02")),
         CACHE_DIR=os.getenv("CACHE_DIR", "data/cache"),
         DYNAMODB_TABLE_NAME=os.getenv("DYNAMODB_TABLE_NAME", "arise-cache"),
         API_TIMEOUT_SECONDS=float(os.getenv("API_TIMEOUT_SECONDS", "10.0")),
@@ -121,7 +151,7 @@ def get_settings() -> Settings:
         POWERTOOLS_SERVICE_NAME=os.getenv("POWERTOOLS_SERVICE_NAME", "arise-api"),
         STAGE=os.getenv("STAGE"),
         API_GATEWAY_BASE_PATH=os.getenv("API_GATEWAY_BASE_PATH"),
-        LLM_PROVIDER=os.getenv("LLM_PROVIDER", "rule-based"),
+        LLM_PROVIDER=os.getenv("LLM_PROVIDER", "bedrock"),
         BEDROCK_MODEL_ID=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-lite-v1:0"),
         GEMINI_SECRET_ID=os.getenv("GEMINI_SECRET_ID", "arise/gemini-api-key"),
         GEMINI_MODEL_ID=os.getenv("GEMINI_MODEL_ID", "gemini-3.5-flash-lite"),

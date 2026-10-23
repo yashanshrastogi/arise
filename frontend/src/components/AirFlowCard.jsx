@@ -1,4 +1,5 @@
 import React from 'react';
+import InfoTooltip from './InfoTooltip';
 
 /**
  * Air Flow Status card — inspired by s2 screenshot middle card.
@@ -10,10 +11,10 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
   const speedMs = (speedNum / 3.6).toFixed(1);
 
   const flowCategory = speedNum < 5.0
-    ? { label: 'Calm / Stagnant', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', layer: 'Surface boundary layer < 400m' }
+    ? { label: 'Calm / Stagnant', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', layer: 'Low air ceiling (< 400m)' }
     : speedNum < 12.0
-    ? { label: 'Moderate Mixing', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20', layer: 'Surface boundary layer ~600m' }
-    : { label: 'Active Dispersion', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', layer: 'Ventilated boundary layer > 800m' };
+    ? { label: 'Moderate Mixing', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20', layer: 'Moderate air mixing (~600m)' }
+    : { label: 'Active Dispersion', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', layer: 'Well ventilated (> 800m)' };
 
   // Compass dial points
   const points = [
@@ -40,8 +41,8 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
     <div className="card p-5 flex flex-col justify-between h-full" style={{ background: 'var(--card)' }}>
       <div className="flex items-center justify-between mb-2">
         <div>
-          <h3 className="text-sm sm:text-base font-black t1">Air Flow Status</h3>
-          <p className="text-xs font-semibold tm">Wind &amp; Atmospheric Mixing</p>
+          <h3 className="text-base font-black t1">Air Flow Status</h3>
+          <p className="text-xs sm:text-sm font-semibold tm">Wind &amp; Atmospheric Mixing</p>
         </div>
         <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${flowCategory.color}`}>
           {flowCategory.label}
@@ -51,10 +52,15 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
       <div className="flex flex-wrap sm:flex-nowrap items-center justify-between my-2 gap-3 sm:gap-4">
         {/* Big wind speed stat */}
         <div className="min-w-0">
-          <div className="text-3xl sm:text-4xl font-black t1 leading-none">{speed}</div>
-          <div className="text-xs sm:text-sm font-black text-indigo-600 dark:text-indigo-400 mt-1">{unit} · {direction}</div>
-          <div className="text-xs font-semibold tm mt-2">
-            {flowCategory.layer}
+          <div className="text-3xl sm:text-4xl font-black t1 leading-none tabular-nums">{speed}</div>
+          <div className="text-sm font-black text-indigo-600 dark:text-indigo-400 mt-1">{unit} · {direction}</div>
+          <div className="text-xs sm:text-sm font-semibold tm mt-2 flex items-center gap-1.5">
+            <span>{flowCategory.layer}</span>
+            <InfoTooltip
+              title="Surface Boundary Layer"
+              text="The lowest layer of the atmosphere where ground air mixes. When it contracts under 400m at night/morning, trapped pollution concentrates at breathing level."
+              impact="Avoid early morning jogs when the boundary layer is lowest."
+            />
           </div>
         </div>
 
@@ -163,10 +169,21 @@ export default function AirFlowCard({ speed = '3.2', unit = 'km/h', direction = 
         className="rounded-xl p-3 flex items-center gap-2.5 mt-2"
         style={{ background: 'var(--surface-alt)', border: '1px solid var(--border)' }}
       >
-        <span className="text-base flex-shrink-0">⚠️</span>
-        <p className="text-[11px] font-semibold t2 leading-snug">
-          <strong className="text-amber-600 dark:text-amber-400">Calm Air Trap:</strong> Indo-Gangetic basin stagnation is preventing dispersion of fine particulates.
-        </p>
+        <span className="text-base flex-shrink-0">{speedNum < 5.0 ? '⚠️' : '🍃'}</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs sm:text-sm font-semibold t2 leading-snug flex items-center gap-1.5 flex-wrap">
+            <span className="font-bold text-amber-600 dark:text-amber-400">
+              {speedNum < 5.0 ? 'Calm Air Trap:' : speedNum < 12.0 ? 'Air Movement:' : 'Good Ventilation:'}
+            </span>
+            <span>
+              {speedNum < 5.0
+                ? 'Calm surface wind is preventing dispersion of fine particulates.'
+                : speedNum < 12.0
+                ? 'Moderate air movement allows steady dispersion of fine particulates.'
+                : 'Active breeze is effectively dispersing local fine particulates.'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

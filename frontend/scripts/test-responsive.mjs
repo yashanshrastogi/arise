@@ -55,7 +55,7 @@ const ROUTES = [
       const hasAskInput = !!document.querySelector('input[placeholder*="Ask"], input[placeholder*="ask"]') || bodyText.includes('Sign in to unlock');
       return hasAskHeader && hasAskInput;
     },
-    expectedName: 'Ask Arise Copilot'
+    expectedName: 'Ask Arise'
   },
   {
     path: '/#/more',

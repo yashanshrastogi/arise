@@ -213,6 +213,24 @@ textarea:focus-visible,
   outline-offset: 3px !important;
 }
 
+[data-theme="dark"] button:focus-visible,
+[data-theme="dark"] a:focus-visible,
+[data-theme="dark"] input:focus-visible,
+[data-theme="dark"] select:focus-visible,
+[data-theme="dark"] textarea:focus-visible,
+[data-theme="dark"] [role="button"]:focus-visible,
+[data-theme="dark"] [tabindex="0"]:focus-visible,
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark input:focus-visible,
+.dark select:focus-visible,
+.dark textarea:focus-visible,
+.dark [role="button"]:focus-visible,
+.dark [tabindex="0"]:focus-visible {
+  outline: 3px solid #818CF8 !important;
+  outline-offset: 3px !important;
+}
+
 /* ── Text Utility Classes with Font Floor ── */
 .t1 { color: var(--text-primary); }
 .t2 { color: var(--text-secondary); }
@@ -280,13 +298,33 @@ textarea:focus-visible,
   animation: scaleUp 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* ── Prefers-Reduced-Motion (WCAG 2.2) ── */
+/* ── Prefers-Reduced-Motion (WCAG 2.2 AA / AAA Compliant) ── */
 @media (prefers-reduced-motion: reduce) {
+  /* Prevent infinite running loops and jarring layout shifts */
   *, *::before, *::after {
-    animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Smooth crossfade alternative for modals and overlays without physical movement */
+  .animate-fadeIn,
+  .animate-scaleUp {
+    animation: fadeIn 0.12s ease-out forwards !important;
+    transform: none !important;
+  }
+
+  /* Neutralize distracting bouncing and pulsing elements */
+  .animate-pulse,
+  .animate-ping,
+  .animate-bounce {
+    animation: none !important;
+    opacity: 0.85 !important;
+  }
+
+  /* Keep short, non-disorienting transitions on interactive controls to preserve focus/hover states */
+  button, a, input, select, textarea, .card, [role="button"] {
+    transition-duration: 0.1s !important;
+    transform: none !important;
   }
 }
 

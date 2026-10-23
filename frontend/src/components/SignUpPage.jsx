@@ -5,9 +5,11 @@ import {
   directCognitoConfirmSignUp,
   directCognitoResendCode,
 } from '../auth/cognitoAuth';
+import { formatNameFromEmail } from '../utils/userUtils';
 
 export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack }) {
   const { loginWithGoogle } = useAuth();
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -17,6 +19,17 @@ export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack })
   const [successMsg, setSuccessMsg] = useState('');
 
   const handleBack = onBack || onContinueGuest;
+
+  // Support Escape key to close modal
+  React.useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape' && handleBack) {
+        handleBack();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleBack]);
 
   // Confirmation step state
   const [step, setStep] = useState('signup'); // 'signup' | 'confirm' | 'confirmed'
@@ -52,7 +65,12 @@ export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack })
 
     setLoading(true);
     try {
-      await directCognitoSignUp({ email: cleanEmail, password });
+      const derivedName = fullName.trim() || formatNameFromEmail(cleanEmail);
+      await directCognitoSignUp({ name: derivedName, email: cleanEmail, password });
+      try {
+        const existing = JSON.parse(localStorage.getItem('arise_user_profile') || '{}');
+        localStorage.setItem('arise_user_profile', JSON.stringify({ ...existing, display_name: derivedName }));
+      } catch {}
       setStep('confirm');
       setSuccessMsg(`Verification code sent to ${cleanEmail}. Please enter it below to activate your account.`);
     } catch (err) {
@@ -200,13 +218,33 @@ export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack })
           {/* Divider */}
           <div className="flex items-center my-4 text-xs">
             <div className="flex-1 border-t" style={{ borderColor: 'var(--border)' }} />
-            <span className="px-3 uppercase tracking-wider font-extrabold text-[10px] tm">or direct in-app registration</span>
+            <span className="px-3 uppercase tracking-wider font-extrabold text-[11px] tm">or direct in-app registration</span>
             <div className="flex-1 border-t" style={{ borderColor: 'var(--border)' }} />
           </div>
 
           <form onSubmit={handleSignUpSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-xs font-bold t1 mb-1">Email Address</label>
+              <label htmlFor="input-signup-name" className="block text-xs font-bold t1 mb-1">
+                Full Name
+              </label>
+              <input
+                id="input-signup-name"
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="e.g. Yashansh Rastogi"
+                autoComplete="name"
+                className="w-full px-3.5 py-2.5 rounded-xl border text-sm outline-none transition-all focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 font-medium"
+                style={{
+                  background: 'var(--surface-alt)',
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-primary)',
+                }}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="input-signup-email" className="block text-xs font-bold t1 mb-1">Email Address</label>
               <input
                 id="input-signup-email"
                 type="email"
@@ -224,7 +262,7 @@ export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack })
             </div>
 
             <div>
-              <label className="block text-xs font-bold t1 mb-1">Password (min. 8 characters)</label>
+              <label htmlFor="input-signup-password" className="block text-xs font-bold t1 mb-1">Password (min. 8 characters)</label>
               <div className="relative">
                 <input
                   id="input-signup-password"
@@ -243,6 +281,7 @@ export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack })
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password as plain text'}
                   className="absolute right-3 top-2.5 text-xs font-semibold tm hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                 >
                   {showPassword ? 'Hide' : 'Show'}
@@ -273,7 +312,7 @@ export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack })
             </div>
 
             <div>
-              <label className="block text-xs font-bold t1 mb-1">Confirm Password</label>
+              <label htmlFor="input-signup-confirm-password" className="block text-xs font-bold t1 mb-1">Confirm Password</label>
               <input
                 id="input-signup-confirm-password"
                 type={showPassword ? 'text' : 'password'}
@@ -393,7 +432,7 @@ export default function SignUpPage({ onNavigateLogin, onContinueGuest, onBack })
       {/* STEP 3: Confirmed Success State */}
       {step === 'confirmed' && (
         <div className="text-center py-6 space-y-3 relative z-10">
-          <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-3xl mx-auto animate-bounce font-black">
+          <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-3xl mx-auto animate-in zoom-in-95 duration-200 font-black shadow-xs">
             ✓
           </div>
           <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{successMsg}</p>

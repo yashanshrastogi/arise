@@ -55,10 +55,15 @@ def build_gemini_prompt(
     fc_data: dict[str, Any],
     fire_data: dict[str, Any],
     persona: str = "General Public",
+    location_name: Optional[str] = None,
+    user_context: Optional[dict[str, Any]] = None,
+    environmental_context: Optional[dict[str, Any]] = None,
+    approved_memories: Optional[list[Any]] = None,
+    route_data: Optional[dict[str, Any]] = None,
 ) -> str:
     """
-    Build a strictly grounded prompt providing verified environmental context
-    without user names, emails, or personal addresses.
+    Build a strictly grounded prompt providing verified environmental and meteorological context
+    without user names, emails, or personal addresses. Never invents values.
     """
     verdict_data = verdict_data or {}
     air_data = air_data or {}
@@ -70,27 +75,76 @@ def build_gemini_prompt(
     category = verdict_data.get("category") or air_data.get("category", "Unavailable")
     dominant = air_data.get("dominant_pollutant", "PM2.5")
     station_count = air_data.get("station_count", 0)
-    pm25 = air_data.get("pm25", "N/A")
-    pm10 = air_data.get("pm10", "N/A")
-    best_window = verdict_data.get("best_window") or fc_data.get("best_window") or "No recommended outdoor window"
-    recheck_at = verdict_data.get("recheck_at") or fc_data.get("recheck_at") or "in 1 hour"
+    pm25 = air_data.get("pm25", "Unavailable")
+    pm10 = air_data.get("pm10", "Unavailable")
+
+    from app.agents.arise_agent import is_practical_outdoor_window, sanitize_recheck_time
+    raw_bw = verdict_data.get("best_window") or fc_data.get("best_window")
+    best_window = raw_bw if is_practical_outdoor_window(raw_bw) else "No recommended outdoor window"
+    recheck_at = sanitize_recheck_time(verdict_data.get("recheck_at") or fc_data.get("recheck_at"))
 
     fire_count = fire_data.get("signals_count", 0)
     fire_source = fire_data.get("source", "NASA FIRMS")
 
+    # Weather telemetry (strictly without fabricated defaults)
     weather = air_data.get("weather") or {}
-    temp = weather.get("temperature", 28.4)
-    feels = weather.get("feels_like", 30.8)
-    humidity = weather.get("humidity", 58.0)
-    wind_speed = weather.get("wind_speed", 3.2)
-    wind_dir = weather.get("wind_direction", "NW")
-    condition = weather.get("condition", "Partly Cloudy")
+    if not weather and environmental_context and environmental_context.get("weather"):
+        weather = environmental_context.get("weather") or {}
 
-    daily_forecast = fc_data.get("daily_forecast") or []
+    temp_val = weather.get("temperature")
+    feels_val = weather.get("feels_like")
+    humid_val = weather.get("humidity")
+    dew_val = weather.get("dew_point")
+    press_val = weather.get("surface_pressure")
+    wind_spd = weather.get("wind_speed")
+    wind_dir = weather.get("wind_direction", "NW")
+    wind_deg = weather.get("wind_degrees")
+    precip_val = weather.get("precipitation")
+    rain_prob = weather.get("rain_probability")
+    vis_val = weather.get("visibility")
+    uv_val = weather.get("uv_index")
+    clouds_val = weather.get("cloud_cover")
+    condition = weather.get("condition") or weather.get("condition_text") or "Partly Cloudy"
+    sunrise = weather.get("sunrise")
+    sunset = weather.get("sunset")
+    obs_time = weather.get("observation_time")
+    tz = weather.get("local_timezone", "Asia/Kolkata")
+    w_source = weather.get("source", "Open-Meteo NWP")
+
+    weather_lines = []
+    if temp_val is not None:
+        weather_lines.append(f"- Ambient Temperature: {temp_val}°C" + (f" (Feels like: {feels_val}°C)" if feels_val is not None else ""))
+    else:
+        weather_lines.append("- Ambient Temperature: Unavailable")
+
+    if humid_val is not None:
+        weather_lines.append(f"- Relative Humidity: {humid_val}%" + (f" (Dew point: {dew_val}°C)" if dew_val is not None else ""))
+    if press_val is not None:
+        weather_lines.append(f"- Surface Atmospheric Pressure: {press_val} hPa")
+    if wind_spd is not None:
+        deg_str = f" ({wind_deg}°)" if wind_deg is not None else ""
+        weather_lines.append(f"- Surface Wind: {wind_spd} km/h {wind_dir}{deg_str}")
+    if precip_val is not None or rain_prob is not None:
+        weather_lines.append(f"- Precipitation: {precip_val or 0.0} mm (Rain probability: {rain_prob or 0.0}%)")
+    if vis_val is not None:
+        weather_lines.append(f"- Horizontal Visibility: {vis_val} km")
+    if uv_val is not None:
+        weather_lines.append(f"- UV Index: {uv_val}")
+    if clouds_val is not None:
+        weather_lines.append(f"- Cloud Cover: {clouds_val}% (Sky: {condition})")
+    if sunrise and sunset:
+        weather_lines.append(f"- Solar Schedule: Sunrise {sunrise}, Sunset {sunset}")
+    if obs_time:
+        weather_lines.append(f"- Weather Observation Time: {obs_time} (Timezone: {tz})")
+    weather_lines.append(f"- Meteorological Telemetry Source: {w_source}")
+    weather_str = "\n".join(weather_lines)
+
+    # Multi-day and hourly forecast
+    daily_forecast = fc_data.get("daily") or fc_data.get("daily_forecast") or []
     forecast_lines = []
     if daily_forecast:
         for item in daily_forecast[:14]:
-            d_ahead = item.get("days_ahead", 0)
+            d_ahead = item.get("day_offset", item.get("days_ahead", 0))
             d_label = item.get("day", f"+{d_ahead}d")
             w_label = item.get("weekday", "")
             d_temp = item.get("temp", "N/A")
@@ -101,120 +155,121 @@ def build_gemini_prompt(
                 f"  * Day +{d_ahead} ({d_label} / {w_label}): Forecast Temp {d_temp}°C, AQI {d_aqi} ({d_stat}), Sky: {d_cond}"
             )
     else:
-        forecast_lines.append("  * Multi-day daily forecast: Day 0 (Today) 24°C, Day 1 (Tomorrow) 25°C, Day 2 (+2d) 26°C")
+        forecast_lines.append("  * Multi-day daily forecast models are currently unavailable for this location.")
     forecast_table_str = "\n".join(forecast_lines)
 
+    # Pollutant speciation details
+    pollutant_lines = []
+    if air_data.get("pollutants"):
+        for p in air_data["pollutants"]:
+            p_name = p.get("pollutant")
+            p_val = p.get("value")
+            p_unit = p.get("unit", "µg/m³")
+            p_sub = p.get("sub_index")
+            sub_info = f" [Sub-Index: {p_sub}]" if p_sub is not None else ""
+            pollutant_lines.append(f"  * {p_name}: {p_val} {p_unit}{sub_info}")
+    else:
+        if pm25 != "Unavailable":
+            pollutant_lines.append(f"  * PM2.5: {pm25} µg/m³")
+        if pm10 != "Unavailable":
+            pollutant_lines.append(f"  * PM10: {pm10} µg/m³")
+    pollutants_block = ("\nCHEMICAL SPECIATION & POLLUTANTS:\n" + "\n".join(pollutant_lines) + "\n") if pollutant_lines else ""
+
+    # Contributing stations
+    stations_block = ""
+    if air_data.get("contributing_stations"):
+        stn_strs = [f"{s.get('name')} ({s.get('distance_km', '—')} km, {s.get('source', 'CPCB')})" for s in air_data["contributing_stations"][:4]]
+        stations_block = f"- Contributing Ground Monitors ({len(air_data['contributing_stations'])} active): " + ", ".join(stn_strs) + "\n"
+    elif station_count > 0:
+        stations_block = f"- Contributing Ground Monitors: {station_count} active stations\n"
+
+    # User saved places
+    user_lines = []
+    if user_context:
+        if user_context.get("home"):
+            user_lines.append(f"- Saved Home Location: {user_context.get('home')}")
+        if user_context.get("work"):
+            user_lines.append(f"- Saved Work / Office: {user_context.get('work')}")
+        if user_context.get("school"):
+            user_lines.append(f"- Saved School / Kids: {user_context.get('school')}")
+        if user_context.get("sensitivity"):
+            user_lines.append(f"- Reported Sensitivities: {user_context.get('sensitivity')}")
+    user_block = ("\nUSER PERSONAL SAVED PLACES & PROFILE CONTEXT:\n" + "\n".join(user_lines) + "\n") if user_lines else ""
+
+    # Approved user remarks
+    mem_lines = []
+    if approved_memories:
+        from app.services.memories import scrub_secrets
+        for it in (approved_memories or [])[:10]:
+            c = getattr(it, "content", None) or (it.get("content") if isinstance(it, dict) else None) or (getattr(it, "fact", None) or (it.get("fact") if isinstance(it, dict) else None)) or ""
+            k = getattr(it, "key", None) or (it.get("key") if isinstance(it, dict) else None) or ""
+            cat = getattr(it, "category", None) or (it.get("category") if isinstance(it, dict) else None) or "fact"
+            if c:
+                clean_c = sanitize_input(scrub_secrets(str(c)))
+                mem_lines.append(f"- [{str(cat).upper()}] {k}: {clean_c}")
+    memories_block = ("\nUSER APPROVED REMARKS & HEALTH THRESHOLDS:\n" + "\n".join(mem_lines) + "\n") if mem_lines else ""
+
+    # Commute route exposure
+    route_block = ""
+    if route_data:
+        r_lines = [
+            f"- Distance: {route_data.get('distance_km', '—')} km, Duration: {route_data.get('duration_minutes', '—')} min",
+            f"- Route: {route_data.get('origin_label', 'Origin')} → {route_data.get('destination_label', 'Destination')}",
+        ]
+        if route_data.get("pollution_summary"):
+            ps = route_data.get("pollution_summary")
+            r_lines.append(f"- Route Average AQI: {ps.get('average_aqi', '—')} ({ps.get('air_band', '—')}), Peak AQI: {ps.get('peak_aqi', '—')}")
+        if route_data.get("advisory"):
+            r_lines.append(f"- Route Advisory: {route_data.get('advisory')}")
+        route_block = "\nCOMMUTE ROUTE EXPOSURE:\n" + "\n".join(r_lines) + "\n"
+
+    env_lines = []
+    if environmental_context:
+        for k, v in environmental_context.items():
+            if v and k != "weather":
+                env_lines.append(f"- {k.replace('_', ' ').title()}: {v}")
+    env_block = ("\nADDITIONAL APPLICATION METRICS:\n" + "\n".join(env_lines) + "\n") if env_lines else ""
+
+    loc_label = location_name or "Selected Location"
     clean_question = sanitize_input(question)
 
-    return f"""You are Arise — Delhi-NCR's Environmental Intelligence Copilot.
-You help citizens, families, parents, runners, schools, developers, and workers understand real-time air quality, weather, and safety protocols.
+    return f"""You are Arise — an evidence-grounded weather, air-quality, and environmental intelligence assistant.
+You turn Arise's weather observations, sensor readings, forecasts, satellite detections, dispersion models, commute routes, and scientific data into clear, concise answers tailored to the user's question for {loc_label}.
 
-CORE OPERATIONAL RULES:
-1. Ground every statement exclusively in the verified environmental telemetry, multi-day forecast, and authoritative verdict provided below.
-2. NEVER invent, extrapolate, or hallucinate pollutant concentrations, temperatures, dates, or measurements.
-3. PREDICTION & FUTURE INQUIRIES: When the user asks for forecast or future conditions (e.g. 'after 2 days', 'tomorrow', 'next week', 'day after tomorrow', 'in 3 days'):
-   - You MUST NOT return today's current ambient temperature!
-   - You MUST consult the MULTI-DAY FORECAST DATASET and state the PREDICTED temperature, AQI, and sky condition for that requested future day.
-4. NEVER override the authoritative verdict ({verdict}). The verdict ({verdict}) is final and non-negotiable.
-5. Satellite fire signals (NASA FIRMS) indicate active thermal detections upwind. NEVER claim fire signals prove direct pollution causation without verified dispersion evidence.
-6. Provide clear, empathetic, plain-English guidance tailored to the user's health persona ({persona}). Avoid medical advice.
-7. When the user asks technical, programming, or coding questions regarding environmental telemetry (such as writing Python scripts to query Arise APIs or analyze air data), provide clean, constructive, working code and technical explanation within the response fields (headline, why, do).
-8. SCOPE GUARDRAILS: If the user asks general questions completely unrelated to air quality, weather, health precautions, or environmental telemetry:
-   - Kindly and warmly decline in an educational, user-coaching manner without being blunt.
-   - Set headline to: "I specialize exclusively in **air quality**, **weather dynamics**, and **outdoor health safety** across **Delhi-NCR**."
-   - In 'why': Explain that as **Arise**, your intelligence is balanced solely around **atmospheric dynamics** and **environmental health**.
-   - In 'do': Train the user with 3 friendly examples they can ask about current AQI, outdoor safety windows, and protective gear.
-   - Highlight important keywords using markdown **bolding**.
-9. Return answers conforming strictly to the AskAriseVerdictResponse JSON structure.
+CORE OPERATIONAL & RESPONSE RULES:
+1. Answer the user's exact question first in the headline.
+2. In 'why', use concise bullet points explaining key evidence, what it means, trends, and comparisons grounded in the available data.
+3. In 'do', include clear practical steps or precautions that follow strictly from the evidence (not medical advice).
+4. Include the most relevant values, units (°C, km/h, µg/m³, mm, hPa), and observation or forecast times.
+5. Explain technical terms (like inversion, PM2.5, or boundary layer) in simple English.
+6. State clearly when important information is unavailable, stale, estimated, or uncertain.
+7. Avoid repeating the entire weather report when the user asks one specific question (e.g. if asked about rain, focus on rain/cloud telemetry; if asked about temp, focus on temperature).
+8. PREDICTION & FUTURE INQUIRIES: When asked about future conditions ('tomorrow', 'after 2 days', 'next week'), cite the predicted temperature, AQI, and sky from the MULTI-DAY FORECAST DATASET, never today's ambient readings!
+9. PRACTICAL WAKING HOURS: All outdoor windows must fall strictly between 6:00 AM and 9:00 PM. NEVER recommend overnight hours (10:00 PM to 5:59 AM) for outdoor workouts or errands.
+10. USER REMARKS & THRESHOLDS: When approved remarks or sensitivities exist, evaluate current/forecast conditions against the user's stated threshold and advise accordingly.
 
-VERIFIED ENVIRONMENTAL DATA:
-- Location Region: Delhi-NCR
+DATA GROUNDING & SAFETY BOUNDARIES:
+- Ground every claim strictly in the VERIFIED TELEMETRY DATASET below. Never invent measurements, timestamps, station names, or sources.
+- The authoritative verdict is {verdict}. You must NEVER contradict or override this verdict.
+- Distinguish physically observed data from forecasts, models, and satellite thermal detections.
+- Never substitute Delhi or another city for the selected location ({loc_label}).
+- Return output strictly conforming to the AskAriseVerdictResponse JSON schema.
+
+VERIFIED TELEMETRY DATASET:
+- Active Monitored Location: {loc_label}
 - Authoritative Verdict: {verdict}
-- Authoritative AQI: {aqi}
+- Authoritative CPCB NAQI: {aqi}
 - Air Quality Category: {category}
 - Dominant Pollutant: {dominant}
-- Ambient Temperature (Current): {temp}°C (Feels like: {feels}°C)
-- Relative Humidity: {humidity}%
-- Surface Wind: {wind_speed} km/h {wind_dir}
-- Sky Conditions: {condition}
-- Ground Monitoring Stations: {station_count} active CPCB / OpenAQ stations
-- PM2.5 Concentration: {pm25} µg/m³
-- PM10 Concentration: {pm10} µg/m³
 - Best Outdoor Window: {best_window}
 - Recommended Recheck Time: {recheck_at}
-- Upwind Fire Signals: {fire_count} ({fire_source} thermal detections)
+- Upwind Fire Signals: {fire_count} ({fire_source} thermal detections; non-causal infrared signal)
 - Target User Persona: {persona}
-
-MULTI-DAY FORECAST DATASET (Authoritative for Future / Prediction Queries):
-{forecast_table_str}
-
+{stations_block}{weather_str}
+{pollutants_block}{forecast_table_str}{route_block}{user_block}{memories_block}{env_block}
 USER QUESTION:
 {clean_question}
 """
-
-
-async def invoke_gemini_critic(
-    client: genai.Client,
-    model_id: str,
-    question: str,
-    draft: AskAriseVerdictResponse,
-    prompt_context: str,
-    timeout_sec: float = 4.0,
-) -> AskAriseVerdictResponse:
-    """
-    Critic & Quality Evaluator Agent (2nd API Call).
-    Inspects the draft answer against ground-truth telemetry and user question to eliminate
-    hallucinations, ensure temporal precision (forecast vs current temp), and guarantee guardrails.
-    """
-    critic_prompt = f"""You are the Arise Environmental Critic & Quality Evaluator Agent.
-Your duty is to rigorously review the draft response produced by the first agent against the Ground-Truth Telemetry and the User's Question.
-
-CRITICAL EVALUATION CHECKLIST:
-1. Temporal Alignment: If the user asked about future conditions (e.g., 'after 2 days', 'tomorrow', 'in 3 days'), verify that the draft cited the predicted temperature and AQI from the MULTI-DAY FORECAST DATASET, NOT today's current ambient temperature! If it mistakenly cited today's temperature, CORRECT it immediately using the exact day's forecast.
-2. Zero Hallucination: Verify all numerical values (temperature, AQI, humidity) are grounded in the verified data.
-3. Authoritative Verdict & Guardrails: Ensure verdict is preserved and out-of-scope queries are properly addressed.
-4. Output the final, verified response strictly adhering to the AskAriseVerdictResponse JSON schema.
-
-CONTEXT DATA:
-{prompt_context}
-
-USER QUESTION:
-{question}
-
-DRAFT RESPONSE FROM FIRST PASS:
-Headline: {draft.headline}
-Verdict: {draft.verdict}
-AQI: {draft.aqi}
-Category: {draft.category}
-Why: {draft.why}
-Do: {draft.do}
-
-Return your evaluated, verified AskAriseVerdictResponse JSON now:
-"""
-    try:
-        config = types.GenerateContentConfig(
-            temperature=0.1,
-            max_output_tokens=600,
-            response_mime_type="application/json",
-            response_schema=AskAriseVerdictResponse,
-        )
-        critic_res = await asyncio.wait_for(
-            client.aio.models.generate_content(
-                model=model_id,
-                contents=critic_prompt,
-                config=config,
-            ),
-            timeout=timeout_sec,
-        )
-        critic_text = getattr(critic_res, "text", None)
-        if critic_text and critic_text.strip():
-            evaluated = AskAriseVerdictResponse.model_validate_json(critic_text)
-            logger.info("Critic Evaluator successfully validated and verified response.")
-            return evaluated
-    except Exception as ce:
-        logger.warning(f"Critic evaluator skipped/timed out ({ce}). Using draft response.")
-
-    return draft
 
 
 async def invoke_gemini(
@@ -227,23 +282,15 @@ async def invoke_gemini(
     api_key: Optional[str] = None,
     model_id: str = "gemini-3.5-flash-lite",
     timeout_sec: float = 6.0,
+    location_name: Optional[str] = None,
+    user_context: Optional[dict[str, Any]] = None,
+    environmental_context: Optional[dict[str, Any]] = None,
+    approved_memories: Optional[list[Any]] = None,
+    route_data: Optional[dict[str, Any]] = None,
 ) -> AskAriseVerdictResponse:
     """
-    Invoke Google Gemini with structured output and a 2-stage Critic Evaluator agent.
-
-    Args:
-        question: User query.
-        verdict_data: Authoritative environmental verdict dict.
-        air_data: Ground station telemetry dict.
-        fc_data: Forecast telemetry dict.
-        fire_data: Satellite fire signal dict.
-        persona: Active health persona.
-        api_key: Google Gemini API key.
-        model_id: Supported model identifier (e.g. 'gemini-3.5-flash-lite').
-        timeout_sec: Strict invocation timeout in seconds.
-
-    Returns:
-        Structured AskAriseVerdictResponse.
+    Invoke Google Gemini with structured output in a single, token-efficient pass.
+    Enforces deterministic verdict preservation and honest telemetry labeling.
     """
     if not api_key:
         raise GeminiProviderError("GEMINI_API_KEY is not configured or could not be retrieved.")
@@ -255,28 +302,29 @@ async def invoke_gemini(
         fc_data=fc_data,
         fire_data=fire_data,
         persona=persona,
+        location_name=location_name,
+        user_context=user_context,
+        environmental_context=environmental_context,
+        approved_memories=approved_memories,
+        route_data=route_data,
     )
 
     try:
         client = genai.Client(api_key=api_key)
         config = types.GenerateContentConfig(
             temperature=0.2,
-            max_output_tokens=600,
+            max_output_tokens=700,
             response_mime_type="application/json",
             response_schema=AskAriseVerdictResponse,
         )
 
-        draft_timeout = max(0.01, timeout_sec * 0.6)
-        critic_timeout = max(0.01, timeout_sec * 0.4)
-
-        # 1. Primary Draft Generation
         response = await asyncio.wait_for(
             client.aio.models.generate_content(
                 model=model_id,
                 contents=prompt,
                 config=config,
             ),
-            timeout=draft_timeout,
+            timeout=timeout_sec,
         )
 
         text = getattr(response, "text", None)
@@ -284,16 +332,6 @@ async def invoke_gemini(
             raise GeminiProviderError("Gemini returned empty text response.")
 
         parsed = AskAriseVerdictResponse.model_validate_json(text)
-
-        # 2. Critic Evaluator Pass (2nd AI Agent Call)
-        parsed = await invoke_gemini_critic(
-            client=client,
-            model_id=model_id,
-            question=question,
-            draft=parsed,
-            prompt_context=prompt,
-            timeout_sec=critic_timeout,
-        )
 
         # Enforce verdict integrity: AI must never override deterministic verdict
         authoritative_verdict = verdict_data.get("verdict")
@@ -313,12 +351,12 @@ async def invoke_gemini(
             parsed.sources = [
                 "CPCB / OpenAQ Ground Stations",
                 "Open-Meteo Atmospheric Dynamics",
-                f"Google Gemini ({model_id}) with Critic Evaluation",
+                f"Google Gemini ({model_id})",
             ]
 
         # Honest labeling
         parsed.provider = "gemini"
-        parsed.assistant_label = f"Arise AI (Google Gemini · {model_id} + Critic Evaluator)"
+        parsed.assistant_label = f"Arise AI (Google Gemini · {model_id})"
         parsed.is_rule_based = False
         parsed.timestamp = datetime.now(timezone.utc).strftime("%I:%M %p")
 

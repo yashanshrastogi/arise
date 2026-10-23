@@ -40,7 +40,7 @@ class TestEnvironmentService(unittest.TestCase):
 
         self.loop.run_until_complete(run_test())
 
-    def test_compare_places_ranking(self):
+    def test_compare_places_ranking_both_available(self):
         async def run_test():
             service = ComparePlacesService()
             places = [
@@ -51,8 +51,51 @@ class TestEnvironmentService(unittest.TestCase):
             self.assertEqual(len(comp.results), 2)
             self.assertEqual(comp.results[0].relative_ranking, 1)
             self.assertEqual(comp.results[1].relative_ranking, 2)
-            # Cleanest place must have lower or equal AQI
+            self.assertIsNotNone(comp.results[0].aqi)
+            self.assertIsNotNone(comp.results[1].aqi)
             self.assertLessEqual(comp.results[0].aqi, comp.results[1].aqi)
+            self.assertIn(comp.cleanest_place, ["ITO Office", "Dwarka Home"])
+
+        self.loop.run_until_complete(run_test())
+
+    def test_compare_places_one_unavailable(self):
+        async def run_test():
+            service = ComparePlacesService()
+            places = [
+                PlaceTarget(label="ITO Office", latitude=28.6289, longitude=77.2412),
+                PlaceTarget(label="London Remote", latitude=51.5074, longitude=-0.1278),
+            ]
+            comp = await service.compare_locations(places, force_demo=True)
+            self.assertEqual(len(comp.results), 2)
+            valid_res = comp.results[0]
+            unav_res = comp.results[1]
+            self.assertEqual(valid_res.label, "ITO Office")
+            self.assertEqual(valid_res.relative_ranking, 1)
+            self.assertIsNotNone(valid_res.aqi)
+
+            self.assertEqual(unav_res.label, "London Remote")
+            self.assertIsNone(unav_res.aqi, "Unavailable location must have aqi=None")
+            self.assertIsNone(unav_res.relative_ranking, "Unavailable location must not be assigned a numeric ranking")
+            self.assertEqual(comp.cleanest_place, "ITO Office")
+            self.assertIn("London Remote", comp.recommendation)
+
+        self.loop.run_until_complete(run_test())
+
+    def test_compare_places_both_unavailable(self):
+        async def run_test():
+            service = ComparePlacesService()
+            places = [
+                PlaceTarget(label="London Remote", latitude=51.5074, longitude=-0.1278),
+                PlaceTarget(label="NYC Remote", latitude=40.7128, longitude=-74.0060),
+            ]
+            comp = await service.compare_locations(places, force_demo=True)
+            self.assertEqual(len(comp.results), 2)
+            for r in comp.results:
+                self.assertIsNone(r.aqi, "AQI must be None when monitoring is unavailable")
+                self.assertIsNone(r.relative_ranking, "Ranking must be None when AQI is unavailable")
+            self.assertEqual(comp.cleanest_place, "None")
+            self.assertEqual(comp.worst_place, "None")
+            self.assertIn("unavailable", comp.recommendation.lower())
 
         self.loop.run_until_complete(run_test())
 

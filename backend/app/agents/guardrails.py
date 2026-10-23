@@ -16,21 +16,30 @@ ENVIRONMENTAL_REGEX = re.compile(
     r"pollut\w*|smog|smoke|haze|dust|particulate\w*|ozone|o3|no2|so2|co2|carbon monoxide|"
     r"emission\w*|exhaust|stubble|parali|inversion|stagnat\w*|boundary layer|"
     # Weather & atmospheric dynamics
-    r"weather|temp|temperature\w*|forecast\w*|wind\w*|breeze|rain\w*|cloud\w*|sun\w*|uv|"
-    r"humid\w*|climate|celsius|fahrenheit|degree\w*|hot|cold|warm\w*|chilly|winter|monsoon|fog|visibility|"
-    # Outdoor activities & exposure safety
+    r"weather|temp|temperature\w*|forecast\w*|wind\w*|breeze|gust\w*|rain\w*|precipitation|drizzle|shower\w*|storm\w*|thunder\w*|"
+    r"cloud\w*|overcast|clear sky|sun\w*|sunrise|sunset|uv|uv index|dew point|barometer|pressure|surface pressure|"
+    r"humid\w*|climate|celsius|fahrenheit|degree\w*|hot|heat\w*|cold\w*|warm\w*|chilly|winter|summer|monsoon|fog|visibility|"
+    # Outdoor activities, travel & exposure safety
     r"go out|going out|outside|outdoor\w*|stay in|staying in|walk\w*|run\w*|jog\w*|marathon|"
-    r"exercise\w*|workout\w*|gym|cycle\w*|cycling|bike|biking|commute\w*|transit|play\w*|playground|park|"
+    r"exercise\w*|workout\w*|gym|cycle\w*|cycling|bike|biking|commute\w*|transit|route\w*|drive|driving|traffic|"
+    r"travel\w*|trip|flight|picnic|bbq|gardening|wash car|car wash|drying clothes|park|playground|play\w*|"
     r"safe|safety|hazard\w*|risk\w*|"
+    # Comparisons & scientific explanations
+    r"compare\w*|comparison|difference|cleaner|warmer|colder|better or worse|trend\w*|"
+    r"how is aqi|what does|why is|explain\w*|meaning|formula|breakpoint\w*|speciation|"
     # Sensitive demographics & health symptoms
-    r"kid\w*|child\w*|baby|babies|toddler\w*|school\w*|student\w*|sports|elderly|senior\w*|"
+    r"health\w*|kid\w*|child\w*|baby|babies|toddler\w*|school\w*|student\w*|sports|elderly|senior\w*|"
     r"parent\w*|grandparent\w*|asthma|respiratory|breath\w*|lung\w*|cough\w*|throat|allergy|allergies|inhaler|"
+    # Personal memories, health facts, and profile context
+    r"memory|memories|health fact\w*|remember|health condition\w*|sensitivities|sensitivity|"
+    r"preference\w*|saved fact\w*|my profile|saved location|"
     # Protective actions & protocols
     r"mask\w*|n95|kn95|ffp2|purifier\w*|hepa|filter\w*|filtration|window\w*|balcony|indoor\w*|recirculat\w*|"
     # Satellite fire anomalies & agricultural burning
     r"fire\w*|burn\w*|flame\w*|hotspot\w*|thermal|firms|viirs|modis|"
-    # Geographic airshed
+    # Geographic airsheds & major regions
     r"delhi|ncr|noida|gurugram|gurgaon|ghaziabad|faridabad|mandir marg|anand vihar|punjab|haryana|"
+    r"mumbai|bengaluru|bangalore|kolkata|chennai|hyderabad|pune|ahmedabad|jaipur|lucknow|chandigarh|bhopal|patna|surat|nagpur|kochi|indore|coimbatore|"
     # Platform & environmental telemetry
     r"arise|telemetry|sensor\w*|station\w*"
     r")\b",

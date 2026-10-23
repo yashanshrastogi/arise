@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import ProfileSettingsModal from './ProfileSettingsModal';
+import { resolveDisplayName, getInitials } from '../utils/userUtils';
 
-export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOpenProfile }) {
+export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOpenProfile, userProfile = null }) {
   const {
     user,
     isAuthenticated,
@@ -11,7 +11,6 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOp
   } = useAuth();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -79,6 +78,9 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOp
     );
   }
 
+  const displayName = resolveDisplayName({ user, userProfile });
+  const initials = getInitials(displayName);
+
   // Authenticated View: Show User Pill + Dropdown
   return (
     <div className="relative" ref={menuRef}>
@@ -95,10 +97,10 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOp
         }}
       >
         <div className="w-7 h-7 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
-          {user.initials || 'U'}
+          {initials}
         </div>
-        <span className="hidden sm:inline text-xs font-bold t1 max-w-[120px] truncate">
-          {user.name}
+        <span className="hidden sm:inline text-xs font-bold t1 max-w-[180px] truncate">
+          {displayName}
         </span>
         <span className="text-xs tm" aria-hidden="true">▾</span>
       </button>
@@ -117,10 +119,10 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOp
             style={{ borderColor: 'var(--border)' }}
           >
             <div className="w-10 h-10 shrink-0 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">
-              {user.initials || 'U'}
+              {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold t1 truncate">{user.name}</p>
+              <p className="text-sm font-bold t1 truncate">{displayName}</p>
               <p className="text-xs tm truncate">{user.email || 'Verified User'}</p>
             </div>
           </div>
@@ -134,13 +136,10 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOp
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold t1">Account Security</span>
-              <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                AWS Cognito
-              </span>
             </div>
             <p className="text-xs tm mt-1.5 flex items-center gap-1">
               <span>Powered by</span>
-              <span className="font-bold t1">Google</span>
+              <span className="font-bold t1">Google Auth</span>
               <span>&amp;</span>
               <span className="font-bold t1">AWS Cognito</span>
             </p>
@@ -153,8 +152,6 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOp
               setMenuOpen(false);
               if (onOpenProfile) {
                 onOpenProfile();
-              } else {
-                setProfileOpen(true);
               }
             }}
             className="w-full mb-2 rounded-xl border px-3 py-2.5 text-xs font-bold hover:bg-[var(--surface-alt)] transition-colors text-left flex items-center justify-between"
@@ -180,15 +177,6 @@ export default function UserProfileMenu({ onNavigateAuth, onProfileUpdated, onOp
             <span>↪</span>
           </button>
         </div>
-      )}
-
-      {profileOpen && (
-        <ProfileSettingsModal
-          onClose={() => setProfileOpen(false)}
-          onProfileSaved={(updated) => {
-            if (onProfileUpdated) onProfileUpdated(updated);
-          }}
-        />
       )}
     </div>
   );

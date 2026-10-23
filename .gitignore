@@ -9,6 +9,7 @@ node_modules/
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Build outputs and deployment bundles
 .aws-sam/
@@ -30,10 +31,10 @@ design/
 .claude/
 .cursor/
 .agent/
-AGENTS.md
+.agents/
+.codex/
 CLAUDE.md
 GEMINI.md
-TOOLS.md
 PHASE*.md
 gitleaks-report.json
 

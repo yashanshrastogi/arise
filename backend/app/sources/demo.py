@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from app.domain.models import StationObservation, AirMeasurement
 from app.sources.base import BaseAirQualityProvider
+from app.services.location_estimator import haversine_distance_km
 
 
 class DemoAirProvider(BaseAirQualityProvider):
@@ -97,6 +98,104 @@ class DemoAirProvider(BaseAirQualityProvider):
             "so2": 11.0,
             "co": 1.1,
             "o3": 34.0
+        },
+        {
+            "id": "st-sanjaynagar",
+            "name": "Sanjay Nagar, Ghaziabad",
+            "lat": 28.6853,
+            "lon": 77.4538,
+            "aqi": 358,
+            "dominant": "PM2.5",
+            "pm25": 172.0,
+            "pm10": 255.0,
+            "no2": 54.0,
+            "so2": 16.5,
+            "co": 1.6,
+            "o3": 26.0
+        },
+        {
+            "id": "st-vasundhara",
+            "name": "Vasundhara, Ghaziabad",
+            "lat": 28.6603,
+            "lon": 77.3573,
+            "aqi": 348,
+            "dominant": "PM2.5",
+            "pm25": 165.5,
+            "pm10": 242.0,
+            "no2": 50.2,
+            "so2": 14.8,
+            "co": 1.4,
+            "o3": 28.0
+        },
+        {
+            "id": "st-indirapuram",
+            "name": "Indirapuram, Ghaziabad",
+            "lat": 28.6416,
+            "lon": 77.3712,
+            "aqi": 342,
+            "dominant": "PM2.5",
+            "pm25": 161.0,
+            "pm10": 236.0,
+            "no2": 49.0,
+            "so2": 14.2,
+            "co": 1.3,
+            "o3": 29.5
+        },
+        {
+            "id": "st-loni",
+            "name": "Loni, Ghaziabad",
+            "lat": 28.7511,
+            "lon": 77.2882,
+            "aqi": 365,
+            "dominant": "PM2.5",
+            "pm25": 178.0,
+            "pm10": 268.0,
+            "no2": 56.5,
+            "so2": 17.2,
+            "co": 1.7,
+            "o3": 24.0
+        },
+        {
+            "id": "st-noida62",
+            "name": "Sector 62, Noida",
+            "lat": 28.6276,
+            "lon": 77.3653,
+            "aqi": 335,
+            "dominant": "PM2.5",
+            "pm25": 158.0,
+            "pm10": 230.0,
+            "no2": 47.8,
+            "so2": 13.5,
+            "co": 1.3,
+            "o3": 31.0
+        },
+        {
+            "id": "st-gurugram",
+            "name": "Vikas Sadan, Gurugram",
+            "lat": 28.4595,
+            "lon": 77.0266,
+            "aqi": 310,
+            "dominant": "PM2.5",
+            "pm25": 145.0,
+            "pm10": 215.0,
+            "no2": 44.5,
+            "so2": 12.0,
+            "co": 1.2,
+            "o3": 33.0
+        },
+        {
+            "id": "st-faridabad",
+            "name": "Sector 16A, Faridabad",
+            "lat": 28.4089,
+            "lon": 77.3178,
+            "aqi": 328,
+            "dominant": "PM2.5",
+            "pm25": 154.0,
+            "pm10": 228.0,
+            "no2": 46.2,
+            "so2": 13.0,
+            "co": 1.3,
+            "o3": 32.5
         }
     ]
 
@@ -111,6 +210,9 @@ class DemoAirProvider(BaseAirQualityProvider):
         stations: List[StationObservation] = []
 
         for item in self.STATIONS_RAW:
+            dist = haversine_distance_km(lat, lon, item["lat"], item["lon"])
+            if dist > radius_km:
+                continue
             pollutants: Dict[str, AirMeasurement] = {
                 "PM2.5": AirMeasurement(
                     pollutant="PM2.5",
@@ -196,7 +298,8 @@ class DemoAirProvider(BaseAirQualityProvider):
                 dominant_pollutant=item["dominant"],
                 timestamp=now_iso,
                 source="DEMO",
-                is_stale=False
+                is_stale=False,
+                distance_km=dist
             )
             stations.append(st)
 

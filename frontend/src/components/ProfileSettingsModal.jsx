@@ -6,28 +6,22 @@ import {
   updateUserProfile,
 } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import AddressInput from './AddressInput';
+import { reverseGeocodeDetailed, forwardGeocode, KNOWN_COORDS } from '../utils/geoUtils';
 
-const KNOWN_COORDS = {
-  'saket': { lat: 28.524, lon: 77.206 },
-  'vasant kunj': { lat: 28.529, lon: 77.154 },
-  'connaught': { lat: 28.631, lon: 77.219 },
-  'cp': { lat: 28.631, lon: 77.219 },
-  'anand vihar': { lat: 28.647, lon: 77.316 },
-  'ito': { lat: 28.629, lon: 77.241 },
-  'rohini': { lat: 28.749, lon: 77.067 },
-  'noida': { lat: 28.572, lon: 77.355 },
-  'gurugram': { lat: 28.459, lon: 77.026 },
-  'gurgaon': { lat: 28.459, lon: 77.026 },
-  'greater kailash': { lat: 28.548, lon: 77.234 },
-  'gk': { lat: 28.548, lon: 77.234 },
-  'dwarka': { lat: 28.592, lon: 77.046 },
-  'nehru place': { lat: 28.549, lon: 77.253 },
-  'lajpat nagar': { lat: 28.570, lon: 77.243 },
+
+const PREFIX_TO_PERSONA = {
+  home: 'General Public',
+  work: 'Work & Outdoor Labor',
+  school: 'Children & Schools',
+  parent: 'Elderly & Respiratory',
+  admin_school: 'School Administration',
 };
 
 const initialForm = {
   display_name: '',
   persona: 'General Public',
+  pinned_personas: [],
   configured_personas: ['General Public'],
   alerts_enabled: false,
   home_label: 'Home',
@@ -68,10 +62,6 @@ function formToLocation(form, prefix, fallbackLabel) {
 
   if (!address && !latText && !lonText) return null;
 
-  if ((latText && !lonText) || (!latText && lonText)) {
-    throw new Error(`Enter both latitude and longitude for ${fallbackLabel.toLowerCase()}.`);
-  }
-
   const location = {
     label: (form[`${prefix}_label`] || '').trim() || fallbackLabel,
     address: address || null,
@@ -82,27 +72,25 @@ function formToLocation(form, prefix, fallbackLabel) {
     const longitude = Number(lonText);
 
     if (
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude) ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
+      Number.isFinite(latitude) &&
+      Number.isFinite(longitude) &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180
     ) {
-      throw new Error(`Invalid coordinates for ${fallbackLabel.toLowerCase()}.`);
+      location.latitude = latitude;
+      location.longitude = longitude;
     }
+  }
 
-    location.latitude = latitude;
-    location.longitude = longitude;
-  } else if (address) {
+  // Fallback to known coords if matched; never substitute Delhi for unknown locations
+  if (location.latitude == null && address) {
     const lower = address.toLowerCase();
     const matched = Object.entries(KNOWN_COORDS).find(([k]) => lower.includes(k));
     if (matched) {
       location.latitude = matched[1].lat;
       location.longitude = matched[1].lon;
-    } else {
-      location.latitude = 28.6139;
-      location.longitude = 77.2090;
     }
   }
 
@@ -149,7 +137,10 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
           setForm({
             ...initialForm,
             display_name: localCached.display_name || user?.name || '',
-            persona: localCached.persona || 'General Public',
+            persona: (localCached.pinned_personas && localCached.pinned_personas.length > 0)
+              ? localCached.pinned_personas[0]
+              : (localCached.persona || 'General Public'),
+            pinned_personas: localCached.pinned_personas || [],
             configured_personas: localCached.configured_personas || initialForm.configured_personas,
             alerts_enabled: Boolean(localCached.alerts_enabled),
             ...locationToForm(localCached.home_location, 'home', 'Home'),
@@ -187,7 +178,10 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
         setForm({
           ...initialForm,
           display_name: profile.display_name || user?.name || '',
-          persona: profile.persona || 'General Public',
+          persona: (profile.pinned_personas && profile.pinned_personas.length > 0)
+            ? profile.pinned_personas[0]
+            : (profile.persona || 'General Public'),
+          pinned_personas: profile.pinned_personas || [],
           configured_personas: profile.configured_personas || initialForm.configured_personas,
           alerts_enabled: Boolean(profile.alerts_enabled),
           ...locationToForm(profile.home_location, 'home', 'Home'),
@@ -235,23 +229,51 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
     setSaving(true);
 
     try {
-      const activePersonas = form.configured_personas || ['General Public'];
-      const homeLoc = formToLocation(form, 'home', 'Home');
+      // Auto-geocode any filled location that is missing coordinates in the background
+      const prefixes = ['home', 'work', 'school', 'parent', 'admin_school'];
+      const updatedForm = { ...form };
+      for (const pfx of prefixes) {
+        const addr = (updatedForm[`${pfx}_address`] || '').trim();
+        const hasLat = Boolean(updatedForm[`${pfx}_lat`]);
+        const hasLon = Boolean(updatedForm[`${pfx}_lon`]);
+        if (addr && (!hasLat || !hasLon)) {
+          try {
+            const geo = await forwardGeocode(addr);
+            if (geo && geo.lat != null && geo.lon != null) {
+              updatedForm[`${pfx}_lat`] = String(geo.lat);
+              updatedForm[`${pfx}_lon`] = String(geo.lon);
+              if (geo.formattedAddress) {
+                updatedForm[`${pfx}_address`] = geo.formattedAddress;
+              }
+            }
+          } catch (geoErr) {
+            console.warn(`Geocoding skipped for ${pfx}:`, geoErr);
+          }
+        }
+      }
+
+      const activePersonas = updatedForm.configured_personas || ['General Public'];
+      const homeLoc = formToLocation(updatedForm, 'home', 'Home');
       const workLoc = activePersonas.includes('Work & Outdoor Labor')
-        ? formToLocation(form, 'work', 'Work')
-        : (formToLocation(form, 'work', 'Work') || null);
+        ? formToLocation(updatedForm, 'work', 'Work')
+        : (formToLocation(updatedForm, 'work', 'Work') || null);
       const schoolLoc = (activePersonas.includes('Children & Schools') || activePersonas.includes('School Administration'))
-        ? (formToLocation(form, 'school', 'School') || formToLocation(form, 'admin_school', 'Campus'))
+        ? (formToLocation(updatedForm, 'school', 'School') || formToLocation(updatedForm, 'admin_school', 'Campus'))
         : null;
       const parentLoc = activePersonas.includes('Elderly & Respiratory')
-        ? formToLocation(form, 'parent', "Parent's Home")
+        ? formToLocation(updatedForm, 'parent', "Parent's Home")
         : null;
 
+      const priorityPersona = (updatedForm.pinned_personas && updatedForm.pinned_personas.length > 0)
+        ? updatedForm.pinned_personas[0]
+        : (updatedForm.persona || 'General Public');
+
       const updates = {
-        display_name: form.display_name.trim(),
-        persona: form.persona,
-        configured_personas: form.configured_personas,
-        alerts_enabled: form.alerts_enabled,
+        display_name: updatedForm.display_name.trim(),
+        persona: priorityPersona,
+        pinned_personas: updatedForm.pinned_personas || [],
+        configured_personas: updatedForm.configured_personas,
+        alerts_enabled: updatedForm.alerts_enabled,
         home_location: homeLoc,
         work_location: workLoc,
         school_location: schoolLoc,
@@ -327,41 +349,108 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
   }
 
   const [locatingPrefix, setLocatingPrefix] = useState(null);
+  const [activeDropdownPrefix, setActiveDropdownPrefix] = useState(null);
 
-  function handleUseCurrentLocation(prefix) {
+  async function handleUseCurrentLocation(prefix) {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
       return;
     }
     setError('');
     setLocatingPrefix(prefix);
-    setMessage(`Requesting browser permission for ${prefix} location...`);
+    setMessage(`Detecting your precise current location...`);
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = Number(pos.coords.latitude.toFixed(4));
-        const lon = Number(pos.coords.longitude.toFixed(4));
-        setForm((prev) => ({
-          ...prev,
-          [`${prefix}_lat`]: String(lat),
-          [`${prefix}_lon`]: String(lon),
-          [`${prefix}_address`]: prev[`${prefix}_address`] || `${lat}°N, ${lon}°E (Current Area)`,
-        }));
-        setLocatingPrefix(null);
-        setMessage(`Coordinates obtained (${lat}, ${lon}). You can review and edit before saving.`);
+      async (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(5));
+        const lon = Number(pos.coords.longitude.toFixed(5));
+        try {
+          const detailed = await reverseGeocodeDetailed(lat, lon);
+          const fullAddress = detailed?.formattedAddress || `${lat}°N, ${lon}°E`;
+          setForm((prev) => ({
+            ...prev,
+            [`${prefix}_lat`]: String(lat),
+            [`${prefix}_lon`]: String(lon),
+            [`${prefix}_address`]: fullAddress,
+          }));
+          setMessage(`Location detected & verified: ${detailed?.formattedLocation || fullAddress}`);
+        } catch {
+          setForm((prev) => ({
+            ...prev,
+            [`${prefix}_lat`]: String(lat),
+            [`${prefix}_lon`]: String(lon),
+          }));
+          setMessage(`Coordinates pinned (${lat}, ${lon}).`);
+        } finally {
+          setLocatingPrefix(null);
+        }
       },
       (err) => {
         setLocatingPrefix(null);
-        setError(`Unable to detect location: ${err.message}. Please enter address or coordinates manually.`);
+        setError(`Unable to detect location: ${err.message}. Please enter address manually.`);
       },
       { timeout: 10000, enableHighAccuracy: true }
     );
   }
 
-  function locationSection(title, prefix, fallbackLabel, placeholder = 'e.g. Connaught Place, New Delhi') {
+  function handleTogglePin(prefix) {
+    const targetPersona = PREFIX_TO_PERSONA[prefix];
+    if (!targetPersona) return;
+
+    setForm((prev) => {
+      const prevPinned = prev.pinned_personas || [];
+      const isCurrentlyPinned = prevPinned.includes(targetPersona);
+
+      let nextPinned;
+      let nextPersona;
+      let nextConfigured = prev.configured_personas || ['General Public'];
+
+      if (isCurrentlyPinned) {
+        // Toggle OFF: unpin
+        nextPinned = prevPinned.filter((p) => p !== targetPersona);
+        nextPersona = nextPinned.length > 0 ? nextPinned[0] : (nextConfigured[0] || 'General Public');
+      } else {
+        // Toggle ON: pin and prioritize
+        nextPinned = [targetPersona, ...prevPinned.filter((p) => p !== targetPersona)];
+        nextPersona = targetPersona;
+        if (!nextConfigured.includes(targetPersona)) {
+          nextConfigured = [...nextConfigured, targetPersona];
+        }
+      }
+
+      return {
+        ...prev,
+        pinned_personas: nextPinned,
+        configured_personas: nextConfigured,
+        persona: nextPersona,
+      };
+    });
+  }
+
+  const SECTION_Z_INDEX = {
+    home: 'z-[50]',
+    work: 'z-[40]',
+    school: 'z-[30]',
+    parent: 'z-[20]',
+    admin_school: 'z-[10]',
+  };
+
+  function locationSection(title, prefix, fallbackLabel, placeholder = 'e.g. Pari Chowk, Greater Noida') {
     const icon = prefix === 'home' ? '🏠' : prefix === 'work' ? '💼' : prefix === 'parent' ? '🫁' : '🏫';
+    const addressVal = form[`${prefix}_address`] || '';
+    const latVal = form[`${prefix}_lat`];
+    const lonVal = form[`${prefix}_lon`];
+    const hasCoords = Boolean(latVal && lonVal && !isNaN(Number(latVal)) && !isNaN(Number(lonVal)));
+    const isDropdownActive = activeDropdownPrefix === prefix;
+
     return (
-      <section className="space-y-3 rounded-xl border p-4 animate-fadeIn" style={{ borderColor: 'var(--border)' }}>
+      <section
+        key={prefix}
+        className={`space-y-3 rounded-xl border p-4 transition-all duration-150 relative ${
+          SECTION_Z_INDEX[prefix] || 'z-10'
+        } ${isDropdownActive ? 'shadow-md ring-1 ring-indigo-500/20' : ''}`}
+        style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base">{icon}</span>
@@ -383,25 +472,40 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
             : `Monitored location for your ${fallbackLabel.toLowerCase()} profile. Leave blank if not needed.`}
         </p>
         {textField('Label', `${prefix}_label`, { maxLength: 80, placeholder: fallbackLabel })}
-        {textField('Address or area', `${prefix}_address`, {
-          placeholder,
-        })}
-        <div className="grid grid-cols-2 gap-3">
-          {textField('Latitude (optional)', `${prefix}_lat`, {
-            type: 'number',
-            min: -90,
-            max: 90,
-            step: 'any',
-            maxLength: 40,
-          })}
-          {textField('Longitude (optional)', `${prefix}_lon`, {
-            type: 'number',
-            min: -180,
-            max: 180,
-            step: 'any',
-            maxLength: 40,
-          })}
-        </div>
+
+        {/* Smart Address Input with explicit selection and elevated active dropdown */}
+        <AddressInput
+          id={`address-input-${prefix}`}
+          label="Address or area"
+          value={addressVal}
+          onChange={(val) => {
+            change(`${prefix}_address`, val);
+            if (!val.trim()) {
+              setForm((prev) => ({ ...prev, [`${prefix}_lat`]: '', [`${prefix}_lon`]: '' }));
+            }
+          }}
+          onSelectLocation={(item) => {
+            setForm((prev) => ({
+              ...prev,
+              [`${prefix}_address`]: item.formattedAddress || item.subtitle || item.name,
+              [`${prefix}_lat`]: String(item.lat),
+              [`${prefix}_lon`]: String(item.lon),
+            }));
+            setMessage(`Location pinned: ${item.name}`);
+          }}
+          onDropdownOpenChange={(open) => {
+            setActiveDropdownPrefix(open ? prefix : null);
+          }}
+          hasCoords={hasCoords}
+          coordLat={latVal}
+          coordLon={lonVal}
+          placeholder={placeholder}
+          pinToggle={{
+            id: `btn-pin-toggle-${prefix}`,
+            isPinned: (form.pinned_personas || []).includes(PREFIX_TO_PERSONA[prefix]),
+            onToggle: () => handleTogglePin(prefix),
+          }}
+        />
       </section>
     );
   }
@@ -474,7 +578,7 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-semibold t1">Dashboard Personas</span>
-                <span className="text-[10px] tm">Choose who to show on your daily checks</span>
+                <span className="text-[11px] tm">Choose who to show on your daily checks</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                 {[
@@ -522,22 +626,6 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
               </div>
             </div>
 
-            <label className="block space-y-1">
-              <span className="text-xs font-semibold t1">Primary Default Profile</span>
-              <select
-                className={fieldClass}
-                style={fieldStyle}
-                value={form.persona}
-                onChange={(event) => change('persona', event.target.value)}
-              >
-                <option value="General Public">General Public (Me)</option>
-                <option value="Children & Schools">Child / Student</option>
-                <option value="Elderly & Respiratory">Older Adult / Respiratory Sensitive</option>
-                <option value="Work & Outdoor Labor">Outdoor Worker / Commuter</option>
-                <option value="School Administration">School Administrator</option>
-              </select>
-            </label>
-
             {/* Dynamic location sections according to checked tags */}
             <div className="space-y-3.5 pt-1">
               <div className="border-t pt-3" style={{ borderColor: 'var(--border)' }}>
@@ -550,15 +638,15 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
               </div>
 
               {/* Home location - always active for personal residence */}
-              {locationSection('Home location (Me)', 'home', 'Home', 'e.g. Greater Kailash, New Delhi')}
+              {locationSection('Home location (Me)', 'home', 'Home', 'e.g. 221B Baker Street, London')}
 
               {/* Work location - shown if Work & Outdoor Labor is checked */}
               {form.configured_personas?.includes('Work & Outdoor Labor') &&
-                locationSection('Work or office location', 'work', 'Work', 'e.g. Connaught Place, New Delhi')}
+                locationSection('Work or office location', 'work', 'Work', 'e.g. Financial District, Mumbai')}
 
               {/* School location - shown if Children & Schools is checked */}
               {form.configured_personas?.includes('Children & Schools') &&
-                locationSection("Child's school location", 'school', 'School', 'e.g. Vasant Kunj, New Delhi')}
+                locationSection("Child's school location", 'school', 'School', 'e.g. Greenfield Academy, Bangalore')}
 
               {/* Parent location - shown if Elderly & Respiratory is checked */}
               {form.configured_personas?.includes('Elderly & Respiratory') &&
@@ -566,23 +654,8 @@ export default function ProfileSettingsModal({ onClose, onProfileSaved }) {
 
               {/* School Administration campus location - shown if School Administration is checked */}
               {form.configured_personas?.includes('School Administration') &&
-                locationSection('School campus / institution location', 'admin_school', 'Campus', 'e.g. DPS R.K. Puram, New Delhi')}
+                locationSection('School campus / institution location', 'admin_school', 'Campus', 'e.g. Oxford University, Oxford')}
             </div>
-
-            <label className="flex items-start gap-3 rounded-xl border p-3" style={{ borderColor: 'var(--border)' }}>
-              <input
-                type="checkbox"
-                checked={form.alerts_enabled}
-                onChange={(event) => change('alerts_enabled', event.target.checked)}
-                className="mt-1"
-              />
-              <span>
-                <span className="block text-sm font-semibold t1">Enable alert preference</span>
-                <span className="block text-xs tm mt-1">
-                  Saves your preference. Notifications are not sent until a notification service is implemented.
-                </span>
-              </span>
-            </label>
           </form>
         )}
 

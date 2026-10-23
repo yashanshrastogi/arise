@@ -139,14 +139,18 @@ async function callCognitoIdp(target, payload) {
   return data;
 }
 
-export async function directCognitoSignUp({ email, password, clientId = DEFAULT_CLIENT_ID }) {
+export async function directCognitoSignUp({ name, email, password, clientId = DEFAULT_CLIENT_ID }) {
+  const userAttributes = [
+    { Name: 'email', Value: email.trim() },
+  ];
+  if (name && typeof name === 'string' && name.trim()) {
+    userAttributes.push({ Name: 'name', Value: name.trim() });
+  }
   return callCognitoIdp('SignUp', {
     ClientId: clientId,
     Username: email.trim(),
     Password: password,
-    UserAttributes: [
-      { Name: 'email', Value: email.trim() },
-    ],
+    UserAttributes: userAttributes,
   });
 }
 
@@ -210,6 +214,8 @@ export function parseJwtPayload(token) {
   }
 }
 
+import { broadcastAuthChanged } from '../utils/crossTabSync.js';
+
 export async function storeCognitoTokensInUserManager(authTokens, manager) {
   const activeManager = manager || getSharedUserManager();
   const profile = parseJwtPayload(authTokens.idToken);
@@ -228,5 +234,14 @@ export async function storeCognitoTokensInUserManager(authTokens, manager) {
   if (activeManager.events && typeof activeManager.events.load === 'function') {
     await activeManager.events.load(user);
   }
+
+  // Notify other tabs that user has signed in
+  broadcastAuthChanged({
+    action: 'LOGIN',
+    userId: profile.sub,
+    email: profile.email,
+  });
+
   return user;
 }
+

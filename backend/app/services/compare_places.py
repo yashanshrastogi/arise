@@ -17,13 +17,13 @@ class PlaceComparisonResult(BaseModel):
     label: str
     latitude: float
     longitude: float
-    aqi: int
-    category: str
-    dominant_pollutant: str
-    verdict: str
-    temperature: float
-    wind_speed: float
-    relative_ranking: int # 1 = cleanest
+    aqi: Optional[int] = Field(default=None, ge=0)
+    category: str = "Unavailable"
+    dominant_pollutant: str = "None"
+    verdict: str = "BE_SMART"
+    temperature: Optional[float] = None
+    wind_speed: Optional[float] = None
+    relative_ranking: Optional[int] = None # 1 = cleanest, None for unavailable
 
 
 class ComparePlacesResponse(BaseModel):
@@ -47,36 +47,56 @@ class ComparePlacesService:
             snap = await self.env_service.get_environmental_snapshot(
                 lat=p.latitude, lon=p.longitude, force_demo=force_demo
             )
+            temp = snap.weather.temperature if snap.weather else None
+            wind = snap.weather.wind_speed if snap.weather else None
             items.append(PlaceComparisonResult(
                 label=p.label,
                 latitude=p.latitude,
                 longitude=p.longitude,
                 aqi=snap.aqi,
-                category=snap.aqi_category,
-                dominant_pollutant=snap.dominant_pollutant,
-                verdict=snap.verdict or "STAY_IN",
-                temperature=snap.weather.temperature if snap.weather else 28.0,
-                wind_speed=snap.weather.wind_speed if snap.weather else 3.2,
-                relative_ranking=1 # placeholder
+                category=snap.aqi_category or "Unavailable",
+                dominant_pollutant=snap.dominant_pollutant or "None",
+                verdict=snap.verdict or "BE_SMART",
+                temperature=temp,
+                wind_speed=wind,
+                relative_ranking=None
             ))
 
-        # Sort by AQI ascending (lower is cleaner)
-        items.sort(key=lambda x: x.aqi)
-        for rank, item in enumerate(items, 1):
+        # Separate items with valid AQI from unavailable
+        valid_items = [it for it in items if it.aqi is not None]
+        unavailable_items = [it for it in items if it.aqi is None]
+
+        # Sort valid items by AQI ascending (lower is cleaner)
+        valid_items.sort(key=lambda x: x.aqi)
+        for rank, item in enumerate(valid_items, 1):
             item.relative_ranking = rank
 
-        cleanest = items[0].label if items else "None"
-        worst = items[-1].label if items else "None"
-        
-        diff = items[-1].aqi - items[0].aqi if len(items) > 1 else 0
-        rec = f"{cleanest} currently has the lowest exposure risk (AQI {items[0].aqi}). "
-        if diff > 30:
-            rec += f"{worst} is substantially more polluted (+{diff} AQI). Shift outdoor periods towards {cleanest}."
+        # Unavailable items retain relative_ranking = None (never ranked as 0 or fabricated)
+        sorted_results = valid_items + unavailable_items
+
+        if len(valid_items) > 1:
+            cleanest = valid_items[0].label
+            worst = valid_items[-1].label
+            diff = valid_items[-1].aqi - valid_items[0].aqi
+            rec = f"{cleanest} currently has the lowest exposure risk (AQI {valid_items[0].aqi}). "
+            if diff > 30:
+                rec += f"{worst} is substantially more polluted (+{diff} AQI). Shift outdoor periods towards {cleanest}."
+            else:
+                rec += "Regional pollution conditions are relatively uniform across the monitored basin."
+            if unavailable_items:
+                rec += f" Note: Air quality is currently unavailable for {', '.join(u.label for u in unavailable_items)}."
+        elif len(valid_items) == 1:
+            cleanest = valid_items[0].label
+            worst = valid_items[0].label
+            unav_labels = ", ".join(u.label for u in unavailable_items)
+            rec = f"{cleanest} has monitored air quality (AQI {valid_items[0].aqi}). Air quality telemetry is unavailable for {unav_labels}."
         else:
-            rec += "Regional pollution conditions are relatively uniform across the monitored basin."
+            cleanest = "None"
+            worst = "None"
+            rec = "Air quality telemetry is currently unavailable for all requested locations."
 
         return ComparePlacesResponse(
-            results=items,
+            results=sorted_results,
             cleanest_place=cleanest,
             worst_place=worst,
             recommendation=rec

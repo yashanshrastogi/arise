@@ -33,6 +33,10 @@ test('isEnvironmentalQuery accepts relevant environmental queries', () => {
     'Should my school cancel outdoor sports?',
     'How do car emissions affect PM2.5 in Delhi?',
     'What are the current wind speeds?',
+    'Check my new memory',
+    'What health fact did I save?',
+    'Do you remember my health conditions?',
+    'Recall my saved health memory',
   ];
   for (const q of inScope) {
     assert.strictEqual(

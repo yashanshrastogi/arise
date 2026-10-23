@@ -3,8 +3,8 @@ Canonical Pydantic schemas for Strands Ask Arise Agent.
 Enforces structured output validation conforming to Phase 2 requirements.
 """
 
-from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+from typing import Any, List, Literal, Optional
+from pydantic import BaseModel, Field, model_validator
 
 
 class AskAriseVerdictResponse(BaseModel):
@@ -54,12 +54,55 @@ class AskAriseVerdictResponse(BaseModel):
         default=None,
         description="Current formatted timestamp of response generation."
     )
+    conversation_id: Optional[str] = Field(
+        default=None,
+        description="ID of the conversation this response belongs to."
+    )
+    message_id: Optional[str] = Field(
+        default=None,
+        description="ID of the assistant message."
+    )
+    used_categories: List[str] = Field(
+        default_factory=list,
+        description="Compact list of telemetry/evidence categories used (e.g. CPCB Telemetry, User Memory)."
+    )
+    uncertainty_notes: List[str] = Field(
+        default_factory=list,
+        description="Explicit indications if data was unavailable, stale, or estimated."
+    )
+    pipeline_metadata: Optional[dict] = Field(
+        default=None,
+        description="Operational metadata: stages executed, elapsed milliseconds, evaluation score, revisions."
+    )
+    candidate_memories: List[dict] = Field(
+        default_factory=list,
+        description="Extracted candidate long-term facts pending or eligible for user approval."
+    )
 
 
 class AskAriseRequest(BaseModel):
     """User query request payload."""
-    question: str = Field(..., min_length=1, max_length=1000)
+    question: str = Field(default="", max_length=1000)
     lat: float = Field(default=28.6139, ge=-90.0, le=90.0)
     lon: float = Field(default=77.2090, ge=-180.0, le=180.0)
     persona: str = Field(default="General Public")
     demo: bool = Field(default=False)
+    location_name: Optional[str] = Field(default=None, description="Active user location name, e.g. 'Noida' or 'Connaught Place'")
+    user_context: Optional[dict] = Field(default=None, description="User saved profile info: home/work/school locations, health tags, sensitivity")
+    environmental_context: Optional[dict] = Field(default=None, description="Current full environmental metrics: AQI, dominant pollutant, weather, wind, dispersion, school protocol")
+    conversation_id: Optional[str] = Field(default=None, description="Active persistent conversation ID to append turn to")
+    include_memories: bool = Field(default=True, description="Whether to include user long-term memories in retrieval")
+    force_deep_pipeline: bool = Field(default=False, description="Force multi-stage evaluator execution even for simple queries")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_question(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            q = data.get("question")
+            m = data.get("message")
+            text = (q or m or "").strip()
+            if not text:
+                raise ValueError("A non-empty 'question' or 'message' is required.")
+            data["question"] = text
+        return data
+

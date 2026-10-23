@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, useEffect } from 'react';
 import {
   AuthProvider as OidcAuthProvider,
   useAuth as useOidcAuth,
@@ -12,6 +12,8 @@ import {
   directCognitoSignIn,
   storeCognitoTokensInUserManager,
 } from './cognitoAuth';
+import { formatNameFromEmail, getInitials } from '../utils/userUtils';
+import { subscribeToSyncEvents, broadcastAuthChanged } from '../utils/crossTabSync.js';
 
 const AuthContext = createContext(null);
 
@@ -38,6 +40,57 @@ function CognitoBridge({ children }) {
   const logoutUri =
     import.meta.env.VITE_COGNITO_LOGOUT_URI ||
     (typeof window !== 'undefined' ? `${window.location.origin}/` : 'http://localhost:5173/');
+
+  // Cross-tab auth synchronization: keep all tabs in sync with login/logout
+  useEffect(() => {
+    const manager = getSharedUserManager();
+
+    const unsubscribe = subscribeToSyncEvents(async (event) => {
+      if (event.type !== 'AUTH_CHANGED') return;
+
+      if (event.action === 'LOGIN') {
+        try {
+          const user = await manager.getUser();
+          if (user && manager.events && typeof manager.events.load === 'function') {
+            await manager.events.load(user);
+          }
+        } catch {}
+      } else if (event.action === 'LOGOUT') {
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.removeItem('arise_user_profile');
+          }
+          if (manager.events && typeof manager.events.unload === 'function') {
+            await manager.events.unload();
+          }
+        } catch {}
+      }
+    });
+
+    const handleVisibilityChange = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        try {
+          const user = await manager.getUser();
+          if (user && !oidc.isAuthenticated && manager.events?.load) {
+            await manager.events.load(user);
+          } else if (!user && oidc.isAuthenticated && manager.events?.unload) {
+            await manager.events.unload();
+          }
+        } catch {}
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      unsubscribe();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [oidc.isAuthenticated]);
 
   const loginWithGoogle = useCallback(
     () =>
@@ -87,6 +140,10 @@ function CognitoBridge({ children }) {
 
   const logout = useCallback(async () => {
     try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem('arise_user_profile');
+      }
+      broadcastAuthChanged({ action: 'LOGOUT' });
       await oidc.removeUser();
     } catch {
       // ignore
@@ -100,22 +157,16 @@ function CognitoBridge({ children }) {
     }
   }, [oidc, cognitoDomain, clientId, logoutUri]);
 
+
   const profile = oidc.user?.profile;
   const name =
-    typeof profile?.name === 'string'
-      ? profile.name
+    typeof profile?.name === 'string' && profile.name.trim() && !profile.name.includes('@')
+      ? profile.name.trim()
       : typeof profile?.email === 'string'
-        ? profile.email
+        ? formatNameFromEmail(profile.email)
         : 'Arise User';
 
-  const initials =
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join('')
-      .toUpperCase() || 'U';
+  const initials = getInitials(name);
 
   const user =
     oidc.isAuthenticated && profile

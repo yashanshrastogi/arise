@@ -8,7 +8,7 @@ class VerdictOutput(BaseModel):
     verdict: str = Field(description="GO | BE_SMART | CUT_BACK | STAY_IN")
     headline: str
     recommendation: str
-    aqi: int = 0
+    aqi: Optional[int] = None
     category: str = "Good"
     why: List[Dict[str, str]] = Field(default_factory=list)
     do: List[str] = Field(default_factory=list)
@@ -52,6 +52,22 @@ def evaluate_environment(
     Applies health guidelines strictly based on environmental data and persona risk profiles.
     The LLM never computes or overrides this decision.
     """
+    if snapshot.aqi is None:
+        return VerdictOutput(
+            verdict="BE_SMART",
+            headline="Local air-quality telemetry is unavailable for these coordinates.",
+            recommendation="No ground monitoring stations were found within range. Check local official advisories.",
+            aqi=None,
+            category="Unavailable",
+            why=[{"label": "Air Quality Data", "detail": "No active monitoring stations within configured radius.", "type": "data"}],
+            do=["Check local municipal sources for air advisories.", "Use indoor air filtration if local conditions appear hazy."],
+            best_window=snapshot.best_window,
+            recheck_at=snapshot.recheck_at or "in 3 hours",
+            sources=snapshot.sources or [{"name": "Arise Engine", "type": "rule-based"}],
+            persona=persona,
+            school_action="MODIFY"
+        )
+
     aqi = snapshot.aqi
     base_verdict = get_base_verdict(aqi)
     p_clean = persona.strip().lower()
@@ -131,13 +147,13 @@ def evaluate_environment(
     # 2. Meteorological dispersion
     if snapshot.weather:
         w = snapshot.weather
-        if w.wind_speed < 5.0:
+        if w.wind_speed is not None and w.wind_speed < 5.0:
             why_items.append({
                 "label": "Calm surface wind",
                 "detail": f"Surface wind at {w.wind_speed} km/h ({w.wind_direction}) limits horizontal ventilation.",
                 "type": "weather"
             })
-        if w.humidity > 70:
+        if w.humidity is not None and w.humidity > 70:
             why_items.append({
                 "label": "High humidity & haze",
                 "detail": f"High relative humidity ({int(w.humidity)}%) promotes secondary particulate condensation.",
@@ -153,7 +169,7 @@ def evaluate_environment(
         })
 
     # 4. Regional baseline
-    if aqi > 200:
+    if aqi is not None and aqi > 200:
         why_items.append({
             "label": "Low atmospheric mixing depth",
             "detail": "Seasonal boundary layer suppression trapping emissions near surface level.",

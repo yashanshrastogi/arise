@@ -6,7 +6,7 @@ import React from 'react';
 export default function AqiGauge({
   aqi = 312,
   status = 'Very Poor',
-  location = 'Delhi-NCR',
+  location = 'Your Location',
   country = 'India',
   verdict = 'STAY IN',
   recommendation = 'Outdoor exposure should be minimized today. Keep windows closed and run purifiers if available.',
@@ -59,14 +59,14 @@ export default function AqiGauge({
             <span>📍</span>
             <span>{location}</span>
           </div>
-          <div className="text-[10px] font-bold tm">{country}</div>
+          <div className="text-[11px] font-bold tm">{country}</div>
         </div>
         <span
-          className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shadow-2xs"
+          className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shadow-2xs"
           style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-          <span className="font-extrabold tracking-wide uppercase text-[10px] text-emerald-600 dark:text-emerald-400">Live</span>
+          <span className="font-extrabold tracking-wide uppercase text-[11px] text-emerald-600 dark:text-emerald-400">Live</span>
         </span>
       </div>
 
@@ -124,12 +124,12 @@ export default function AqiGauge({
           style={{ top: cy - 40 }}
         >
           <span
-            className="text-4xl lg:text-5xl font-black tracking-tight"
+            className="text-4xl lg:text-5xl font-black tracking-tight tabular-nums"
             style={{ color: statusColor, lineHeight: 1 }}
           >
             {clampedAqi}
           </span>
-          <span className="text-[10px] font-black t3 uppercase tracking-widest mt-1">
+          <span className="text-[11px] font-black t3 uppercase tracking-widest mt-1">
             AQI
           </span>
         </div>

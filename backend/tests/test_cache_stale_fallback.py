@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import httpx
 from app.cache.repository import get_cache_repository
 from app.services.environment import EnvironmentService
@@ -13,8 +13,39 @@ async def test_stale_cache_behavior():
     env_service = EnvironmentService()
     forecast_service = ForecastService()
     
-    print("1. Fetching initial LIVE data to populate cache...")
-    live_snapshot = await env_service.get_environmental_snapshot(lat=28.6139, lon=77.2090, force_demo=False)
+    print("1. Fetching initial data to populate cache...")
+    mock_weather_resp = MagicMock()
+    mock_weather_resp.status_code = 200
+    mock_weather_resp.json.return_value = {
+        "current": {
+            "time": "2026-10-19T12:00",
+            "temperature_2m": 28.0,
+            "relative_humidity_2m": 55.0,
+            "apparent_temperature": 29.5,
+            "weather_code": 1,
+            "surface_pressure": 1012.0,
+            "wind_speed_10m": 8.0,
+            "wind_direction_10m": 120,
+            "cloud_cover": 20,
+            "dew_point_2m": 18.0,
+            "visibility": 6000.0,
+        },
+        "daily": {
+            "sunrise": ["2026-10-19T06:20"],
+            "sunset": ["2026-10-19T17:45"],
+            "uv_index_max": [6.0],
+        }
+    }
+
+    real_get = httpx.AsyncClient.get
+
+    async def mock_initial_get(self, url, *args, **kwargs):
+        if "open-meteo" in str(url):
+            return mock_weather_resp
+        return await real_get(self, url, *args, **kwargs)
+
+    with patch("httpx.AsyncClient.get", new=mock_initial_get):
+        live_snapshot = await env_service.get_environmental_snapshot(lat=28.6139, lon=77.2090, force_demo=False)
     assert not live_snapshot.is_stale, "Initial snapshot should be fresh (is_stale=False)"
     print(f"   LIVE data received: AQI={live_snapshot.aqi}, Stations={len(live_snapshot.contributing_stations)}, is_stale={live_snapshot.is_stale}")
     

@@ -1,6 +1,8 @@
 # Arise — Product Specification & Design System
 **Delhi-NCR Environmental & Atmospheric Intelligence for Everyday Decisions**
 
+> **Current Project Memory & Active Handoff:** For active milestone, verified test results, and pending tasks, see [PROJECT_STATE.md](../PROJECT_STATE.md). Operating rules are defined in [AGENTS.md](../AGENTS.md).
+
 ---
 
 ## 1. Product Pitch & Mission

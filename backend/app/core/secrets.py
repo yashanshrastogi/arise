@@ -41,7 +41,17 @@ def get_secret(secret_id: str, region_name: Optional[str] = None) -> Optional[st
         return _SECRET_CACHE[secret_id]
 
     # 2. Local environment variable fallback (for local dev / unit tests)
-    env_key = os.getenv("GEMINI_API_KEY")
+    env_var_name = secret_id.split("/")[-1].upper().replace("-", "_")
+    env_key = os.getenv(env_var_name)
+    if not env_key and "OPENWEATHER" in env_var_name:
+        env_key = os.getenv("OPENWEATHER_API_KEY")
+    elif not env_key and "TOMORROW" in env_var_name:
+        env_key = os.getenv("TOMORROW_API_KEY")
+    elif not env_key and "GEMINI" in env_var_name:
+        env_key = os.getenv("GEMINI_API_KEY")
+    elif not env_key and "ORS" in env_var_name:
+        env_key = os.getenv("ORS_API_KEY")
+
     if env_key and env_key.strip():
         _SECRET_CACHE[secret_id] = env_key.strip()
         return _SECRET_CACHE[secret_id]
@@ -64,16 +74,20 @@ def get_secret(secret_id: str, region_name: Optional[str] = None) -> Optional[st
             try:
                 data = json.loads(secret_str)
                 extracted = (
-                    data.get("GEMINI_API_KEY")
-                    or data.get("gemini_api_key")
-                    or data.get("api_key")
+                    data.get("api_key")
                     or data.get("apiKey")
+                    or data.get("key")
+                    or data.get(env_var_name)
+                    or data.get("OPENWEATHER_API_KEY")
+                    or data.get("TOMORROW_API_KEY")
+                    or data.get("GEMINI_API_KEY")
                     or next(iter(data.values()), None)
                 )
                 if extracted and isinstance(extracted, str):
                     secret_str = extracted.strip()
             except Exception:
                 pass  # Fall back to using the raw secret string
+
 
         _SECRET_CACHE[secret_id] = secret_str
         return secret_str
@@ -90,3 +104,38 @@ def get_secret(secret_id: str, region_name: Optional[str] = None) -> Optional[st
 def clear_secret_cache() -> None:
     """Clear in-memory secret cache (used in automated test suites)."""
     _SECRET_CACHE.clear()
+
+
+def get_provenance_signing_key(region_name: Optional[str] = None) -> bytes:
+    """
+    Retrieve HMAC signing key for CPCB aggregation provenance attestation and verification.
+    In local dev / test mode, checks PROVENANCE_SECRET_KEY or PROVENANCE_KEY env vars,
+    falling back safely to an internal dev key without making external network calls.
+    In production AWS mode, retrieves from AWS Secrets Manager ('arise/provenance-key').
+
+    SECURITY INVARIANTS:
+    - Never log or return this key in responses.
+    - Treat signing authority as restricted to internal ingestion adapters.
+    """
+    # 1. Local / config check first to prevent AWS network calls in local mode
+    secret = os.getenv("PROVENANCE_KEY") or os.getenv("PROVENANCE_SECRET_KEY")
+    if not secret:
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            if settings.PROVENANCE_SECRET_KEY:
+                secret = settings.PROVENANCE_SECRET_KEY
+            elif settings.MODE == "local":
+                secret = "arise_cpcb_regulatory_provenance_v1"
+        except Exception:
+            pass
+
+    # 2. In AWS mode, query Secrets Manager if not resolved locally
+    if not secret:
+        secret = get_secret("arise/provenance-key", region_name=region_name)
+
+    # 3. Safe fallback
+    if not secret:
+        secret = "arise_cpcb_regulatory_provenance_v1"
+
+    return secret.encode("utf-8")

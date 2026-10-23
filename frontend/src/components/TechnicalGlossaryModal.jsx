@@ -13,7 +13,7 @@ const GLOSSARY_ITEMS = [
     subtitle: 'Particles ≤ 2.5 µm',
     icon: '🎯',
     definition:
-      'Ultra-fine inhalable particles from combustion, vehicular exhaust, and secondary atmospheric reactions. Because they penetrate deep into lung alveoli and the bloodstream, PM2.5 is the primary health driver across Delhi-NCR.',
+      'Ultra-fine inhalable particles from combustion, vehicular exhaust, and secondary atmospheric reactions. Because they penetrate deep into lung alveoli and the bloodstream, PM2.5 is the primary health driver across polluted airsheds.',
   },
   {
     term: 'PM10 (Coarse Particulate Matter)',
@@ -87,7 +87,7 @@ export default function TechnicalGlossaryModal({ isOpen = false, onClose }) {
                 Environmental Metrics &amp; Definitions
               </h3>
               <p className="text-xs sm:text-sm font-semibold tm mt-0.5">
-                Understand Delhi-NCR air quality indicators in plain, actionable English
+                Understand air quality and weather indicators in plain, actionable English
               </p>
             </div>
           </div>

@@ -14,6 +14,7 @@ from app.api.routes.environment import router as environment_router
 from app.api.routes.verdict import router as verdict_router
 from app.api.routes.compare import router as compare_router
 from app.api.routes.chat import router as chat_router
+from app.api.routes.route import router as route_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("arise.api")
@@ -21,10 +22,12 @@ logger = logging.getLogger("arise.api")
 settings = get_settings()
 
 from app.api.routes.profile import router as profile_router
+from app.api.routes.conversations import router as conversations_router
+from app.api.routes.memories import router as memories_router
 
 app = FastAPI(
     title="Arise API",
-    description="Delhi-NCR Environmental Intelligence & Air Quality Decision Platform",
+    description="Environmental Intelligence Platform",
     version="2.0.0"
 )
 
@@ -60,7 +63,7 @@ def root():
     """Root endpoint welcoming users and providing direct links to documentation and health check."""
     return {
         "service": "Arise API",
-        "description": "Delhi-NCR Environmental Intelligence & Air Quality Decision Platform",
+        "description": "Environmental Intelligence Platform",
         "version": "2.0.0",
         "status": "online",
         "docs_url": "/docs",
@@ -79,3 +82,6 @@ app.include_router(verdict_router)
 app.include_router(compare_router)
 app.include_router(chat_router)
 app.include_router(profile_router)
+app.include_router(route_router)
+app.include_router(conversations_router)
+app.include_router(memories_router)

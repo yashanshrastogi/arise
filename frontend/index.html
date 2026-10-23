@@ -7,7 +7,31 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <title>Arise · Delhi-NCR Air Intelligence</title>
+    <title>Arise · Global Environmental &amp; Weather Intelligence</title>
+    <meta name="title" content="Arise · Global Environmental &amp; Weather Intelligence" />
+    <meta name="description" content="Global environmental and weather intelligence platform. Real-time air quality, hyper-local weather dynamics, and deterministic safety recommendations worldwide." />
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('arise_theme');
+          var isDark = false;
+          if (saved === 'dark') {
+            isDark = true;
+          } else if (saved === 'light') {
+            isDark = false;
+          } else {
+            isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.setAttribute('data-theme', 'light');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

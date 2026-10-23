@@ -5,7 +5,13 @@ Verification script for AQI Scientific Correctness Audit:
 3. Checks dashboard, API, verdict, and Ask Arise agreement.
 """
 
+import json
+import os
+import sys
 import socket
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import httpx
 from app.domain.aqi import calculate_aqi, calculate_sub_index, get_aqi_category
 
@@ -15,9 +21,12 @@ def _getaddrinfo_ipv4(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = _getaddrinfo_ipv4
 
 
-def manual_cpcb_calculation(pollutant: str, conc: float) -> int:
-    """Independent calculation using authoritative CPCB breakpoints."""
-    # Breakpoint lookup table (b_lo, b_hi, i_lo, i_hi)
+def manual_cpcb_calculation(pollutant: str, conc: float):
+    """
+    Independent calculation directly from authoritative CPCB Table 4.1
+    (Report CUPS/82/2014-15 page 24).
+    Returns None if conc is negative or exceeds the official breakpoint table.
+    """
     table = {
         "PM2.5": [
             (0.0, 30.0, 0, 50),
@@ -67,42 +76,54 @@ def manual_cpcb_calculation(pollutant: str, conc: float) -> int:
             (208.0, 748.0, 301, 400),
             (748.0, 1000.0, 401, 500),
         ],
+        "NH3": [
+            (0.0, 200.0, 0, 50),
+            (200.0, 400.0, 51, 100),
+            (400.0, 800.0, 101, 200),
+            (800.0, 1200.0, 201, 300),
+            (1200.0, 1800.0, 301, 400),
+            (1800.0, 2400.0, 401, 500),
+        ],
+        "PB": [
+            (0.0, 0.5, 0, 50),
+            (0.5, 1.0, 51, 100),
+            (1.0, 2.0, 101, 200),
+            (2.0, 3.0, 201, 300),
+            (3.0, 3.5, 301, 400),
+            (3.5, 5.0, 401, 500),
+        ],
     }
-    bps = table[pollutant]
-    for b_lo, b_hi, i_lo, i_hi in bps:
-        if b_lo <= conc <= b_hi:
-            # Linear interpolation
+    bps = table.get(pollutant)
+    if not bps or conc < 0.0 or conc > bps[-1][1]:
+        return None
+
+    for idx, (b_lo, b_hi, i_lo, i_hi) in enumerate(bps):
+        in_b = (b_lo <= conc <= b_hi) if idx == 0 else (b_lo < conc <= b_hi)
+        if in_b:
             return round(((i_hi - i_lo) / (b_hi - b_lo)) * (conc - b_lo) + i_lo)
-    last_lo, last_hi, last_i_lo, last_i_hi = bps[-1]
-    if conc > last_hi:
-        return min(round(((last_i_hi - last_i_lo) / (last_hi - last_lo)) * (conc - last_lo) + last_i_lo), 500)
-    return 0
+    return None
 
 
 def run_cross_check():
     print("==================================================")
-    print("STEP 9 — LIVE MANUAL CROSS-CHECK")
+    print("STEP 9 — VERSIONED SIRIFORT CROSS-CHECK")
     print("==================================================")
 
-    # Let's inspect real live Delhi CAAQMS station Sirifort (ID 5586)
-    # Observed raw telemetry:
-    # PM10: 318.0 µg/m³
-    # PM2.5: 72.88 µg/m³
-    # NO2: 30.81 ppb -> 30.81 * 1.88 = 57.92 µg/m³
-    # SO2: 44.76 ppb -> 44.76 * 2.62 = 117.27 µg/m³
-    # CO: 2.19 mg/m³
-    # O3: 15.95 µg/m³
-    sirifort_readings = {
-        "PM10": 318.0,
-        "PM2.5": 72.88,
-        "NO2": round(30.81 * 1.88, 1), # 57.9 µg/m³
-        "SO2": round(44.76 * 2.62, 1), # 117.3 µg/m³
-        "CO": 2.2,                      # 2.2 mg/m³
-        "O3": 16.0,                     # 16.0 µg/m³
-    }
+    fixture_path = os.path.join(
+        os.path.dirname(__file__), "fixtures", "sirifort_station_telemetry.json"
+    )
+    with open(fixture_path, "r", encoding="utf-8") as f:
+        fixture = json.load(f)
 
-    print("\nLive Station: Sirifort (ID 5586), New Delhi")
-    print("Averaging Periods: PM10 (24h), PM2.5 (24h), NO2 (24h), SO2 (24h), CO (8h), O3 (8h)")
+    sirifort_readings = {}
+    for item in fixture["raw_sensor_readings"]:
+        p = item["parameter"].upper()
+        if p in ("PM25", "PM2.5"):
+            p = "PM2.5"
+        sirifort_readings[p] = item["normalized_value"]
+
+    print("\nVersioned Fixture: Sirifort (ID 5586), New Delhi")
+    print("Provenance Note:", fixture["provenance"].get("verification_note"))
     print("Normalized Concentrations (CPCB reference units):", sirifort_readings)
 
     # Independent sub-indices
@@ -119,19 +140,37 @@ def run_cross_check():
     print(f"Independent Dominant Pollutant: {manual_dominant}")
     print(f"Independent Overall AQI: {manual_aqi}")
 
-    # Arise calculation
-    arise_res = calculate_aqi(sirifort_readings)
-    print("\nArise calculate_aqi() Output:")
+    # Arise calculation: Regulatory Benchmark mode with demonstrable averaging coverage
+    cov_data = fixture["provenance"]["averaging_coverage"]
+    arise_res = calculate_aqi(sirifort_readings, averaging_coverage=cov_data)
+    print("\nArise calculate_aqi(averaging_coverage=cov_data) Output:")
     print(f"  - AQI: {arise_res.aqi}")
     print(f"  - Dominant: {arise_res.dominant_pollutant}")
     print(f"  - Category: {arise_res.category}")
     print(f"  - Sub-indices: {arise_res.sub_indices}")
     print(f"  - CPCB Compliant: {arise_res.is_cpcb_compliant}")
+    print(f"  - Data Type: {arise_res.data_type}")
 
     diff = abs(manual_aqi - arise_res.aqi)
     print(f"\nDiscrepancy: {diff}")
     assert diff == 0, f"Discrepancy detected between manual ({manual_aqi}) and Arise ({arise_res.aqi})"
-    print("CROSS-CHECK VERDICT: PASS (Identical match)")
+    assert arise_res.dominant_pollutant == fixture["expected_overall"]["dominant_pollutant"]
+    assert arise_res.category == fixture["expected_overall"]["category"]
+    assert arise_res.is_cpcb_compliant is True
+    assert arise_res.data_type == "regulatory_compliant"
+
+    # Reject manual boolean without demonstrable validation
+    unvalidated_res = calculate_aqi(sirifort_readings, has_verified_averaging=True)
+    assert unvalidated_res.is_cpcb_compliant is False, "A manually set boolean without coverage validation must NOT produce CPCB compliance!"
+    assert unvalidated_res.data_type == "indicative"
+
+    # Also test Indicative Telemetry mode (has_verified_averaging=False)
+    indicative_res = calculate_aqi(sirifort_readings, has_verified_averaging=False)
+    assert indicative_res.aqi == manual_aqi
+    assert indicative_res.is_cpcb_compliant is False
+    assert indicative_res.meets_pollutant_criteria is True
+    assert indicative_res.data_type == "indicative"
+    print("CROSS-CHECK VERDICT: PASS (Identical match for both regulatory and indicative modes)")
 
     print("\n==================================================")
     print("STEP 10 — CURRENT ARISE SNAPSHOT (LIVE)")

@@ -30,3 +30,28 @@ parameter_overrides = [
 port = 8000
 host = "127.0.0.1"
 warm_containers = "EAGER"
+
+[staging]
+[staging.build]
+[staging.build.parameters]
+cached = true
+parallel = true
+
+[staging.validate]
+[staging.validate.parameters]
+lint = true
+
+[staging.deploy]
+[staging.deploy.parameters]
+stack_name = "arise-staging"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-ngyibeul3fsd"
+s3_prefix = "arise-staging"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = [
+    "Stage=\"staging\"",
+    "CorsOrigins=\"http://localhost:5173,https://staging.dqmsa8e2klyso.amplifyapp.com\"",
+    "LlmProvider=\"rule-based\"",
+    "IngestionScheduleState=\"DISABLED\""
+]

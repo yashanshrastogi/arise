@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { askAriseChat } from '../api/client';
 import { isEnvironmentalQuery, getOutOfScopeGuardrailResponse } from '../utils/guardrails';
 import FormattedBotText from './FormattedBotText';
 import { useAuth } from '../auth/AuthContext';
+import { speakText, stopSpeech, buildSpeechText } from '../utils/speechUtils';
 
 const QUICK_CHIPS = [
   "Can I go out now?",
@@ -21,6 +22,13 @@ export default function AskBar({
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, []);
 
   const handleAsk = async (queryText) => {
     if (!isAuthenticated) {
@@ -194,7 +202,7 @@ export default function AskBar({
             style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
             title={!isAuthenticated ? "Sign in to ask this question" : chip}
           >
-            {!isAuthenticated && <span className="text-[10px] opacity-60">🔒</span>}
+            {!isAuthenticated && <span className="text-[11px] opacity-60">🔒</span>}
             <span>{chip}</span>
           </button>
         ))}
@@ -210,9 +218,36 @@ export default function AskBar({
             <span className="text-indigo-700 dark:text-indigo-300 font-extrabold uppercase">
               Verdict: {answer.verdict}
             </span>
-            <span className="text-slate-500 text-[11px]">
-              Answered by {answer.assistant_label}
-            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (isSpeaking) {
+                  stopSpeech();
+                  setIsSpeaking(false);
+                } else {
+                  const text = buildSpeechText(answer);
+                  if (text) {
+                    setIsSpeaking(true);
+                    speakText(text, {
+                      onStart: () => setIsSpeaking(true),
+                      onEnd: () => setIsSpeaking(false),
+                      onError: () => setIsSpeaking(false),
+                    });
+                  }
+                }
+              }}
+              id="btn-askbar-read-aloud"
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer border ${
+                isSpeaking
+                  ? 'bg-indigo-600 text-white border-indigo-500 animate-pulse'
+                  : 'bg-[var(--surface)] hover:bg-[var(--surface-alt)] border-[var(--border)] t2'
+              }`}
+              title={isSpeaking ? "Stop reading response" : "Read response aloud"}
+              aria-label={isSpeaking ? "Stop reading response aloud" : "Read response aloud"}
+            >
+              <span aria-hidden="true">{isSpeaking ? '⏹️' : '🔊'}</span>
+              <span>{isSpeaking ? 'Stop' : 'Read Aloud'}</span>
+            </button>
           </div>
 
           <div className="text-sm font-bold t1 leading-snug">

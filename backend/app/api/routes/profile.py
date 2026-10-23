@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.cognito_auth import get_current_user
+from app.services.identity import get_identity_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/profile", tags=["Profile"])
@@ -20,6 +21,8 @@ router = APIRouter(prefix="/profile", tags=["Profile"])
 MAX_ITEM_PAYLOAD_BYTES = 32 * 1024  # 32 KB maximum profile size
 ALLOWED_PROFILE_FIELDS = {
     "user_id",
+    "canonical_user_id",
+    "linked_user_ids",
     "display_name",
     "email",
     "home_location",
@@ -33,6 +36,7 @@ ALLOWED_PROFILE_FIELDS = {
     "created_at",
     "updated_at",
 }
+
 
 
 def _sanitize_string(val: str | None) -> str | None:
@@ -245,6 +249,8 @@ def _public_profile(item: dict) -> dict:
         key: item.get(key)
         for key in (
             "user_id",
+            "canonical_user_id",
+            "linked_user_ids",
             "display_name",
             "email",
             "home_location",
@@ -263,14 +269,26 @@ def _public_profile(item: dict) -> dict:
 
 @router.get("")
 def get_profile(user: dict = Depends(get_current_user)):
+    identity = get_identity_service().resolve_identity(user)
     table = _get_profile_table()
-    item = _get_item(table, user["sub"])
+
+    # Search canonical ID, current sub, and any linked verified subs
+    target_uids = list(dict.fromkeys([identity.canonical_user_id, user["sub"]] + identity.linked_subs))
+    item = None
+    for uid in target_uids:
+        item = _get_item(table, uid)
+        if item:
+            break
+
     if not item:
         raise HTTPException(
             status_code=404,
             detail="Profile not initialized. Create it through /profile/bootstrap.",
         )
-    return _public_profile(item)
+    pub = _public_profile(item)
+    pub["canonical_user_id"] = identity.canonical_user_id
+    pub["linked_user_ids"] = identity.linked_subs
+    return pub
 
 
 @router.post("/bootstrap")
@@ -278,19 +296,31 @@ def bootstrap_profile(
     payload: ProfileBootstrap,
     user: dict = Depends(get_current_user),
 ):
-    # Guardrail 1: Ownership is strictly derived from the validated Cognito token 'sub'
-    user_id = user["sub"]
+    identity = get_identity_service().resolve_identity(user)
+    # Guardrail 1: Ownership is strictly derived from the canonical verified identity
+    user_id = identity.canonical_user_id
     # Guardrail 2: Verified email is strictly sourced from Cognito authentication claims
     verified_email = user.get("email")
 
     table = _get_profile_table()
     existing = _get_item(table, user_id)
+    if not existing:
+        for uid in identity.linked_subs:
+            existing = _get_item(table, uid)
+            if existing:
+                break
+
     if existing:
-        return _public_profile(existing)
+        pub = _public_profile(existing)
+        pub["canonical_user_id"] = identity.canonical_user_id
+        pub["linked_user_ids"] = identity.linked_subs
+        return pub
 
     now = datetime.now(timezone.utc).isoformat()
     item = {
         "user_id": user_id,
+        "canonical_user_id": identity.canonical_user_id,
+        "linked_user_ids": identity.linked_subs,
         "display_name": payload.display_name,
         "email": verified_email,
         "home_location": payload.home_location.model_dump(mode="json") if payload.home_location else None,
@@ -317,19 +347,28 @@ def bootstrap_profile(
                 ConditionExpression="attribute_not_exists(user_id)",
             )
             _put_local_item(item)
-            return _public_profile(item)
+            pub = _public_profile(item)
+            pub["canonical_user_id"] = identity.canonical_user_id
+            pub["linked_user_ids"] = identity.linked_subs
+            return pub
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
                 existing = _get_item(table, user_id)
                 if existing:
-                    return _public_profile(existing)
+                    pub = _public_profile(existing)
+                    pub["canonical_user_id"] = identity.canonical_user_id
+                    pub["linked_user_ids"] = identity.linked_subs
+                    return pub
             logger.warning(f"DynamoDB put notice ({exc}). Fallback to local store.")
         except Exception as exc:
             logger.warning(f"DynamoDB put notice ({exc}). Fallback to local store.")
 
     # Always persist locally for offline resilience
     _put_local_item(item)
-    return _public_profile(item)
+    pub = _public_profile(item)
+    pub["canonical_user_id"] = identity.canonical_user_id
+    pub["linked_user_ids"] = identity.linked_subs
+    return pub
 
 
 @router.patch("")
@@ -337,8 +376,9 @@ def update_profile(
     payload: ProfilePatch,
     user: dict = Depends(get_current_user),
 ):
-    # Guardrail 1: Ownership is strictly derived from validated token 'sub'
-    user_id = user["sub"]
+    identity = get_identity_service().resolve_identity(user)
+    # Guardrail 1: Ownership is strictly derived from verified canonical identity
+    user_id = identity.canonical_user_id
     table = _get_profile_table()
 
     # Guardrail 2: Attribute allowlist and dynamic UpdateExpression avoiding race conditions
@@ -409,4 +449,55 @@ def update_profile(
     existing["updated_at"] = now
     _put_local_item(existing)
     return _public_profile(existing)
+
+
+class LinkAccountRequest(BaseModel):
+    secondary_token: str
+
+
+@router.post("/link-account")
+def link_account(
+    payload: LinkAccountRequest,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Explicitly link another authenticated Cognito account to the current account.
+    Validates secondary_token against the same Cognito User Pool and JWKS.
+    """
+    import jwt
+    from app.core.cognito_auth import _jwks_client
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    pool_id = os.getenv("COGNITO_USER_POOL_ID", "").strip() or (settings.COGNITO_USER_POOL_ID or "").strip()
+    client_id = os.getenv("COGNITO_APP_CLIENT_ID", "").strip() or (settings.COGNITO_APP_CLIENT_ID or "").strip()
+    region = os.getenv("AWS_REGION", "").strip() or (settings.AWS_REGION or "us-east-1").strip()
+    issuer = f"https://cognito-idp.{region}.amazonaws.com/{pool_id}"
+
+    try:
+        signing_key = _jwks_client(issuer).get_signing_key_from_jwt(payload.secondary_token)
+        secondary_claims = jwt.decode(
+            payload.secondary_token,
+            signing_key.key,
+            algorithms=["RS256"],
+            issuer=issuer,
+            options={"verify_aud": False, "require": ["exp", "iat", "sub", "iss", "token_use"]},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid secondary account token.") from exc
+
+    token_client_id = secondary_claims.get("client_id") or secondary_claims.get("aud")
+    if token_client_id != client_id:
+        raise HTTPException(status_code=400, detail="Secondary token is for another application.")
+
+    identity_service = get_identity_service()
+    cluster = identity_service.explicit_link(primary_claims=user, secondary_claims=secondary_claims)
+
+    return {
+        "success": True,
+        "canonical_user_id": cluster.canonical_user_id,
+        "linked_subs": cluster.linked_subs,
+        "link_method": cluster.link_method,
+    }
+
 

@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export default function DataStatusPopover({ hasLiveFires = true }) {
+export default function DataStatusPopover({
+  hasLiveFires = true,
+  placement = 'bottom',
+  align = 'right',
+}) {
   const [open, setOpen] = useState(false);
   const popoverRef = useRef(null);
 
@@ -10,28 +14,42 @@ export default function DataStatusPopover({ hasLiveFires = true }) {
         setOpen(false);
       }
     }
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
+
+  const positionClasses = placement === 'top' ? 'bottom-full mb-2.5' : 'top-full mt-2.5';
+  const alignClasses = align === 'left' ? 'left-0' : 'right-0';
 
   return (
     <div className="relative inline-block text-xs" ref={popoverRef}>
       <button
         type="button"
+        id="btn-data-status-popover"
         onClick={() => setOpen(prev => !prev)}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border t2 hover:bg-[var(--surface-alt)] transition-colors font-bold touch-target"
         style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
         aria-expanded={open}
+        aria-haspopup="dialog"
         aria-label="Where this comes from"
       >
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
         <span>Where this comes from</span>
-        <span className="text-[10px] opacity-75">ℹ️</span>
+        <span className="text-[11px] opacity-75">ℹ️</span>
       </button>
 
       {open && (
         <div
-          className="absolute bottom-full mb-2.5 left-0 w-80 max-w-[calc(100vw-2rem)] p-4 rounded-2xl border shadow-2xl z-[4000] animate-in fade-in zoom-in-95 duration-150"
+          className={`absolute ${positionClasses} ${alignClasses} w-80 max-w-[calc(100vw-2rem)] p-4 rounded-2xl border shadow-2xl z-[4000] animate-in fade-in zoom-in-95 duration-150`}
           style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
           role="dialog"
           aria-label="Data sources explanation"
@@ -41,7 +59,7 @@ export default function DataStatusPopover({ hasLiveFires = true }) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="w-6 h-6 rounded-lg flex items-center justify-center text-xs t3 hover:bg-[var(--surface-alt)] font-bold"
+              className="w-6 h-6 rounded-lg flex items-center justify-center text-xs t3 hover:bg-[var(--surface-alt)] font-bold cursor-pointer"
               aria-label="Close"
             >
               ✕

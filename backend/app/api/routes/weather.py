@@ -7,8 +7,8 @@ weather_provider = OpenMeteoWeatherProvider()
 
 @router.get("/weather/now")
 async def get_weather_now(
-    lat: float = Query(default=28.6139, ge=-90.0, le=90.0),
-    lon: float = Query(default=77.2090, ge=-180.0, le=180.0),
+    lat: float = Query(..., ge=-90.0, le=90.0, description="Latitude between -90 and 90"),
+    lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude between -180 and 180"),
     demo: bool = Query(default=False)
 ):
     """Retrieve current surface weather and meteorological dispersion factors."""

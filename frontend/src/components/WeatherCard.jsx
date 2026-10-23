@@ -1,4 +1,5 @@
 import React from 'react';
+import InfoTooltip from './InfoTooltip';
 
 export default function WeatherCard({ weather, aqi }) {
   if (!weather) return null;
@@ -10,8 +11,8 @@ export default function WeatherCard({ weather, aqi }) {
         <div className="flex items-center gap-2">
           <span className="text-xl">🌤️</span>
           <div>
-            <h3 className="text-sm font-black t1">Weather &amp; Wind</h3>
-            <p className="text-xs font-semibold t3">Local conditions</p>
+            <h3 className="text-base font-black t1">Weather &amp; Wind</h3>
+            <p className="text-xs sm:text-sm font-semibold tm">Local conditions</p>
           </div>
         </div>
       </div>
@@ -20,25 +21,25 @@ export default function WeatherCard({ weather, aqi }) {
       <div className="flex items-center justify-between py-2 px-1">
         <div>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl lg:text-4xl font-black t1 leading-none">
-              {weather.temp}°C
+            <span className="text-3xl lg:text-4xl font-black t1 leading-none tabular-nums" data-testid="weather-temp">
+              {weather.temp != null ? `${typeof weather.temp === 'number' ? Math.round(weather.temp) : weather.temp}°C` : '—'}
             </span>
-            <span className="text-xs font-bold tm">
-              Feels like {weather.feelsLike}°C
+            <span className="text-xs sm:text-sm font-bold tm tabular-nums">
+              {weather.feelsLike != null ? `Feels like ${typeof weather.feelsLike === 'number' ? Math.round(weather.feelsLike) : weather.feelsLike}°C` : 'Feels like —'}
             </span>
           </div>
-          <div className="text-xs font-bold t2 mt-1.5 flex items-center gap-1.5">
-            <span>{weather.icon}</span>
-            <span>{weather.condition}</span>
+          <div className="text-xs sm:text-sm font-bold t2 mt-1.5 flex items-center gap-1.5">
+            <span>{weather.icon || '🌤️'}</span>
+            <span>{weather.condition || 'Unavailable'}</span>
           </div>
         </div>
 
         <div className="text-right">
-          <div className="text-xs font-black text-indigo-600 dark:text-indigo-400">
-            {weather.windSpeed} km/h · {weather.windDirection}
+          <div className="text-xs sm:text-sm font-bold tm">
+            Visibility: <span className="font-extrabold t1 tabular-nums">{weather.visibility != null ? `${typeof weather.visibility === 'number' ? Number(weather.visibility).toFixed(1) : weather.visibility} km` : '—'}</span>
           </div>
-          <div className="text-xs font-bold tm mt-1">
-            How far you can see: <span className="font-extrabold t1">{weather.visibility} km</span>
+          <div className="text-xs sm:text-sm font-semibold text-indigo-600 dark:text-indigo-400 mt-1 tabular-nums">
+            {weather.humidity != null ? `${weather.humidity}% Humidity` : ''}
           </div>
         </div>
       </div>
@@ -49,20 +50,22 @@ export default function WeatherCard({ weather, aqi }) {
         style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
       >
         <div>
-          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Chance of rain</div>
-          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.rainProb}%</div>
+          <div className="text-xs font-bold uppercase tm">Chance of rain</div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5 tabular-nums">{weather.rainProb != null ? `${weather.rainProb}%` : '—'}</div>
         </div>
         <div>
-          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Cloud cover</div>
-          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.cloudCover}%</div>
+          <div className="text-xs font-bold uppercase tm">Cloud cover</div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5 tabular-nums">{weather.cloudCover != null ? `${weather.cloudCover}%` : '—'}</div>
         </div>
         <div>
-          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Humidity</div>
-          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.humidity}%</div>
+          <div className="text-xs font-bold uppercase tm">Humidity</div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5 tabular-nums">{weather.humidity != null ? `${weather.humidity}%` : '—'}</div>
         </div>
         <div>
-          <div className="text-[11px] sm:text-xs font-bold uppercase tm">Sun strength</div>
-          <div className="text-sm sm:text-base font-black t1 mt-0.5">{weather.uvIndex != null ? `${weather.uvIndex} (UV)` : '5.0 (UV)'}</div>
+          <div className="text-xs font-bold uppercase tm flex items-center justify-center gap-1">
+            <span>Sun strength</span>
+          </div>
+          <div className="text-sm sm:text-base font-black t1 mt-0.5 tabular-nums">{weather.uvIndex != null ? `${typeof weather.uvIndex === 'number' ? Math.round(weather.uvIndex) : weather.uvIndex} (UV)` : '—'}</div>
         </div>
       </div>
 
@@ -70,25 +73,29 @@ export default function WeatherCard({ weather, aqi }) {
       <div
         className="p-3.5 rounded-2xl border text-xs sm:text-sm leading-snug"
         style={{
-          background: aqi > 300 ? 'var(--poor-bg)' : 'var(--good-bg)',
-          borderColor: aqi > 300 ? 'var(--poor)' : 'var(--good)',
+          background: (aqi || 0) > 300 ? 'var(--poor-bg)' : 'var(--good-bg)',
+          borderColor: (aqi || 0) > 300 ? 'var(--poor)' : 'var(--good)',
         }}
       >
-        <div className="flex items-center gap-1.5 font-black mb-1" style={{ color: aqi > 300 ? 'var(--poor-ink)' : 'var(--good-ink)' }}>
-          <span aria-hidden="true">ⓘ</span>
-          <span className="text-xs uppercase tracking-wider font-extrabold">
-            {aqi > 300 ? 'Why the air is trapped' : 'Atmospheric Dispersion'}
+        <div className="flex items-center gap-1.5 font-black mb-1" style={{ color: (aqi || 0) > 300 ? 'var(--poor-ink)' : 'var(--good-ink)' }}>
+          <span className="text-xs sm:text-sm uppercase tracking-wider font-extrabold flex items-center gap-1.5">
+            <span>{(aqi || 0) > 300 ? 'Thermal & Moisture Impact' : 'Atmospheric Conditions'}</span>
+            <InfoTooltip
+              title="Weather & Air Quality Link"
+              text="Temperature, humidity, and atmospheric pressure interact directly with air pollution. Cool, humid air condenses airborne particulates and prevents them from rising away."
+              impact="High humidity combined with stagnant air exacerbates breathing discomfort."
+            />
           </span>
         </div>
         <p className="text-xs sm:text-sm font-semibold t1 leading-relaxed">
-          {weather.correlation || (aqi > 300 ? 'Calm surface wind under 4 km/h prevents smoke and dust from dispersing.' : 'Active winds help ventilate the surface layer.')}
+          {weather.correlation || ((aqi || 0) > 300 ? 'Cooler ambient air and moisture condense particulates near ground level.' : 'Favorable temperature and mixing allow clean air circulation.')}
         </p>
       </div>
 
       {/* Sunrise / Sunset */}
-      <div className="flex items-center justify-between text-xs font-semibold tm pt-2 mt-2 border-t" style={{ borderColor: 'var(--border)' }}>
-        <span>🌅 Sunrise: {weather.sunrise || '6:22 AM'}</span>
-        <span>🌇 Sunset: {weather.sunset || '5:54 PM'}</span>
+      <div className="flex items-center justify-between text-sm sm:text-base font-bold t1 pt-2.5 mt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+        <span>🌅 Sunrise: {weather.sunrise || '—'}</span>
+        <span>🌇 Sunset: {weather.sunset || '—'}</span>
       </div>
     </div>
   );

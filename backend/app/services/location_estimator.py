@@ -61,10 +61,12 @@ class LocationEstimator:
                 confidence="low"
             )
 
-        # 1. Calculate distance for each valid, non-stale station
+        # 1. Calculate distance for candidate stations within max_radius_km
+        # Prefer fresh stations; if all available stations are stale (e.g. outage fallback), allow stale within radius
+        has_fresh = any(not st.is_stale for st in stations)
         candidate_stations: List[Tuple[float, StationObservation]] = []
         for st in stations:
-            if st.is_stale:
+            if has_fresh and st.is_stale:
                 continue
             dist = haversine_distance_km(target_lat, target_lon, st.latitude, st.longitude)
             if dist <= self.max_radius_km:
@@ -74,12 +76,17 @@ class LocationEstimator:
                 candidate_stations.append((dist, st_copy))
 
         if not candidate_stations:
-            # Fall back to closest available even if beyond max_radius
-            for st in stations:
-                dist = haversine_distance_km(target_lat, target_lon, st.latitude, st.longitude)
-                st_copy = st.model_copy()
-                st_copy.distance_km = dist
-                candidate_stations.append((dist, st_copy))
+            return LocalAirEstimation(
+                latitude=target_lat,
+                longitude=target_lon,
+                estimated_pollutants={},
+                contributing_stations=[],
+                nearest_station_id=None,
+                nearest_station_name=None,
+                nearest_station_distance_km=None,
+                estimation_quality="unavailable",
+                confidence="low"
+            )
 
         # Sort by distance
         candidate_stations.sort(key=lambda x: x[0])
@@ -133,7 +140,8 @@ class LocationEstimator:
                     pol_weights_sum += w
                     pol_val_sum += w * val
             if pol_weights_sum > 0:
-                estimated_values[pol] = round(pol_val_sum / pol_weights_sum, 1)
+                dec = 2 if pol == "CO" else 1
+                estimated_values[pol] = round(pol_val_sum / pol_weights_sum, dec)
 
         # Determine estimation quality & confidence
         num_contributors = len(contributing)

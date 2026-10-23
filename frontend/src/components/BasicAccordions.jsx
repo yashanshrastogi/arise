@@ -59,7 +59,7 @@ export default function BasicAccordions({ data }) {
               <div>
                 <h4 className="text-sm font-extrabold t1">Fires seen upwind</h4>
                 <p className="text-xs font-medium t2 mt-0.5">
-                  Satellite sensors spotted farm fire signals upwind. Northwest winds carry external smoke plumes into the Delhi-NCR basin.
+                  Satellite sensors spotted farm fire signals upwind. Wind patterns may carry external smoke plumes into the local air basin.
                 </p>
               </div>
             </div>
@@ -118,11 +118,11 @@ export default function BasicAccordions({ data }) {
                       }}
                     >
                       <span className="text-xs font-bold t3">{item.time || item.hour || `+${index}h`}</span>
-                      <span className="text-base font-black my-1" style={{ color: b.color }}>
+                      <span className="text-base font-black my-1 tabular-nums" style={{ color: b.color }}>
                         {item.aqi}
                       </span>
                       <span
-                        className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
+                        className="text-[11px] font-extrabold px-1.5 py-0.5 rounded-full"
                         style={{ background: b.bg, color: b.ink }}
                       >
                         {b.symbol} {b.band}
@@ -164,7 +164,7 @@ export default function BasicAccordions({ data }) {
                   <span className="text-xs font-black text-red-600 dark:text-red-400">10× healthy limit</span>
                 </div>
                 <div className="text-xl font-black t1 mt-1">
-                  {pollutants.pm25 || 245} <span className="text-xs font-semibold tm">µg/m³</span>
+                  {pollutants.pm25 != null ? pollutants.pm25 : '—'} <span className="text-xs font-semibold tm">µg/m³</span>
                 </div>
                 <p className="text-[11px] font-medium t3 mt-1">
                   Main hazard today. India safety limit: 60 µg/m³.
@@ -178,7 +178,7 @@ export default function BasicAccordions({ data }) {
                   <span className="text-xs font-black text-amber-600 dark:text-amber-400">4× healthy limit</span>
                 </div>
                 <div className="text-xl font-black t1 mt-1">
-                  {pollutants.pm10 || 382} <span className="text-xs font-semibold tm">µg/m³</span>
+                  {pollutants.pm10 != null ? pollutants.pm10 : '—'} <span className="text-xs font-semibold tm">µg/m³</span>
                 </div>
                 <p className="text-[11px] font-medium t3 mt-1">
                   Road dust and construction grit. India safety limit: 100 µg/m³.
@@ -192,7 +192,7 @@ export default function BasicAccordions({ data }) {
                   <span className="text-xs font-bold text-amber-500">Elevated</span>
                 </div>
                 <div className="text-xl font-black t1 mt-1">
-                  {pollutants.no2 || 88} <span className="text-xs font-semibold tm">µg/m³</span>
+                  {pollutants.no2 != null ? pollutants.no2 : '—'} <span className="text-xs font-semibold tm">µg/m³</span>
                 </div>
                 <p className="text-[11px] font-medium t3 mt-1">
                   Exhaust from diesel and petrol vehicles in urban corridors.
@@ -206,7 +206,7 @@ export default function BasicAccordions({ data }) {
                   <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Within limit</span>
                 </div>
                 <div className="text-xl font-black t1 mt-1">
-                  {pollutants.o3 || 42} <span className="text-xs font-semibold tm">µg/m³</span>
+                  {pollutants.o3 != null ? pollutants.o3 : '—'} <span className="text-xs font-semibold tm">µg/m³</span>
                 </div>
                 <p className="text-[11px] font-medium t3 mt-1">
                   Ground-level ozone formed by sun reacting with vehicle exhaust.

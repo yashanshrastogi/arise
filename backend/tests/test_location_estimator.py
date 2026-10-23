@@ -98,10 +98,23 @@ class TestLocationEstimator(unittest.TestCase):
         self.assertIn("O3", res.estimated_pollutants)
         self.assertEqual(res.estimated_pollutants["O3"], 35.0)
 
-    def test_empty_stations_graceful(self):
-        res = self.estimator.estimate_location_pollutants(28.6139, 77.2090, [])
+    def test_distant_stations_enforce_max_radius_unavailable(self):
+        """Regression test for Priority 1: London coordinates cannot receive distant Delhi station data."""
+        london_lat, london_lon = 51.5074, -0.1278
+        res = self.estimator.estimate_location_pollutants(london_lat, london_lon, [self.st1, self.st2, self.st3])
         self.assertEqual(res.estimation_quality, "unavailable")
         self.assertEqual(len(res.contributing_stations), 0)
+        self.assertEqual(len(res.estimated_pollutants), 0)
+        self.assertIsNone(res.nearest_station_id)
+        self.assertIsNone(res.nearest_station_distance_km)
+
+    def test_distant_stations_with_empty_station_list(self):
+        """Regression test: Empty station list for London returns unavailable without fabrication."""
+        london_lat, london_lon = 51.5074, -0.1278
+        res = self.estimator.estimate_location_pollutants(london_lat, london_lon, [])
+        self.assertEqual(res.estimation_quality, "unavailable")
+        self.assertEqual(len(res.contributing_stations), 0)
+        self.assertEqual(len(res.estimated_pollutants), 0)
 
 
 if __name__ == "__main__":

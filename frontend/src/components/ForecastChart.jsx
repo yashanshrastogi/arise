@@ -3,6 +3,7 @@ import {
   AreaChart, Area, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea
 } from 'recharts';
+import { computeOutdoorWindowImprovement } from '../utils/timeContext.js';
 
 /**
  * Air Quality & Weather Forecast Chart
@@ -57,7 +58,7 @@ const METRIC_CONFIG = {
   },
 };
 
-function CustomTooltip({ active, payload, label, activeMetric, location = 'Delhi-NCR' }) {
+function CustomTooltip({ active, payload, label, activeMetric, location = 'Your Location' }) {
   if (!active || !payload?.length) return null;
   const val = payload[0].value;
   if (val === undefined || val === null) return null;
@@ -70,16 +71,16 @@ function CustomTooltip({ active, payload, label, activeMetric, location = 'Delhi
       <div className="text-[11px] font-bold t3 mb-1">{label} · {location}</div>
       <div className="flex items-center justify-center gap-2">
         <div
-          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-black shadow-sm"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-black shadow-sm"
           style={{ background: cfg.color }}
         >
           ●
         </div>
         <div className="text-left">
-          <div className="text-lg font-black leading-none" style={{ color: cfg.color }}>
+          <div className="text-lg font-black leading-none tabular-nums" style={{ color: cfg.color }}>
             {val} <span className="text-[11px] font-bold">{cfg.unit}</span>
           </div>
-          <div className="text-[9px] font-bold tm uppercase mt-0.5">
+          <div className="text-[11px] font-bold tm uppercase mt-0.5">
             {activeMetric === 'aqi'
               ? val > 300 ? 'Very Poor' : val > 200 ? 'Poor' : val > 100 ? 'Moderate' : 'Good'
               : cfg.label}
@@ -95,10 +96,22 @@ function CustomTooltip({ active, payload, label, activeMetric, location = 'Delhi
   );
 }
 
-export default function ForecastChart({ data = [], data7Day = [], currentAqi = null, location = 'Delhi-NCR' }) {
+export default function ForecastChart({ data = [], data7Day = [], currentAqi = null, location = 'Your Location' }) {
   const [metric, setMetric] = useState('aqi');
   const [period, setPeriod] = useState('24h'); // '24h' | '7d'
   const [selectedPoint, setSelectedPoint] = useState(null);
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="card p-6 h-full flex flex-col items-center justify-center min-h-[320px] text-center" style={{ background: 'var(--card)' }}>
+        <div className="text-3xl mb-2" aria-hidden="true">📈</div>
+        <h3 className="text-base font-black t1">24-Hour Forecast Horizon</h3>
+        <p className="text-xs font-semibold tm mt-1 max-w-sm leading-relaxed">
+          Atmospheric numerical prediction models are temporarily unavailable for {location}. Ground telemetry will resume once monitoring feeds reconnect.
+        </p>
+      </div>
+    );
+  }
 
   const cfg = METRIC_CONFIG[metric];
 
@@ -130,16 +143,33 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
   const bwItems = data.filter(d => d.bestWindow && !d.past);
   const bwStart = bwItems[0]?.time;
   const bwEnd = bwItems[bwItems.length - 1]?.time;
+  const isModelOnly = currentAqi == null || bwItems.some(d => d.source === "Open-Meteo Air Quality Model" || d.windowStatus === "model_projected");
 
   // Lowest AQI future item
   const futurePoints = data.filter(d => !d.past);
   const candidatePoints = futurePoints.length > 0 ? futurePoints : data;
-  const minAqiItem = candidatePoints.reduce((min, cur) => cur.aqi < min.aqi ? cur : min, candidatePoints[0] || { aqi: 0, time: '' });
-  const currentVal = currentAqi != null ? Number(currentAqi) : (nowVal || 329);
-  const minAqi = minAqiItem?.aqi || currentVal;
-  const percentImprovement = currentVal > 0 ? (currentVal - minAqi) / currentVal : 0;
-  const isBetterBand = (currentVal > 300 && minAqi <= 300) || (currentVal > 200 && minAqi <= 200) || (currentVal > 100 && minAqi <= 100);
-  const hasRealSafeWindow = (percentImprovement >= 0.15 || isBetterBand) && Boolean(bwStart && bwEnd);
+  const validCandidatePoints = candidatePoints.filter(d => d.aqi != null && !Number.isNaN(Number(d.aqi)));
+  const minAqiItem = validCandidatePoints.length > 0
+    ? validCandidatePoints.reduce((min, cur) => cur.aqi < min.aqi ? cur : min, validCandidatePoints[0])
+    : null;
+
+  const {
+    currentVal,
+    minAqi,
+    percentImprovement,
+    isBetterBand,
+    hasRealSafeWindow,
+    windowStatus,
+  } = computeOutdoorWindowImprovement({
+    currentAqi,
+    nowVal,
+    minFutureAqi: minAqiItem?.aqi,
+    bwStart,
+    bwEnd,
+    isModelOnly,
+  });
+
+  const hasModelWindow = isModelOnly && bwStart && bwEnd && minAqiItem?.aqi != null && minAqiItem.aqi <= 300;
 
   // Compute dynamic domain
   const activeDataset = period === '24h' ? data : data7Day.length ? data7Day : data;
@@ -148,7 +178,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
   const maxVal = allValues.length ? Math.ceil(Math.max(...allValues) / 5) * 5 + 10 : cfg.max;
 
   return (
-    <div className="card p-6 h-full flex flex-col justify-between" style={{ background: 'var(--card)' }}>
+    <div className="card p-6 h-full flex flex-col justify-between w-full max-w-full min-w-0 overflow-hidden" style={{ background: 'var(--card)' }}>
       {/* Header with Title, Metric Switchers, and Period Selectors */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
@@ -213,7 +243,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
         <div className="flex-1 min-w-0 h-full">
           <ResponsiveContainer width="100%" height="100%">
           {period === '24h' ? (
-            <AreaChart data={merged24h} margin={{ top: 15, right: 10, left: -16, bottom: 0 }}>
+            <AreaChart data={merged24h} margin={{ top: 15, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="metricAreaFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={cfg.color} stopOpacity={0.25} />
@@ -227,7 +257,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                 dataKey="time"
                 axisLine={false}
                 tickLine={false}
-                minTickGap={14}
+                minTickGap={20}
                 tick={{ fontSize: 11, fontWeight: 700, fill: 'var(--text-tertiary)' }}
                 dy={8}
               />
@@ -299,7 +329,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
               </AreaChart>
             ) : (
               /* 7-Day Bar / Line Outlook */
-              <AreaChart data={data7Day} margin={{ top: 15, right: 10, left: -16, bottom: 0 }}>
+              <AreaChart data={data7Day} margin={{ top: 15, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="metric7DayFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={cfg.color} stopOpacity={0.25} />
@@ -340,15 +370,16 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
 
         {/* Vertical Rainbow Spectrum Bar Legend */}
         {metric === 'aqi' && (
-          <div className="hidden sm:flex flex-col items-center justify-between py-3 pl-2">
-            <span className="text-[9px] font-extrabold text-[#8B1E3F]">500</span>
+          <div className="hidden sm:flex flex-col items-center justify-between py-3 pl-2 select-none" title="CPCB National AQI Index Scale (0–500)">
+            <span className="text-[9px] font-black text-[#8B1E3F]">500</span>
             <div
               className="w-2.5 flex-1 my-1.5 rounded-full shadow-inner"
               style={{
                 background: 'linear-gradient(to top, #2EB872, #9BD34A, #F5C542, #F28C28, #E5484D, #8B1E3F)',
               }}
             />
-            <span className="text-[9px] font-extrabold text-[#2EB872]">0</span>
+            <span className="text-[9px] font-black text-[#2EB872]">0</span>
+            <span className="text-[8px] font-bold tm uppercase mt-1 tracking-tighter" style={{ writingMode: 'vertical-rl' }}>CPCB Scale</span>
           </div>
         )}
       </div>
@@ -363,7 +394,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
             <button
               type="button"
               onClick={() => setSelectedPoint(null)}
-              className="text-[10px] font-bold text-indigo hover:underline"
+              className="text-[11px] font-bold text-indigo hover:underline"
             >
               Reset selection
             </button>
@@ -374,7 +405,7 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
         <div
           role="region"
           aria-label="Forecast data points"
-          className="flex items-center gap-1.5 overflow-x-auto pb-1 focus:outline-none"
+          className="w-full max-w-full min-w-0 flex items-center gap-1.5 overflow-x-auto pb-1 focus:outline-none"
         >
           {activeDataset.map((pt, idx) => {
             const isSelected = selectedPoint && (
@@ -402,9 +433,9 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
               >
                 <div className="flex items-center gap-1 font-bold">
                   <span className={isSelected ? 'text-white' : isBest ? 'text-emerald-950 dark:text-emerald-100 font-black' : 't3'}>{label}</span>
-                  {isBest && !isSelected && <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-black">🌟</span>}
+                  {isBest && !isSelected && <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-black">🌟</span>}
                 </div>
-                <div className={`text-xs font-black ${isSelected ? 'text-white' : isBest ? 'text-emerald-900 dark:text-emerald-200' : 't1'}`}>
+                <div className={`text-xs font-black tabular-nums ${isSelected ? 'text-white' : isBest ? 'text-emerald-900 dark:text-emerald-200' : 't1'}`}>
                   {val != null ? `${val} ${cfg.unit}` : '—'}
                 </div>
               </button>
@@ -428,16 +459,16 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                   <span className="text-xs font-black text-indigo-600 dark:text-indigo-400">
                     {period === '24h' ? `Forecast for ${selectedPoint.time}` : `${selectedPoint.day} Forecast`}
                   </span>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
+                  <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 tabular-nums">
                     {selectedPoint[cfg.dataKey]} {cfg.unit}
                   </span>
                   {selectedPoint.bestWindow && hasRealSafeWindow && (
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                    <span className="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
                       🌟 Best Outdoor Window
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] font-medium t2 mt-0.5 flex items-center gap-3 flex-wrap">
+                <div className="text-[11px] font-medium t2 mt-0.5 flex items-center gap-3 flex-wrap tabular-nums">
                   {selectedPoint.aqi != null && <span>AQI: <strong className="t1">{selectedPoint.aqi}</strong></span>}
                   {selectedPoint.temp != null && <span>Temp: <strong className="t1">{selectedPoint.temp}°C</strong></span>}
                   {selectedPoint.rainProb != null && <span>Chance of rain: <strong className="t1">{selectedPoint.rainProb}%</strong></span>}
@@ -478,11 +509,28 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
                 Best Window ({bwStart}–{bwEnd})
               </span>
             </div>
+          ) : hasModelWindow ? (
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-indigo-500/20 border border-indigo-400" />
+              <span className="text-indigo-600 dark:text-indigo-400 font-extrabold text-[11px]">
+                Projected Window ({bwStart}–{bwEnd})
+              </span>
+            </div>
           ) : metric === 'aqi' ? (
             <div className="flex items-center gap-1.5">
-              <span className="text-red-600 dark:text-red-400 font-bold text-[11px]">
-                No safe time to go out today
-              </span>
+              {maxVal > 200 ? (
+                <span className="text-red-600 dark:text-red-400 font-bold text-[11px]">
+                  No safe time to go out today
+                </span>
+              ) : currentAqi == null ? (
+                <span className="t3 font-bold text-[11px]">
+                  Outdoor advisory unavailable
+                </span>
+              ) : (
+                <span className="t2 font-bold text-[11px]">
+                  Conditions steady across hours
+                </span>
+              )}
             </div>
           ) : null}
         </div>
@@ -492,11 +540,27 @@ export default function ForecastChart({ data = [], data7Day = [], currentAqi = n
           {metric === 'aqi' ? (
             hasRealSafeWindow ? (
               <>
-                Optimal outdoor window: <span className="text-emerald-600 dark:text-emerald-400 font-black">{bwStart} – {bwEnd}</span> (dipping to <span className="text-emerald-600 dark:text-emerald-400 font-black">{minAqiItem.aqi} AQI</span>)
+                Optimal outdoor window: <span className="text-emerald-600 dark:text-emerald-400 font-black">{bwStart} – {bwEnd}</span> (dipping to <span className="text-emerald-600 dark:text-emerald-400 font-black">{minAqiItem?.aqi != null ? `${minAqiItem.aqi} AQI` : 'cleaner air'}</span>)
+              </>
+            ) : hasModelWindow ? (
+              <>
+                Projected outdoor window: <span className="text-indigo-600 dark:text-indigo-400 font-black">{bwStart} – {bwEnd}</span> (model estimate ~<span className="text-indigo-600 dark:text-indigo-400 font-black">{minAqiItem?.aqi != null ? `${minAqiItem.aqi} AQI` : 'cleaner air'}</span>)
+              </>
+            ) : allValues.length === 0 ? (
+              <>
+                Air quality forecast data is currently unavailable.
+              </>
+            ) : maxVal <= 100 ? (
+              <>
+                Air quality is favorable throughout the day (between {minVal} and {maxVal} AQI).
+              </>
+            ) : maxVal <= 200 ? (
+              <>
+                Air quality remains moderate throughout the day (between {minVal} and {maxVal} AQI).
               </>
             ) : (
               <>
-                Air quality remains very bad throughout the day (between {minVal} and {maxVal} AQI).
+                Air pollution remains elevated throughout the day (between {minVal} and {maxVal} AQI).
               </>
             )
           ) : metric === 'temp' ? (

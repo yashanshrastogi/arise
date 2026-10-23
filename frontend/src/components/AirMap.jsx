@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
-import { reverseGeocode } from '../utils/geoUtils';
+import { reverseGeocode, searchLocations } from '../utils/geoUtils';
+import { fetchEnvironment } from '../api/client';
+import DelhiNcrVectorMap from './DelhiNcrVectorMap';
+import {
+  isInDelhiNcr,
+  INDIA_OVERVIEW,
+  GLOBAL_COUNTRIES,
+  REGIONAL_DISTRICTS,
+  getDistrictsInBounds,
+  clusterGeoPoints,
+  resolveCountryFromCoords,
+} from '../utils/locationState';
 
 /**
  * Google Maps styling with POI / business suppression.
@@ -69,35 +80,59 @@ const LIGHT_MAP_STYLES = [
   ...BASE_POI_SUPPRESSION,
 ];
 
-const AQI_COLOR = aqi =>
-  aqi > 400 ? '#8B1E3F' :
-  aqi > 300 ? '#E5484D' :
-  aqi > 200 ? '#F28C28' :
-  aqi > 100 ? '#F5C542' :
-  aqi > 50  ? '#9BD34A' : '#2EB872';
+const AQI_COLOR = aqi => {
+  if (aqi == null || isNaN(Number(aqi))) return '#94A3B8';
+  const val = Number(aqi);
+  return val > 400 ? '#8B1E3F' :
+         val > 300 ? '#E5484D' :
+         val > 200 ? '#F28C28' :
+         val > 100 ? '#F5C542' :
+         val > 50  ? '#9BD34A' : '#2EB872';
+};
 
 // ── Custom SVG Marker Icons ──
 
-// 1. Air Quality Monitoring Station Marker
+// 1. Air Quality Monitoring Station Marker with Highlighted AQI Badge & District Name
 function getStationMarkerIcon(st, isDominant, google) {
+  const isMissing = st.aqi == null || isNaN(Number(st.aqi));
   const col = AQI_COLOR(st.aqi);
-  const size = isDominant ? 44 : 38;
+  const circleD = isDominant ? 42 : 36;
   const strokeWidth = isDominant ? 3.5 : 2.5;
+  const isDemo = st.isDemo || st.source === 'DEMO';
+  const name = st.name || 'Station';
+  const displayName = name.length > 15 ? name.slice(0, 14) + '…' : name;
+  const width = Math.max(76, Math.min(115, displayName.length * 7 + 16));
+  const height = circleD + 20;
+  const cx = width / 2;
+  const cy = circleD / 2 + 2;
+  const dashAttr = isDemo ? 'stroke-dasharray="3,2"' : '';
+  const aqiText = isMissing ? '—' : String(st.aqi);
 
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 3}" fill="#ffffff" stroke="${col}" stroke-width="${strokeWidth}" />
-      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 7}" fill="${col}" fill-opacity="0.14" />
-      <text x="${size / 2}" y="${size / 2 + 4}" font-family="system-ui, -apple-system, sans-serif" font-size="${isDominant ? 12 : 10.5}" font-weight="900" fill="${col}" text-anchor="middle">
-        ${st.aqi}
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <defs>
+        <filter id="badge-shadow-${st.id || Math.round(st.lat * 100)}" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.25" />
+        </filter>
+      </defs>
+      <!-- AQI Numeric Circle Badge (Dashed for demo/curated, Slate for missing) -->
+      <circle cx="${cx}" cy="${cy}" r="${circleD / 2 - 2}" fill="#ffffff" stroke="${col}" stroke-width="${strokeWidth}" ${dashAttr} filter="url(#badge-shadow-${st.id || Math.round(st.lat * 100)})" />
+      <circle cx="${cx}" cy="${cy}" r="${circleD / 2 - 5}" fill="${col}" fill-opacity="${isMissing ? 0.08 : 0.16}" />
+      <text x="${cx}" y="${cy + 4.5}" font-family="system-ui, -apple-system, sans-serif" font-size="${isDominant ? 12.5 : 11}" font-weight="900" fill="${col}" text-anchor="middle">
+        ${aqiText}
+      </text>
+      <!-- District / Station Name Pill -->
+      <rect x="2" y="${circleD + 2}" width="${width - 4}" height="15" rx="7.5" fill="#ffffff" stroke="#cbd5e1" stroke-width="1" filter="url(#badge-shadow-${st.id || Math.round(st.lat * 100)})" />
+      <text x="${cx}" y="${circleD + 13}" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="800" fill="#0f172a" text-anchor="middle">
+        ${isDemo ? `[D] ${displayName}` : displayName}
       </text>
     </svg>
   `;
 
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(size, size),
-    anchor: new google.maps.Point(size / 2, size / 2),
+    scaledSize: new google.maps.Size(width, height),
+    anchor: new google.maps.Point(cx, cy),
   };
 }
 
@@ -155,29 +190,54 @@ function getCentralPinIcon(google) {
   };
 }
 
+// 4b. Dynamic Environmental Inspector Pin (Custom Pin with Live AQI Color for Any Searched / Clicked Street or District)
+function getInspectorPinIcon(google, aqi) {
+  const col = aqi ? AQI_COLOR(aqi) : '#6366F1';
+  const width = 34;
+  const height = 46;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <path d="M17 1 C8.5 1 2 7.5 2 16 C2 27 17 44 17 44 C17 44 32 27 32 16 C32 7.5 25.5 1 17 1 Z" fill="${col}" stroke="#ffffff" stroke-width="2.5" />
+      <circle cx="17" cy="16" r="6" fill="#ffffff" />
+      <circle cx="17" cy="16" r="3" fill="${col}" />
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(width, height),
+    anchor: new google.maps.Point(17, 44),
+  };
+}
+
 // 5. National City Hub Marker (Pan-India Overview when zoomed out)
 export const DEFAULT_NATIONAL_HUBS = [
-  { name: 'Delhi-NCR', state: 'Delhi', lat: 28.6139, lng: 77.2090, aqi: 312, status: 'Very Poor', temp: 28, pm25: 142 },
-  { name: 'Mumbai', state: 'Maharashtra', lat: 19.0760, lng: 72.8777, aqi: 164, status: 'Moderate', temp: 31, pm25: 42 },
-  { name: 'Bengaluru', state: 'Karnataka', lat: 12.9716, lng: 77.5946, aqi: 74, status: 'Satisfactory', temp: 26, pm25: 27 },
-  { name: 'Kolkata', state: 'West Bengal', lat: 22.5726, lng: 88.3639, aqi: 187, status: 'Moderate', temp: 29, pm25: 94 },
-  { name: 'Chennai', state: 'Tamil Nadu', lat: 13.0827, lng: 80.2707, aqi: 66, status: 'Satisfactory', temp: 30, pm25: 21 },
-  { name: 'Hyderabad', state: 'Telangana', lat: 17.3850, lng: 78.4867, aqi: 92, status: 'Satisfactory', temp: 28, pm25: 26 },
-  { name: 'Ahmedabad', state: 'Gujarat', lat: 23.0225, lng: 72.5714, aqi: 158, status: 'Moderate', temp: 33, pm25: 58 },
-  { name: 'Pune', state: 'Maharashtra', lat: 18.5204, lng: 73.8567, aqi: 112, status: 'Moderate', temp: 27, pm25: 38 },
-  { name: 'Lucknow', state: 'Uttar Pradesh', lat: 26.8467, lng: 80.9462, aqi: 215, status: 'Poor', temp: 28, pm25: 86 },
-  { name: 'Jaipur', state: 'Rajasthan', lat: 26.9124, lng: 75.7873, aqi: 142, status: 'Moderate', temp: 30, pm25: 52 },
-  { name: 'Patna', state: 'Bihar', lat: 25.6127, lng: 85.1589, aqi: 240, status: 'Poor', temp: 27, pm25: 112 },
-  { name: 'Guwahati', state: 'Assam', lat: 26.1445, lng: 91.7362, aqi: 85, status: 'Satisfactory', temp: 25, pm25: 29 },
-  { name: 'Chandigarh', state: 'Punjab', lat: 30.7333, lng: 76.7794, aqi: 175, status: 'Moderate', temp: 27, pm25: 64 },
-  { name: 'Bhopal', state: 'Madhya Pradesh', lat: 23.2599, lng: 77.4126, aqi: 118, status: 'Moderate', temp: 29, pm25: 41 },
-  { name: 'Kochi', state: 'Kerala', lat: 9.9312, lng: 76.2673, aqi: 52, status: 'Satisfactory', temp: 29, pm25: 18 },
+  { name: 'NCR', state: 'National Capital Region', lat: 28.6139, lng: 77.2090, aqi: 312, status: 'Very Poor', temp: 28, pm25: 142, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Mumbai', state: 'Maharashtra', lat: 19.0760, lng: 72.8777, aqi: 164, status: 'Moderate', temp: 31, pm25: 42, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Bengaluru', state: 'Karnataka', lat: 12.9716, lng: 77.5946, aqi: 74, status: 'Satisfactory', temp: 26, pm25: 27, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Kolkata', state: 'West Bengal', lat: 22.5726, lng: 88.3639, aqi: 187, status: 'Moderate', temp: 29, pm25: 94, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Chennai', state: 'Tamil Nadu', lat: 13.0827, lng: 80.2707, aqi: 66, status: 'Satisfactory', temp: 30, pm25: 21, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Hyderabad', state: 'Telangana', lat: 17.3850, lng: 78.4867, aqi: 92, status: 'Satisfactory', temp: 28, pm25: 26, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Ahmedabad', state: 'Gujarat', lat: 23.0225, lng: 72.5714, aqi: 158, status: 'Moderate', temp: 33, pm25: 58, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Pune', state: 'Maharashtra', lat: 18.5204, lng: 73.8567, aqi: 112, status: 'Moderate', temp: 27, pm25: 38, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Lucknow', state: 'Uttar Pradesh', lat: 26.8467, lng: 80.9462, aqi: 215, status: 'Poor', temp: 28, pm25: 86, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Jaipur', state: 'Rajasthan', lat: 26.9124, lng: 75.7873, aqi: 142, status: 'Moderate', temp: 30, pm25: 52, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Patna', state: 'Bihar', lat: 25.6127, lng: 85.1589, aqi: 240, status: 'Poor', temp: 27, pm25: 112, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Guwahati', state: 'Assam', lat: 26.1445, lng: 91.7362, aqi: 85, status: 'Satisfactory', temp: 25, pm25: 29, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Chandigarh', state: 'Punjab', lat: 30.7333, lng: 76.7794, aqi: 175, status: 'Moderate', temp: 27, pm25: 64, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Bhopal', state: 'Madhya Pradesh', lat: 23.2599, lng: 77.4126, aqi: 118, status: 'Moderate', temp: 29, pm25: 41, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Kochi', state: 'Kerala', lat: 9.9312, lng: 76.2673, aqi: 52, status: 'Satisfactory', temp: 29, pm25: 18, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
+  { name: 'Srinagar', state: 'Jammu & Kashmir', lat: 34.0837, lng: 74.7973, aqi: 45, status: 'Good', temp: 18, pm25: 14, dataType: 'aggregated', source: 'CPCB National Air Quality Bulletin', timestamp: '2026-10-22T18:00:00Z' },
 ];
 
 function getNationalHubMarkerIcon(hub, google) {
+  const isMissing = hub.aqi == null || isNaN(Number(hub.aqi));
   const col = AQI_COLOR(hub.aqi);
-  const width = 84;
+  const width = 88;
   const height = 46;
+  const aqiDisplay = isMissing ? 'AQI —' : `AQI ${hub.aqi}`;
+  const tempDisplay = hub.temp ? ` · ${hub.temp}°C` : '';
+
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
       <rect x="2" y="2" width="${width - 4}" height="30" rx="8" fill="#ffffff" stroke="${col}" stroke-width="2.5" />
@@ -185,7 +245,7 @@ function getNationalHubMarkerIcon(hub, google) {
         ${hub.name}
       </text>
       <text x="${width / 2}" y="25" font-family="system-ui, -apple-system, sans-serif" font-size="8.5" font-weight="900" fill="${col}" text-anchor="middle">
-        AQI ${hub.aqi} · ${hub.temp || 28}°C
+        ${aqiDisplay}${tempDisplay}
       </text>
       <polygon points="${width / 2 - 4},32 ${width / 2 + 4},32 ${width / 2},38" fill="${col}" />
     </svg>
@@ -198,6 +258,86 @@ function getNationalHubMarkerIcon(hub, google) {
   };
 }
 
+function getCountryMarkerIcon(country, google) {
+  const avg = country.avgAqi;
+  const col = avg > 300 ? '#8B1E3F' : avg > 200 ? '#E5484D' : avg > 100 ? '#F28C28' : avg > 50 ? '#EAB308' : '#16A34A';
+  const width = 118;
+  const height = 48;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect x="2" y="2" width="${width - 4}" height="${height - 12}" rx="8" fill="#1e293b" stroke="${col}" stroke-width="2" />
+      <text x="8" y="15" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="800" fill="#f8fafc">
+        ${country.flag} ${country.name}
+      </text>
+      <rect x="${width - 40}" y="5" width="34" height="15" rx="5" fill="${col}" />
+      <text x="${width - 23}" y="16" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="900" fill="#ffffff" text-anchor="middle">
+        ${avg}
+      </text>
+      <text x="8" y="29" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="700" fill="#94a3b8">
+        Min ${country.minAqi} · Max ${country.maxAqi}
+      </text>
+      <polygon points="${width / 2 - 4},${height - 10} ${width / 2 + 4},${height - 10} ${width / 2},${height - 4}" fill="${col}" />
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(width, height),
+    anchor: new google.maps.Point(width / 2, height - 4),
+  };
+}
+
+// 6. Cluster Marker for Dense Station Groups (Local Tier 4: zoom 11–13)
+function getClusterMarkerIcon(cluster, google) {
+  const col = AQI_COLOR(cluster.avgAqi);
+  const size = Math.min(46, 32 + Math.min(cluster.count, 8) * 1.5);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="${col}" fill-opacity="0.25" stroke="${col}" stroke-width="1.5" />
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 6}" fill="${col}" stroke="#ffffff" stroke-width="2" />
+      <text x="${size / 2}" y="${size / 2 + 4}" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="900" fill="#ffffff" text-anchor="middle">
+        ${cluster.count}
+      </text>
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(size, size),
+    anchor: new google.maps.Point(size / 2, size / 2),
+  };
+}
+
+// 7. Regional District / City Marker (Tier 3 Regional Drill-Down: zoom 8–10)
+function getRegionalDistrictMarkerIcon(district, google) {
+  const isMissing = district.aqi == null || isNaN(Number(district.aqi));
+  const col = AQI_COLOR(district.aqi);
+  const displayName = district.name || 'District';
+  const width = Math.max(90, Math.min(136, displayName.length * 6.8 + 24));
+  const height = 44;
+  const aqiLabel = isMissing ? 'AQI —' : `AQI ${district.aqi}`;
+  const statusLabel = isMissing ? 'Data Pending' : (district.status || 'Regional');
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <rect x="2" y="2" width="${width - 4}" height="28" rx="7" fill="#ffffff" stroke="${col}" stroke-width="2" />
+      <text x="${width / 2}" y="13" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="900" fill="#0f172a" text-anchor="middle">
+        ${displayName}
+      </text>
+      <text x="${width / 2}" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="8.5" font-weight="800" fill="${col}" text-anchor="middle">
+        ${aqiLabel} · ${statusLabel}
+      </text>
+      <polygon points="${width / 2 - 4},30 ${width / 2 + 4},30 ${width / 2},36" fill="${col}" />
+    </svg>
+  `;
+
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(width, height),
+    anchor: new google.maps.Point(width / 2, 36),
+  };
+}
+
 export default function AirMap({
   stations = [],
   fires = [],
@@ -205,19 +345,49 @@ export default function AirMap({
   dark = false,
   weather = null,
   traffic = null,
+  center = null,
+  selectedCoords = null,
   onLocationSelect = null,
   onSwitchToToday = null,
+  routeGeometry = null,
+  routeWeatherPoints = null,
+  routePollutionPoints = null,
+  onClearRoute = null,
   fullHeight = true,
   className = '',
 }) {
   const mapRef = useRef(null);
   const googleMapInstance = useRef(null);
   const infoWindowRef = useRef(null);
-  const markersRef = useRef({ stations: [], fires: [], nationalHubs: [], central: null, userGps: null });
+  const markersRef = useRef({
+    stations: [],
+    clusters: [],
+    regionalDistricts: [],
+    nationalHubs: [],
+    countries: [],
+    fires: [],
+    central: null,
+    userGps: null,
+    inspector: null,
+  });
   const overlaysRef = useRef([]);
+  const renderMarkersRef = useRef(null);
   const [currentZoom, setCurrentZoom] = useState(11);
 
+  // Smooth pan helper respecting reduced-motion accessibility preference
+  const smoothPanTo = (lat, lng) => {
+    if (!googleMapInstance.current) return;
+    const prefersReducedMotion = typeof window !== 'undefined' &&
+      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      googleMapInstance.current.setCenter({ lat: Number(lat), lng: Number(lng) });
+    } else {
+      googleMapInstance.current.panTo({ lat: Number(lat), lng: Number(lng) });
+    }
+  };
+
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const [mapMode, setMapMode] = useState(apiKey ? 'google' : 'vector');
   const [inspectedStation, setInspectedStation] = useState(null);
 
   const [mapReady, setMapReady] = useState(false);
@@ -225,7 +395,90 @@ export default function AirMap({
   const [layerDrawerOpen, setLayerDrawerOpen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const layerDrawerRef = useRef(null);
-  const [selectedStationName, setSelectedStationName] = useState('Delhi-NCR');
+
+  // Hyper-Local Pan-India Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchContainerRef = useRef(null);
+
+  const activeAreaLabel = React.useMemo(() => {
+    if (selectedCoords?.city) return selectedCoords.city;
+    if (selectedCoords?.district) return selectedCoords.district;
+    if (selectedCoords?.name && !selectedCoords.name.includes('°') && selectedCoords.name !== 'Device Location' && selectedCoords.name !== 'Selected Area') {
+      return selectedCoords.name;
+    }
+    if (selectedCoords?.region && selectedCoords.region !== 'India') return selectedCoords.region;
+    return 'Local Area';
+  }, [selectedCoords]);
+
+  const activeCenterLat = Number(center?.lat ?? selectedCoords?.lat ?? 28.6139);
+  const activeCenterLng = Number(center?.lon ?? center?.lng ?? selectedCoords?.lon ?? selectedCoords?.lng ?? 77.2090);
+  const isNcr = isInDelhiNcr(activeCenterLat, activeCenterLng);
+
+  const detectedCountry = React.useMemo(() => {
+    return resolveCountryFromCoords(activeCenterLat, activeCenterLng, selectedCoords);
+  }, [activeCenterLat, activeCenterLng, selectedCoords]);
+
+  const countryButtonLabel = React.useMemo(() => {
+    if (detectedCountry.code === 'IN') return '🇮🇳 India';
+    if (detectedCountry.code === 'US') return '🇺🇸 America';
+    return `${detectedCountry.flag} ${detectedCountry.name}`;
+  }, [detectedCountry]);
+
+  const shortLocalLabel = React.useMemo(() => {
+    const raw = activeAreaLabel || 'Local';
+    const firstPart = raw.split(',')[0].trim();
+    return firstPart.length > 12 ? firstPart.slice(0, 11) + '…' : firstPart;
+  }, [activeAreaLabel]);
+
+  const [selectedStationName, setSelectedStationName] = useState('current_area');
+
+  // Dismiss search suggestions on outside click
+  useEffect(() => {
+    function handleOutside(e) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  // Live search debouncing for streets, districts, towns across India
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setSearchResults(prev => prev.length === 0 ? prev : []);
+      setIsSearching(prev => prev ? false : false);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await searchLocations(searchQuery, {
+          stations,
+          hubs: nationalHubs && nationalHubs.length > 0 ? nationalHubs : DEFAULT_NATIONAL_HUBS,
+          districts: REGIONAL_DISTRICTS,
+        });
+        setSearchResults(res);
+        setSearchOpen(true);
+      } catch (err) {
+        console.warn('Location search error:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [searchQuery, stations, nationalHubs]);
+
+  // Synchronize window helper for jumping to Today tab from map info popup
+  useEffect(() => {
+    window.__ariseSwitchToToday = onSwitchToToday;
+    return () => {
+      window.__ariseSwitchToToday = null;
+    };
+  }, [onSwitchToToday]);
 
   // Expanded map state (Modern ride/delivery pattern)
   const [isExpanded, setIsExpanded] = useState(false);
@@ -235,6 +488,15 @@ export default function AirMap({
   const [locating, setLocating] = useState(false);
   const [geoStatus, setGeoStatus] = useState(null);
   const hasAutoLocated = useRef(false);
+
+  const effectiveVectorLocation = React.useMemo(() => {
+    const lat = selectedCoords?.lat ?? center?.lat;
+    const lng = selectedCoords?.lon ?? selectedCoords?.lng ?? center?.lon ?? center?.lng;
+    if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+      return { lat: Number(lat), lng: Number(lng) };
+    }
+    return userLocation;
+  }, [selectedCoords?.lat, selectedCoords?.lon, selectedCoords?.lng, center?.lat, center?.lon, center?.lng, userLocation]);
 
   // Dual-Layer Architecture:
   // Primary: Environment ('aqi' | 'pm25' | 'pm10' | null)
@@ -330,6 +592,16 @@ export default function AirMap({
     };
   }, []);
 
+  // Pan to updated center or selectedCoords if coordinates change
+  useEffect(() => {
+    if (!googleMapInstance.current) return;
+    const targetLat = center?.lat ?? selectedCoords?.lat;
+    const targetLng = center?.lon ?? center?.lng ?? selectedCoords?.lon ?? selectedCoords?.lng;
+    if (targetLat != null && targetLng != null && !isNaN(Number(targetLat)) && !isNaN(Number(targetLng))) {
+      smoothPanTo(Number(targetLat), Number(targetLng));
+    }
+  }, [center?.lat, center?.lon, center?.lng, selectedCoords?.lat, selectedCoords?.lon, selectedCoords?.lng]);
+
   // 1. Initialize Google Maps with POI suppression & clickableIcons: false
   useEffect(() => {
     if (!apiKey || apiKey.trim() === '') return;
@@ -351,9 +623,13 @@ export default function AirMap({
 
         const { Map, InfoWindow } = mapsLib;
 
+        const initialLat = Number((center?.lat ?? selectedCoords?.lat) ?? INDIA_OVERVIEW.lat);
+        const initialLng = Number((center?.lon ?? center?.lng ?? selectedCoords?.lon ?? selectedCoords?.lng) ?? INDIA_OVERVIEW.lon);
+        const initialZoom = (center?.lat != null || selectedCoords?.lat != null) ? 12 : INDIA_OVERVIEW.zoom;
+
         const map = new Map(mapRef.current, {
-          center: { lat: 28.625, lng: 77.225 }, // Delhi-NCR
-          zoom: 11,
+          center: { lat: initialLat, lng: initialLng },
+          zoom: initialZoom,
           clickableIcons: false, // Disables all clickable Google businesses/POIs
           disableDefaultUI: true,
           zoomControl: false,
@@ -362,6 +638,7 @@ export default function AirMap({
           streetViewControl: false,
           rotateControl: false,
           fullscreenControl: false,
+          gestureHandling: 'greedy', // Ensures immediate touchpad and mouse-wheel responsiveness without requiring ctrl key
           styles: dark ? DARK_MAP_STYLES : LIGHT_MAP_STYLES,
           backgroundColor: dark ? '#0b0f19' : '#e5e9ec',
         });
@@ -371,15 +648,26 @@ export default function AirMap({
         const infoWin = new InfoWindow();
         infoWindowRef.current = infoWin;
 
-        // Zoom change listener to toggle between National Metro Hubs and Local Station Details
-        map.addListener('zoom_changed', () => {
+        // Smooth Map Navigation: Update markers on 'idle' (after pan/zoom completes)
+        map.addListener('idle', () => {
           const z = map.getZoom();
-          if (z != null) setCurrentZoom(z);
+          if (z != null) {
+            setCurrentZoom(prev => {
+              // Only trigger React state change when crossing tier boundaries
+              const prevTier = prev <= 3 ? 1 : prev <= 8 ? 2 : prev <= 10 ? 3 : 4;
+              const nextTier = z <= 3 ? 1 : z <= 8 ? 2 : z <= 10 ? 3 : 4;
+              return prevTier !== nextTier ? z : prev;
+            });
+          }
+          if (typeof renderMarkersRef.current === 'function') {
+            renderMarkersRef.current();
+          }
         });
 
-        // Map Click Listener — Environmental Inspector (Never Google Places)
+        // Map Click Listener — Environmental Inspector (Every street, district, or town in India)
         map.addListener('click', async (e) => {
           setLayerDrawerOpen(false);
+          setSearchOpen(false);
           if (!e.latLng) return;
           const lat = e.latLng.lat();
           const lng = e.latLng.lng();
@@ -393,67 +681,12 @@ export default function AirMap({
             }
           } catch {}
 
+          setSelectedStationName(locName);
+          placeInspectorPin(lat, lng, locName, locMeta || {});
+
           if (onLocationSelect) {
             onLocationSelect(lat, lng, locName, locMeta);
           }
-
-          // Compute nearest station or regional estimation
-          let nearestSt = stations[0];
-          let minDist = 999;
-          stations.forEach(s => {
-            const dist = Math.hypot(s.lat - lat, s.lng - lng);
-            if (dist < minDist) {
-              minDist = dist;
-              nearestSt = s;
-            }
-          });
-
-          const aqiVal = nearestSt ? nearestSt.aqi : 312;
-          const aqiCol = AQI_COLOR(aqiVal);
-          const pm25Val = nearestSt ? nearestSt.pm25 : 142.5;
-          const pm10Val = nearestSt ? nearestSt.pm10 : 210.3;
-          const tempVal = weather ? weather.temp : 28;
-          const rainVal = weather ? weather.rainProb : 10;
-          const windVal = weather ? weather.windSpeed : 3.2;
-          const cloudVal = weather ? weather.cloudCover : 42;
-
-          infoWin.setPosition(e.latLng);
-          infoWin.setContent(`
-            <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 6px 10px; min-width: 210px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                <span style="font-size: 10px; font-weight: 800; color: #5B4BDB; text-transform: uppercase;">
-                  Environmental Grid Point
-                </span>
-                <span style="font-size: 9px; font-weight: 700; color: #64748b;">
-                  ${lat.toFixed(3)}°, ${lng.toFixed(3)}°
-                </span>
-              </div>
-              <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 4px;">
-                <span style="font-size: 24px; font-weight: 900; color: ${aqiCol};">${aqiVal}</span>
-                <span style="font-size: 11px; font-weight: 800; color: ${aqiCol}; background: ${aqiCol}18; padding: 1px 7px; border-radius: 999px;">
-                  ${aqiVal > 300 ? 'Very Poor' : aqiVal > 200 ? 'Poor' : 'Moderate'}
-                </span>
-              </div>
-              <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; color: #334155; line-height: 1.5;">
-                <div style="display: flex; justify-content: space-between;">
-                  <span>PM2.5: <strong>${pm25Val} µg/m³</strong></span>
-                  <span>PM10: <strong>${pm10Val} µg/m³</strong></span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 2px;">
-                  <span>Temp: <strong>${tempVal}°C</strong></span>
-                  <span>Rain: <strong>${rainVal}%</strong></span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 2px;">
-                  <span>Wind: <strong>${windVal} km/h</strong></span>
-                  <span>Cloud: <strong>${cloudVal}%</strong></span>
-                </div>
-              </div>
-              <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #f1f5f9; font-size: 9px; font-weight: 700; color: #94a3b8;">
-                Estimated from nearest Arise monitoring grid · Local telemetry only
-              </div>
-            </div>
-          `);
-          infoWin.open(map);
         });
 
         setMapReady(true);
@@ -517,15 +750,15 @@ export default function AirMap({
             onLocationSelect(lat, lng, locName, locMeta);
           }
           if (googleMapInstance.current) {
-            googleMapInstance.current.panTo({ lat, lng });
+            smoothPanTo(lat, lng);
             googleMapInstance.current.setZoom(12);
           }
         },
         () => {
-          // Graceful fallback to Delhi-NCR with subtle message
+          // Graceful fallback with subtle message
           setGeoStatus({
             type: 'info',
-            message: 'Location access is off. Showing Delhi-NCR.',
+            message: 'Location access is off. Showing regional overview.',
           });
           setTimeout(() => setGeoStatus(null), 4500);
         },
@@ -569,7 +802,7 @@ export default function AirMap({
         }
 
         if (googleMapInstance.current) {
-          googleMapInstance.current.panTo({ lat, lng });
+          smoothPanTo(lat, lng);
           googleMapInstance.current.setZoom(13);
         }
 
@@ -581,13 +814,13 @@ export default function AirMap({
       },
       (error) => {
         setLocating(false);
-        let msg = 'Location request failed. Showing Delhi-NCR.';
+        let msg = 'Location request failed. Please select a city or use the map.';
         if (error.code === 1 || error.code === error.PERMISSION_DENIED) {
-          msg = 'Location access is off. Showing Delhi-NCR.';
+          msg = 'Location access is off. Please choose a location from the search bar.';
         } else if (error.code === 2 || error.code === error.POSITION_UNAVAILABLE) {
-          msg = 'Location unavailable. Showing Delhi-NCR.';
+          msg = 'Location unavailable. Please select a location on the map.';
         } else if (error.code === 3 || error.code === error.TIMEOUT) {
-          msg = 'Location request timed out. Showing Delhi-NCR.';
+          msg = 'Location request timed out. Please select a location on the map.';
         }
         setGeoStatus({ type: 'warning', message: msg });
         setTimeout(() => setGeoStatus(null), 4500);
@@ -597,7 +830,7 @@ export default function AirMap({
   };
 
   // 3. Render Markers & Primary Overlays
-  useEffect(() => {
+  const renderMarkers = () => {
     const map = googleMapInstance.current;
     if (!map || !mapReady || !window.google || !window.google.maps) return;
 
@@ -607,49 +840,77 @@ export default function AirMap({
     // Clear previous markers & overlays
     markersRef.current.stations.forEach(m => m.setMap(null));
     markersRef.current.stations = [];
+    if (markersRef.current.clusters) {
+      markersRef.current.clusters.forEach(m => m.setMap(null));
+      markersRef.current.clusters = [];
+    }
+    if (markersRef.current.regionalDistricts) {
+      markersRef.current.regionalDistricts.forEach(m => m.setMap(null));
+      markersRef.current.regionalDistricts = [];
+    }
     if (markersRef.current.nationalHubs) {
       markersRef.current.nationalHubs.forEach(m => m.setMap(null));
       markersRef.current.nationalHubs = [];
+    }
+    if (markersRef.current.countries) {
+      markersRef.current.countries.forEach(m => m.setMap(null));
+      markersRef.current.countries = [];
     }
     markersRef.current.fires.forEach(m => m.setMap(null));
     markersRef.current.fires = [];
     overlaysRef.current.forEach(c => c.setMap(null));
     overlaysRef.current = [];
 
-    // Central Delhi Pin
-    if (!markersRef.current.central) {
-      const centralMarker = new google.maps.Marker({
-        position: { lat: 28.6139, lng: 77.2090 },
-        map: map,
-        title: 'Delhi-NCR (Central Basin)',
-        icon: getCentralPinIcon(google),
-        zIndex: 1000,
-      });
+    const activeCenterLat = Number(center?.lat ?? selectedCoords?.lat ?? 28.6139);
+    const activeCenterLng = Number(center?.lon ?? center?.lng ?? selectedCoords?.lon ?? selectedCoords?.lng ?? 77.2090);
+    const isNcr = isInDelhiNcr(activeCenterLat, activeCenterLng);
 
-      centralMarker.addListener('click', () => {
-        const avgAqi = stations && stations.length > 0
-          ? Math.round(stations.reduce((acc, s) => acc + (s.aqi || 0), 0) / stations.length)
-          : 312;
-        const aqiColor = avgAqi > 400 ? '#8B1E3F' : avgAqi > 300 ? '#E5484D' : avgAqi > 200 ? '#F28C28' : '#F5C542';
-        const verdictText = avgAqi > 300 ? 'STAY IN Recommended' : avgAqi > 200 ? 'AVOID PEAK HOURS' : 'OUTDOOR FRIENDLY';
+    // Central Reference Pin — Scoped to active locality
+    if (isNcr) {
+      if (!markersRef.current.central) {
+        const centralMarker = new google.maps.Marker({
+          position: { lat: activeCenterLat, lng: activeCenterLng },
+          map: map,
+          title: `${activeAreaLabel} (Monitored Area)`,
+          icon: getCentralPinIcon(google),
+          zIndex: 1000,
+        });
 
-        infoWindow.setContent(`
-          <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 6px;">
-            <div style="font-size: 11px; font-weight: 800; color: #5B4BDB; text-transform: uppercase;">
-              📍 Monitored Center
-            </div>
-            <div style="font-size: 14px; font-weight: 800; color: #111827; margin-top: 2px;">
-              Delhi-NCR (Central Basin)
-            </div>
-            <div style="margin-top: 4px; font-size: 11px; font-weight: 700; color: ${aqiColor};">
-              AQI ${avgAqi} · ${verdictText}
-            </div>
-          </div>
-        `);
-        infoWindow.open(map, centralMarker);
-      });
+        centralMarker.addListener('click', () => {
+          const currentLabel = centralMarker.getTitle() || activeAreaLabel;
+          const avgAqi = stations && stations.length > 0
+            ? Math.round(stations.reduce((acc, s) => acc + (s.aqi || 0), 0) / stations.length)
+            : 312;
+          const aqiColor = avgAqi > 400 ? '#8B1E3F' : avgAqi > 300 ? '#E5484D' : avgAqi > 200 ? '#F28C28' : '#F5C542';
+          const verdictText = avgAqi > 300 ? 'STAY IN Recommended' : avgAqi > 200 ? 'AVOID PEAK HOURS' : 'OUTDOOR FRIENDLY';
 
-      markersRef.current.central = centralMarker;
+          infoWindow.setContent(`
+            <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 6px;">
+              <div style="font-size: 11px; font-weight: 800; color: #5B4BDB; text-transform: uppercase;">
+                📍 Monitored Center
+              </div>
+              <div style="font-size: 14px; font-weight: 800; color: #111827; margin-top: 2px;">
+                ${currentLabel}
+              </div>
+              <div style="margin-top: 4px; font-size: 11px; font-weight: 700; color: ${aqiColor};">
+                AQI ${avgAqi} · ${verdictText}
+              </div>
+            </div>
+          `);
+          infoWindow.open(map, centralMarker);
+        });
+
+        markersRef.current.central = centralMarker;
+      } else {
+        markersRef.current.central.setPosition({ lat: activeCenterLat, lng: activeCenterLng });
+        markersRef.current.central.setTitle(`${activeAreaLabel} (Monitored Area)`);
+        markersRef.current.central.setMap(map);
+      }
+    } else {
+      if (markersRef.current.central) {
+        markersRef.current.central.setMap(null);
+        markersRef.current.central = null;
+      }
     }
 
     // User Location GPS Marker
@@ -691,25 +952,93 @@ export default function AirMap({
       }
     }
 
-    // Zoom-dependent Rendering:
-    // When currentZoom <= 8, display National Metro Hubs across India
-    // When currentZoom > 8, display Detailed Local Ground Monitoring Stations
+    // 5-Tier Zoom-dependent Hierarchical Rendering:
+    // Tier 1 (currentZoom <= 3): Global World Overview — Countries with average pollution & min/max
+    // Tier 2 (3 < currentZoom <= 8): National Country View — Major Metro Cities & State Hubs
+    // Tier 3 (8 < currentZoom <= 10): Regional View — Cities, Districts, and Towns within viewport bounds
+    // Tier 4 (10 < currentZoom <= 13): Local View — Localities & Clustered Monitoring Stations
+    // Tier 5 (currentZoom > 13): Monitoring Stations — High-density Individual Ground Monitors
     const activeHubs = (nationalHubs && nationalHubs.length > 0) ? nationalHubs : DEFAULT_NATIONAL_HUBS;
+    const currentZ = map.getZoom() || currentZoom || 11;
+    const bounds = map.getBounds();
 
-    if (currentZoom <= 8) {
+    if (currentZoom <= 3) {
+      if (!markersRef.current.countries) markersRef.current.countries = [];
+      GLOBAL_COUNTRIES.forEach(country => {
+        const marker = new google.maps.Marker({
+          position: { lat: country.lat, lng: country.lng },
+          map: map,
+          title: `${country.flag} ${country.name} · Avg AQI ${country.avgAqi} (Min ${country.minAqi} - Max ${country.maxAqi})`,
+          icon: getCountryMarkerIcon(country, google),
+          zIndex: 900,
+        });
+
+        marker.addListener('click', () => {
+          smoothPanTo(country.lat, country.lng);
+          map.setZoom(country.zoom || 5);
+          infoWindow.setContent(`
+            <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 6px 10px; min-width: 210px;">
+              <div style="font-size: 11px; font-weight: 800; color: #4F46E5; text-transform: uppercase;">
+                ${country.flag} ${country.name} · National Atmospheric Profile
+              </div>
+              <div style="font-size: 15px; font-weight: 900; color: #0F172A; margin-top: 2px;">
+                Average AQI: ${country.avgAqi}
+              </div>
+              <div style="font-size: 11px; font-weight: 700; color: #475569; margin-top: 4px;">
+                Representative Range: Min ${country.minAqi} — Max ${country.maxAqi}
+              </div>
+              <div style="margin-top: 6px; padding-top: 5px; border-top: 1px solid #E2E8F0; font-size: 10px; font-weight: 800; color: #2563EB;">
+                🔍 Zoomed into national metros. Click a metro city to inspect local districts.
+              </div>
+            </div>
+          `);
+          infoWindow.open(map, marker);
+        });
+
+        markersRef.current.countries.push(marker);
+      });
+    } else if (currentZoom <= 8) {
+      // Tier 2: National Country View (Major Metros across India)
       activeHubs.forEach(hub => {
         const marker = new google.maps.Marker({
           position: { lat: hub.lat, lng: hub.lng },
           map: map,
-          title: `${hub.name} (${hub.state || 'India'}) · AQI ${hub.aqi}`,
+          title: `${hub.name} (${hub.state || 'India'}) · AQI ${hub.aqi != null ? hub.aqi : '—'} · Metro Aggregate`,
           icon: getNationalHubMarkerIcon(hub, google),
           zIndex: 800,
         });
 
         marker.addListener('click', () => {
           setSelectedStationName(hub.name);
-          map.panTo({ lat: hub.lat, lng: hub.lng });
-          map.setZoom(11);
+          const col = AQI_COLOR(hub.aqi);
+          const isMissing = hub.aqi == null || isNaN(Number(hub.aqi));
+          const statusText = isMissing ? 'Unavailable' : (hub.status || (hub.aqi > 300 ? 'Very Poor' : hub.aqi > 200 ? 'Poor' : hub.aqi > 100 ? 'Moderate' : 'Good'));
+          infoWindow.setContent(`
+            <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 6px 10px; min-width: 200px;">
+              <div style="display: inline-block; font-size: 9px; font-weight: 800; color: #4338ca; background: #e0e7ff; padding: 2px 7px; border-radius: 4px; margin-bottom: 4px; letter-spacing: 0.05em;">
+                📊 AGGREGATED METRO COMPOSITE
+              </div>
+              <div style="font-size: 14px; font-weight: 900; color: #0f172a;">
+                ${hub.name}, ${hub.state || 'India'}
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 4px;">
+                <span style="font-size: 22px; font-weight: 900; color: ${col};">${!isMissing ? hub.aqi : '—'}</span>
+                <span style="font-size: 10px; font-weight: 800; color: ${col}; background: ${col}18; padding: 1px 6px; border-radius: 999px;">
+                  ${statusText}
+                </span>
+              </div>
+              <div style="margin-top: 6px; font-size: 10px; color: #475569; line-height: 1.4;">
+                <div>Source: <strong>${hub.source || 'CPCB National Air Quality Bulletin'}</strong></div>
+                <div>Data Type: <strong>Aggregated Citywide</strong></div>
+                <div>Reported: <strong>${hub.timestamp ? new Date(hub.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' }) + ' IST' : 'Calibrated Bulletin'}</strong></div>
+              </div>
+              <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 10px; font-weight: 600; color: #64748b;">
+                Composite index across metropolitan stations. Click to drill into regional districts.
+              </div>
+            </div>
+          `);
+          infoWindow.open(map, marker);
+          smoothPanTo(hub.lat, hub.lng);
           if (onLocationSelect) {
             onLocationSelect(hub.lat, hub.lng, hub.name);
           }
@@ -717,47 +1046,140 @@ export default function AirMap({
 
         markersRef.current.nationalHubs.push(marker);
       });
-    } else {
-      // Station Markers (Local Area)
-      if (signals.stations) {
-        stations.forEach((st, i) => {
-          const isDominant = i === 0 || st.aqi > 320;
-          const col = AQI_COLOR(st.aqi);
+    } else if (currentZoom <= 10) {
+      // Tier 3: Regional View — Cities, Districts, and Towns within map bounds
+      if (!markersRef.current.regionalDistricts) markersRef.current.regionalDistricts = [];
+      const visibleDistricts = getDistrictsInBounds(bounds, REGIONAL_DISTRICTS);
 
-          const marker = new google.maps.Marker({
-            position: { lat: st.lat, lng: st.lng },
-            map: map,
-            title: `${st.name} Station (AQI ${st.aqi})`,
-            icon: getStationMarkerIcon(st, isDominant, google),
-            zIndex: isDominant ? 500 : 200,
-          });
+      visibleDistricts.forEach(dist => {
+        const marker = new google.maps.Marker({
+          position: { lat: dist.lat, lng: dist.lon },
+          map: map,
+          title: `${dist.name} (${dist.state}) · AQI ${dist.aqi != null ? dist.aqi : '—'} · Regional Aggregate`,
+          icon: getRegionalDistrictMarkerIcon(dist, google),
+          zIndex: 750,
+        });
 
-          marker.addListener('click', () => {
-            setSelectedStationName(st.name);
-            if (onLocationSelect) {
-              onLocationSelect(st.lat, st.lng, st.name);
-            }
-            infoWindow.setContent(`
-              <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 8px; min-width: 170px;">
-                <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">
-                  ${st.name} Monitoring Station
-                </div>
-                <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 3px;">
-                  <span style="font-size: 22px; font-weight: 900; color: ${col};">${st.aqi}</span>
-                  <span style="font-size: 10px; font-weight: 800; color: ${col}; background: ${col}18; padding: 1px 6px; border-radius: 999px;">
-                    ${st.aqi > 300 ? 'Very Poor' : 'Poor'}
-                  </span>
-                </div>
-                <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; color: #334155;">
-                  <div>PM2.5: <strong>${st.pm25} µg/m³</strong></div>
-                  <div>PM10: <strong>${st.pm10} µg/m³</strong></div>
-                </div>
+        marker.addListener('click', () => {
+          setSelectedStationName(dist.name);
+          const col = AQI_COLOR(dist.aqi);
+          const isMissing = dist.aqi == null || isNaN(Number(dist.aqi));
+          const statusText = isMissing ? 'Unavailable' : (dist.status || (dist.aqi > 300 ? 'Very Poor' : dist.aqi > 200 ? 'Poor' : dist.aqi > 100 ? 'Moderate' : 'Good'));
+          infoWindow.setContent(`
+            <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 6px 10px; min-width: 200px;">
+              <div style="display: inline-block; font-size: 9px; font-weight: 800; color: #4338ca; background: #e0e7ff; padding: 2px 7px; border-radius: 4px; margin-bottom: 4px; letter-spacing: 0.05em;">
+                📊 AGGREGATED REGIONAL BULLETIN
               </div>
-            `);
-            infoWindow.open(map, marker);
-          });
+              <div style="font-size: 14px; font-weight: 900; color: #0f172a;">
+                ${dist.name}, ${dist.state}
+              </div>
+              <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 4px;">
+                <span style="font-size: 22px; font-weight: 900; color: ${col};">${!isMissing ? dist.aqi : '—'}</span>
+                <span style="font-size: 10px; font-weight: 800; color: ${col}; background: ${col}18; padding: 1px 6px; border-radius: 999px;">
+                  ${statusText}
+                </span>
+              </div>
+              <div style="margin-top: 6px; font-size: 10px; color: #475569; line-height: 1.4;">
+                <div>Source: <strong>${dist.source || 'CPCB CAAQMS Regional Bulletin'}</strong></div>
+                <div>Data Type: <strong>Aggregated Regional</strong></div>
+                <div>Reported: <strong>${dist.timestamp ? new Date(dist.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' }) + ' IST' : 'Calibrated Bulletin'}</strong></div>
+              </div>
+              <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 10px; font-weight: 600; color: #64748b;">
+                District-level composite telemetry. Zoom in further to view individual ground monitors.
+              </div>
+            </div>
+          `);
+          infoWindow.open(map, marker);
+          smoothPanTo(dist.lat, dist.lon);
+          if (onLocationSelect) {
+            onLocationSelect(dist.lat, dist.lon, dist.name, dist);
+          }
+        });
 
-          markersRef.current.stations.push(marker);
+        markersRef.current.regionalDistricts.push(marker);
+      });
+    } else {
+      // Tier 4 (zoom 11-13) & Tier 5 (zoom 14+): Local View & Individual Monitoring Stations
+      if (signals.stations) {
+        if (!markersRef.current.clusters) markersRef.current.clusters = [];
+        const stationsInBounds = bounds && typeof bounds.contains === 'function' && window.google?.maps?.LatLng
+          ? stations.filter(st => bounds.contains(new window.google.maps.LatLng(st.lat, st.lng)))
+          : stations;
+
+        const clusterRadius = currentZ <= 13 ? 55 : 0;
+        const clustered = clusterGeoPoints(stationsInBounds, currentZ, clusterRadius);
+
+        clustered.forEach((node, i) => {
+          if (node.isCluster) {
+            const clusterMarker = new google.maps.Marker({
+              position: { lat: node.lat, lng: node.lng },
+              map: map,
+              title: `Cluster: ${node.count} monitoring stations · Avg AQI ${node.avgAqi != null ? node.avgAqi : '—'} · Click to zoom in`,
+              icon: getClusterMarkerIcon(node, google),
+              zIndex: 600,
+            });
+
+            clusterMarker.addListener('click', () => {
+              smoothPanTo(node.lat, node.lng);
+              map.setZoom(Math.min(16, (map.getZoom() || currentZoom) + 2));
+            });
+
+            markersRef.current.clusters.push(clusterMarker);
+          } else {
+            const st = node.item;
+            const isDominant = i === 0 || (st.aqi != null && st.aqi > 320);
+            const col = AQI_COLOR(st.aqi);
+            const isDemo = st.isDemo || st.source === 'DEMO';
+            const isMissing = st.aqi == null || isNaN(Number(st.aqi));
+            const badgeBg = isDemo ? '#fef3c7' : '#dcfce7';
+            const badgeCol = isDemo ? '#92400e' : '#166534';
+            const badgeText = isDemo ? '⚠️ DEMO / SIMULATION' : '📡 OBSERVED TELEMETRY';
+            const statusText = isMissing ? 'Unavailable' : (st.aqi > 300 ? 'Very Poor' : (st.aqi > 200 ? 'Poor' : (st.aqi > 100 ? 'Moderate' : 'Good')));
+
+            const marker = new google.maps.Marker({
+              position: { lat: st.lat, lng: st.lng },
+              map: map,
+              title: `${st.name} Station (AQI ${!isMissing ? st.aqi : '—'}) · ${isDemo ? 'Demo Simulated Sensor' : 'CPCB Ground Monitor'}`,
+              icon: getStationMarkerIcon(st, isDominant, google),
+              zIndex: isDominant ? 500 : 200,
+            });
+
+            marker.addListener('click', () => {
+              setSelectedStationName(st.name);
+              setInspectedStation(st);
+              if (onLocationSelect) {
+                onLocationSelect(st.lat, st.lng, st.name);
+              }
+              infoWindow.setContent(`
+                <div style="font-family: 'Plus Jakarta Sans', sans-serif; padding: 4px 8px; min-width: 180px;">
+                  <div style="display: inline-block; font-size: 9px; font-weight: 800; color: ${badgeCol}; background: ${badgeBg}; padding: 2px 7px; border-radius: 4px; margin-bottom: 4px; letter-spacing: 0.04em;">
+                    ${badgeText}
+                  </div>
+                  <div style="font-size: 12px; font-weight: 800; color: #0f172a;">
+                    ${st.name} Monitoring Station
+                  </div>
+                  <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 3px;">
+                    <span style="font-size: 22px; font-weight: 900; color: ${col};">${!isMissing ? st.aqi : '—'}</span>
+                    <span style="font-size: 10px; font-weight: 800; color: ${col}; background: ${col}18; padding: 1px 6px; border-radius: 999px;">
+                      ${statusText}
+                    </span>
+                  </div>
+                  <div style="margin-top: 6px; font-size: 10px; color: #475569; line-height: 1.4;">
+                    <div>Source: <strong>${isDemo ? 'Demo Calibration Fixture' : (st.source || 'CPCB Ground Station')}</strong></div>
+                    <div>Data Type: <strong>${isDemo ? 'Simulated Demo' : 'Live Observed Ground Sensor'}</strong></div>
+                    <div>Reported: <strong>${st.timestamp ? new Date(st.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' }) + ' IST' : (isDemo ? 'Fixture Data' : 'Timestamp Pending')}</strong></div>
+                  </div>
+                  <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; color: #334155;">
+                    <div>PM2.5: <strong>${st.pm25 != null ? `${st.pm25} µg/m³` : '—'}</strong></div>
+                    <div>PM10: <strong>${st.pm10 != null ? `${st.pm10} µg/m³` : '—'}</strong></div>
+                  </div>
+                </div>
+              `);
+              infoWindow.open(map, marker);
+            });
+
+            markersRef.current.stations.push(marker);
+          }
         });
       }
     }
@@ -797,80 +1219,28 @@ export default function AirMap({
       });
     }
 
-    // Traffic corridor lines (if enabled)
-    if (signals.traffic && traffic?.corridors) {
-      // Line: DND Flyway (Delhi to Noida)
-      const dndLine = new google.maps.Polyline({
-        path: [
-          { lat: 28.5835, lng: 77.2600 },
-          { lat: 28.5750, lng: 77.2950 },
-          { lat: 28.5680, lng: 77.3200 },
-        ],
-        strokeColor: '#E5484D',
-        strokeOpacity: 0.85,
-        strokeWeight: 5,
-        map: map,
-      });
-      // Line: NH-48 (Delhi to Gurugram)
-      const nh48Line = new google.maps.Polyline({
-        path: [
-          { lat: 28.5900, lng: 77.1600 },
-          { lat: 28.5400, lng: 77.1200 },
-          { lat: 28.5000, lng: 77.0800 },
-        ],
-        strokeColor: '#F28C28',
-        strokeOpacity: 0.85,
-        strokeWeight: 5,
-        map: map,
-      });
-      overlaysRef.current.push(dndLine, nh48Line);
-    }
-
-    // Environment Overlay (Primary - vanishes if null)
+    // Dynamic Environment Overlay — Anchored to active location center (Single inner boundary circle)
     if (envLayer === 'aqi' || envLayer === 'pm25' || envLayer === 'pm10') {
-      const outerColor = envLayer === 'pm25' ? '#E5484D' : '#F5C542';
-      const c1 = new google.maps.Circle({
-        map,
-        center: { lat: 28.63, lng: 77.25 },
-        radius: 16000,
-        fillColor: outerColor,
-        fillOpacity: 0.12,
-        strokeColor: outerColor,
-        strokeOpacity: 0.35,
-        strokeWeight: 1.5,
-        clickable: false,
-      });
-      const c2 = new google.maps.Circle({
-        map,
-        center: { lat: 28.63, lng: 77.25 },
-        radius: 10000,
-        fillColor: '#F28C28',
-        fillOpacity: 0.18,
-        strokeColor: '#F28C28',
-        strokeOpacity: 0.45,
-        strokeWeight: 1.5,
-        clickable: false,
-      });
       const c3 = new google.maps.Circle({
         map,
-        center: { lat: 28.64, lng: 77.28 },
+        center: { lat: activeCenterLat, lng: activeCenterLng },
         radius: 5500,
         fillColor: '#E5484D',
-        fillOpacity: 0.25,
+        fillOpacity: 0.22,
         strokeColor: '#E5484D',
         strokeOpacity: 0.65,
         strokeWeight: 2,
         clickable: false,
       });
-      overlaysRef.current.push(c1, c2, c3);
+      overlaysRef.current.push(c3);
     }
 
-    // Weather Overlay (Secondary - Concurrent with Environment, vanishes if null)
+    // Dynamic Weather Overlay — Anchored to active location center
     if (weatherLayer === 'temp') {
       // Warm thermal plume
       const t1 = new google.maps.Circle({
         map,
-        center: { lat: 28.62, lng: 77.22 },
+        center: { lat: activeCenterLat, lng: activeCenterLng },
         radius: 14000,
         fillColor: '#F97316',
         fillOpacity: 0.18,
@@ -884,7 +1254,7 @@ export default function AirMap({
       // Rain radar precipitation circle
       const r1 = new google.maps.Circle({
         map,
-        center: { lat: 28.66, lng: 77.18 },
+        center: { lat: activeCenterLat + 0.02, lng: activeCenterLng - 0.02 },
         radius: 11000,
         fillColor: '#3B82F6',
         fillOpacity: 0.20,
@@ -895,12 +1265,12 @@ export default function AirMap({
       });
       overlaysRef.current.push(r1);
     } else if (weatherLayer === 'wind') {
-      // Wind streamline vectors across basin
+      // Wind streamline vectors oriented dynamically
       const w1 = new google.maps.Polyline({
         path: [
-          { lat: 28.75, lng: 77.05 },
-          { lat: 28.62, lng: 77.22 },
-          { lat: 28.52, lng: 77.35 },
+          { lat: activeCenterLat + 0.10, lng: activeCenterLng - 0.15 },
+          { lat: activeCenterLat, lng: activeCenterLng },
+          { lat: activeCenterLat - 0.10, lng: activeCenterLng + 0.15 },
         ],
         strokeColor: '#10B981',
         strokeOpacity: 0.75,
@@ -909,8 +1279,8 @@ export default function AirMap({
       });
       const w2 = new google.maps.Polyline({
         path: [
-          { lat: 28.70, lng: 77.15 },
-          { lat: 28.58, lng: 77.28 },
+          { lat: activeCenterLat + 0.07, lng: activeCenterLng - 0.08 },
+          { lat: activeCenterLat - 0.05, lng: activeCenterLng + 0.08 },
         ],
         strokeColor: '#10B981',
         strokeOpacity: 0.75,
@@ -921,7 +1291,7 @@ export default function AirMap({
     } else if (weatherLayer === 'clouds') {
       const cl1 = new google.maps.Circle({
         map,
-        center: { lat: 28.64, lng: 77.24 },
+        center: { lat: activeCenterLat, lng: activeCenterLng },
         radius: 18000,
         fillColor: '#94A3B8',
         fillOpacity: 0.22,
@@ -932,7 +1302,151 @@ export default function AirMap({
       });
       overlaysRef.current.push(cl1);
     }
-  }, [mapReady, envLayer, weatherLayer, signals, stations, fires, traffic, userLocation, currentZoom, nationalHubs]);
+
+    // Commute Route Polyline (if provided)
+    if (routeGeometry && Array.isArray(routeGeometry) && routeGeometry.length > 1) {
+      const path = routeGeometry.map(([lat, lon]) => ({ lat: Number(lat), lng: Number(lon) }));
+      const routePolyline = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: '#4F46E5',
+        strokeOpacity: 0.9,
+        strokeWeight: 5,
+        map,
+        zIndex: 950,
+      });
+      overlaysRef.current.push(routePolyline);
+
+      // Add Origin Marker & Destination Marker
+      const originPt = path[0];
+      const destPt = path[path.length - 1];
+
+      const originMarker = new google.maps.Marker({
+        position: originPt,
+        map,
+        title: 'Route Origin',
+        label: { text: 'A', color: '#ffffff', fontWeight: 'bold', fontSize: '11px' },
+        zIndex: 960,
+      });
+
+      const destMarker = new google.maps.Marker({
+        position: destPt,
+        map,
+        title: 'Route Destination',
+        label: { text: 'B', color: '#ffffff', fontWeight: 'bold', fontSize: '11px' },
+        zIndex: 960,
+      });
+
+      overlaysRef.current.push(originMarker, destMarker);
+
+      // Milestone 2: Weather Waypoint Markers along Route
+      if (routeWeatherPoints && Array.isArray(routeWeatherPoints) && routeWeatherPoints.length > 0) {
+        routeWeatherPoints.forEach((wp, idx) => {
+          let marker = null;
+          if (idx === 0) {
+            marker = originMarker;
+            if (wp.temp_c != null) {
+              originMarker.setTitle(`${wp.label || 'Origin'} (+0m): ${Math.round(wp.temp_c)}°C ${wp.condition}`);
+            }
+          } else if (idx === routeWeatherPoints.length - 1) {
+            marker = destMarker;
+            if (wp.temp_c != null) {
+              destMarker.setTitle(`${wp.label || 'Destination'} (+${Math.round(wp.eta_min)}m): ${Math.round(wp.temp_c)}°C ${wp.condition}`);
+            }
+          } else {
+            // Intermediate sampled waypoint (e.g. Midpoint)
+            marker = new google.maps.Marker({
+              position: { lat: wp.lat, lng: wp.lon },
+              map,
+              title: `${wp.label} (+${Math.round(wp.eta_min)}m): ${wp.temp_c != null ? `${Math.round(wp.temp_c)}°C` : '—'} ${wp.condition}`,
+              label: { text: wp.icon || '•', color: '#4F46E5', fontWeight: 'bold', fontSize: '13px' },
+              zIndex: 955,
+            });
+            overlaysRef.current.push(marker);
+          }
+
+          if (marker && infoWindow) {
+            marker.addListener('click', () => {
+              const polWp = routePollutionPoints && (routePollutionPoints[idx] || routePollutionPoints.find(p => p.label === wp.label));
+              const tempStr = wp.temp_c != null ? `${Math.round(wp.temp_c)}°C` : '—';
+              const rainStr = wp.precipitation_mm != null && wp.precipitation_mm > 0
+                ? `${wp.precipitation_mm} mm`
+                : wp.rain_probability != null
+                ? `${Math.round(wp.rain_probability)}% rain`
+                : 'Dry';
+              const windStr = wp.wind_speed_kmh != null
+                ? `${Math.round(wp.wind_speed_kmh)} km/h ${wp.wind_direction || ''}`
+                : 'Calm';
+              const fogAlert = wp.fog_risk && wp.fog_risk !== 'None'
+                ? `<div style="margin-top:4px;color:#d97706;font-weight:bold;font-size:11px;">⚠️ ${wp.fog_risk}${wp.visibility_km != null ? ` (${wp.visibility_km} km vis)` : ''}</div>`
+                : '';
+
+              const pollutionHtml = polWp
+                ? (polWp.aqi != null
+                    ? `<div style="margin-top:5px;padding:3px 6px;border-radius:4px;background:#f8fafc;border:1px solid #e2e8f0;font-size:11px;">
+                         <div style="display:flex;align-items:center;justify-content:space-between;">
+                           <span style="font-weight:bold;color:#0f172a;">💨 AQI ${polWp.aqi} · ${polWp.aqi_category}</span>
+                           <span style="font-size:9px;font-weight:bold;text-transform:uppercase;color:${polWp.data_type === 'observed' ? '#059669' : '#2563eb'};">${polWp.data_type}</span>
+                         </div>
+                         ${polWp.pm25 != null ? `<div style="font-size:10px;color:#475569;margin-top:2px;">PM2.5: ${polWp.pm25} µg/m³ ${polWp.pm10 != null ? `· PM10: ${polWp.pm10}` : ''}</div>` : ''}
+                         <div style="font-size:9px;color:#64748b;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                           ${polWp.nearest_station ? `📍 ${polWp.nearest_station} (${polWp.nearest_station_distance_km} km)` : `🌐 Open-Meteo regional model`}
+                         </div>
+                       </div>`
+                    : `<div style="margin-top:4px;font-size:10px;color:#94a3b8;">💨 Air quality: Telemetry unavailable</div>`
+                  )
+                : '';
+
+              const content = `
+                <div style="font-family:sans-serif;padding:6px;font-size:12px;color:#1e293b;max-width:230px;line-height:1.4;">
+                  <div style="font-weight:bold;font-size:13px;display:flex;align-items:center;gap:4px;">
+                    <span>${wp.icon || '📍'}</span>
+                    <span>${wp.label}</span>
+                    <span style="font-size:10px;background:#e0e7ff;color:#4338ca;padding:1px 5px;border-radius:4px;font-weight:bold;">+${Math.round(wp.eta_min)}m</span>
+                  </div>
+                  <div style="margin-top:4px;font-size:12px;"><strong>${tempStr}</strong> · ${wp.condition}</div>
+                  <div style="margin-top:2px;font-size:11px;color:#475569;">💧 ${rainStr} · 💨 ${windStr}</div>
+                  ${fogAlert}
+                  ${pollutionHtml}
+                  <div style="margin-top:6px;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:3px;">
+                    Corridor sample point
+                  </div>
+                </div>
+              `;
+              infoWindow.setContent(content);
+              infoWindow.open(map, marker);
+            });
+          }
+        });
+      }
+
+      // Fit bounds to show entire route
+      const bounds = new google.maps.LatLngBounds();
+      path.forEach(pt => bounds.extend(pt));
+      map.fitBounds(bounds, { top: 60, bottom: 60, left: 60, right: 60 });
+    }
+  };
+
+  useEffect(() => {
+    renderMarkersRef.current = renderMarkers;
+    renderMarkers();
+
+    return () => {
+      renderMarkersRef.current = null;
+      if (markersRef.current.countries) {
+        markersRef.current.countries.forEach(m => {
+          try { m.setMap(null); } catch {}
+        });
+        markersRef.current.countries = [];
+      }
+      overlaysRef.current.forEach((c) => {
+        try {
+          c.setMap(null);
+        } catch {}
+      });
+      overlaysRef.current = [];
+    };
+  }, [mapReady, envLayer, weatherLayer, signals, stations, fires, traffic, userLocation, currentZoom, nationalHubs, routeGeometry, routeWeatherPoints, routePollutionPoints, center?.lat, center?.lon, center?.lng, selectedCoords?.lat, selectedCoords?.lon, selectedCoords?.lng, activeAreaLabel]);
 
   // Zoom control helpers
   const handleZoomIn = () => {
@@ -947,98 +1461,187 @@ export default function AirMap({
     }
   };
 
+  // Hyper-local Environmental Inspector for Any Street, District, or Town across India
+  const placeInspectorPin = async (lat, lng, label, meta = {}) => {
+    if (!googleMapInstance.current || typeof window === 'undefined' || !window.google?.maps) return;
+    const map = googleMapInstance.current;
+    const google = window.google;
+
+    if (markersRef.current.inspector) {
+      try {
+        markersRef.current.inspector.setMap(null);
+      } catch {}
+    }
+
+    const marker = new google.maps.Marker({
+      position: { lat, lng },
+      map: map,
+      title: label || 'Inspected Area',
+      icon: getInspectorPinIcon(google),
+      zIndex: 1200,
+    });
+    markersRef.current.inspector = marker;
+
+    const infoWin = infoWindowRef.current || new google.maps.InfoWindow();
+    infoWindowRef.current = infoWin;
+
+    infoWin.setPosition({ lat, lng });
+    infoWin.setContent(`
+      <div style="font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 6px 10px; min-width: 220px; max-width: 280px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 10px; font-weight: 800; color: #4F46E5; text-transform: uppercase;">
+            📍 Environmental Inspector
+          </span>
+          <span style="font-size: 9px; font-weight: 700; color: #64748b;">
+            ${lat.toFixed(3)}°, ${lng.toFixed(3)}°
+          </span>
+        </div>
+        <div style="font-size: 13.5px; font-weight: 800; color: #0f172a; margin-top: 3px; line-height: 1.2;">
+          ${label || 'Selected Location'}
+        </div>
+        ${meta.subtitle ? `<div style="font-size: 10.5px; font-weight: 600; color: #64748b; margin-top: 2px;">${meta.subtitle}</div>` : ''}
+        <div style="margin-top: 8px; padding: 6px 8px; background: #f8fafc; border-radius: 8px; font-size: 11px; font-weight: 600; color: #475569; display: flex; align-items: center; gap: 6px;">
+          <span style="display: inline-block; width: 10px; height: 10px; border: 2px solid #6366f1; border-top-color: transparent; border-radius: 50%;"></span>
+          <span>Updating local weather &amp; AQI...</span>
+        </div>
+      </div>
+    `);
+    infoWin.open(map, marker);
+
+    marker.addListener('click', () => {
+      infoWin.open(map, marker);
+    });
+
+    try {
+      const snap = await fetchEnvironment({
+        lat,
+        lon: lng,
+        location_name: label,
+      });
+
+      if (snap) {
+        const aqiVal = snap.aqi != null ? snap.aqi : (stations[0]?.aqi || '—');
+        const aqiCol = typeof aqiVal === 'number' ? AQI_COLOR(aqiVal) : '#64748b';
+        const aqiCat = snap.status || snap.aqi_category || (typeof aqiVal === 'number' ? (aqiVal > 300 ? 'Very Poor' : aqiVal > 200 ? 'Poor' : aqiVal > 100 ? 'Moderate' : 'Good') : 'Monitored');
+        const w = snap.weather || {};
+        const tempStr = w.temp != null ? `${Math.round(w.temp)}°C` : (weather?.temp != null ? `${Math.round(weather.temp)}°C` : '—');
+        const windStr = w.windSpeed != null ? `${w.windSpeed} km/h` : (weather?.windSpeed != null ? `${weather.windSpeed} km/h` : '—');
+        const rainStr = w.rainProb != null ? `${w.rainProb}%` : (weather?.rainProb != null ? `${weather.rainProb}%` : '—');
+        const humStr = w.humidity != null ? `${w.humidity}%` : (weather?.humidity != null ? `${weather.humidity}%` : '—');
+        const condStr = w.condition || weather?.condition || 'Live Telemetry';
+
+        const p25 = snap.pollutants?.find(p => p.name === 'PM2.5')?.value;
+        const p10 = snap.pollutants?.find(p => p.name === 'PM10')?.value;
+
+        if (typeof aqiVal === 'number') {
+          marker.setIcon(getInspectorPinIcon(google, aqiVal));
+        }
+
+        infoWin.setContent(`
+          <div style="font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 6px 10px; min-width: 240px; max-width: 280px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <span style="font-size: 10px; font-weight: 800; color: #4F46E5; text-transform: uppercase;">
+                📍 ${meta.type ? meta.type.toUpperCase() : 'LOCALITY'}
+              </span>
+              <span style="font-size: 9px; font-weight: 700; color: #64748b;">
+                ${lat.toFixed(3)}°, ${lng.toFixed(3)}°
+              </span>
+            </div>
+            <div style="font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 3px; line-height: 1.25;">
+              ${label || 'Selected Location'}
+            </div>
+            ${meta.subtitle ? `<div style="font-size: 10.5px; font-weight: 600; color: #64748b; margin-top: 2px;">${meta.subtitle}</div>` : ''}
+
+            <div style="display: flex; align-items: baseline; gap: 6px; margin-top: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0;">
+              <span style="font-size: 26px; font-weight: 900; color: ${aqiCol}; line-height: 1;">${aqiVal}</span>
+              <span style="font-size: 11px; font-weight: 800; color: ${aqiCol}; background: ${aqiCol}18; padding: 2px 7px; border-radius: 999px;">
+                ${aqiCat}
+              </span>
+              <span style="font-size: 11px; font-weight: 700; color: #64748b; margin-left: auto;">AQI</span>
+            </div>
+
+            <div style="margin-top: 6px; font-size: 11px; font-weight: 600; color: #334155; line-height: 1.6;">
+              <div style="display: flex; justify-content: space-between;">
+                <span>🌡️ Temp: <strong>${tempStr}</strong></span>
+                <span>🌧️ Rain: <strong>${rainStr}</strong></span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span>🌬️ Wind: <strong>${windStr}</strong></span>
+                <span>💧 Humidity: <strong>${humStr}</strong></span>
+              </div>
+              ${p25 != null ? `
+              <div style="display: flex; justify-content: space-between; border-top: 1px dashed #e2e8f0; margin-top: 4px; padding-top: 2px;">
+                <span>PM2.5: <strong>${p25} µg/m³</strong></span>
+                ${p10 != null ? `<span>PM10: <strong>${p10} µg/m³</strong></span>` : ''}
+              </div>` : ''}
+              <div style="margin-top: 2px; color: #64748b; font-size: 10px;">
+                Weather: <strong>${condStr}</strong>
+              </div>
+            </div>
+
+            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 9.5px; font-weight: 700; color: #10b981;">✓ Live CPCB &amp; Meteo</span>
+              <button
+                type="button"
+                id="btn-switch-to-today"
+                onclick="window.__ariseSwitchToToday ? window.__ariseSwitchToToday() : null"
+                style="background: #4F46E5; color: #ffffff; border: none; padding: 4px 9px; border-radius: 6px; font-size: 10.5px; font-weight: 800; cursor: pointer;"
+              >
+                Today's Advice →
+              </button>
+            </div>
+          </div>
+        `);
+      }
+    } catch (err) {
+      console.warn('Inspector telemetry error:', err);
+    }
+  };
+
+  const handleSelectLocation = async (item) => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSelectedStationName(item.name);
+
+    const map = googleMapInstance.current;
+    const lat = Number(item.lat);
+    const lng = Number(item.lon ?? item.lng);
+
+    smoothPanTo(lat, lng);
+    map.setZoom(item.zoom || (item.type === 'street' ? 15 : item.type === 'district' ? 13 : 11));
+
+    placeInspectorPin(lat, lng, item.name, item);
+
+    if (onLocationSelect) {
+      onLocationSelect(lat, lng, item.name, {
+        city: item.city,
+        district: item.district,
+        region: item.subtitle || item.name,
+      });
+    }
+  };
+
   const handleSelectStation = (name) => {
     setSelectedStationName(name);
     if (!googleMapInstance.current) return;
+    if (name === 'current_area') {
+      const targetLat = Number(selectedCoords?.lat ?? center?.lat ?? 28.6139);
+      const targetLng = Number(selectedCoords?.lon ?? selectedCoords?.lng ?? center?.lon ?? center?.lng ?? 77.2090);
+      smoothPanTo(targetLat, targetLng);
+      googleMapInstance.current.setZoom(12);
+      return;
+    }
     const st = stations.find(s => s.name.toLowerCase().includes(name.toLowerCase()));
     if (st) {
-      googleMapInstance.current.panTo({ lat: st.lat, lng: st.lng });
+      smoothPanTo(st.lat, st.lng);
       googleMapInstance.current.setZoom(12);
     } else {
-      googleMapInstance.current.panTo({ lat: 28.625, lng: 77.225 });
-      googleMapInstance.current.setZoom(11);
+      const targetLat = Number(selectedCoords?.lat ?? center?.lat ?? 28.6139);
+      const targetLng = Number(selectedCoords?.lon ?? selectedCoords?.lng ?? center?.lon ?? center?.lng ?? 77.2090);
+      smoothPanTo(targetLat, targetLng);
+      googleMapInstance.current.setZoom(12);
     }
   };
-
-  // Helper for legend descriptions
-  const getLegendInfo = () => {
-    // If environment primary layer is selected
-    if (envLayer === 'pm25') {
-      return {
-        title: 'PM2.5 Concentration (µg/m³)',
-        left: '0 µg',
-        right: '250 µg',
-        gradient: 'linear-gradient(to right, #2EB872, #F5C542, #E5484D, #8B1E3F)',
-        note: weatherLayer ? `Fine particulate dispersion (+ ${weatherLayer.toUpperCase()} weather)` : 'Fine particulate dispersion',
-      };
-    }
-    if (envLayer === 'pm10') {
-      return {
-        title: 'PM10 Concentration (µg/m³)',
-        left: '0 µg',
-        right: '400 µg',
-        gradient: 'linear-gradient(to right, #2EB872, #F5C542, #E5484D, #8B1E3F)',
-        note: weatherLayer ? `Coarse particulate dispersion (+ ${weatherLayer.toUpperCase()} weather)` : 'Coarse particulate dispersion',
-      };
-    }
-    if (envLayer === 'aqi') {
-      return {
-        title: 'AQI Concentration (0–500)',
-        left: 'Good (0)',
-        right: 'Severe (500)',
-        gradient: 'linear-gradient(to right, #2EB872, #9BD34A, #F5C542, #F28C28, #E5484D, #8B1E3F)',
-        note: weatherLayer ? `CPCB Air Quality zones (+ ${weatherLayer.toUpperCase()} weather)` : 'CPCB Air Quality zones',
-      };
-    }
-
-    // If environment layer is deselected, display active weather layer
-    if (weatherLayer === 'temp') {
-      return {
-        title: 'Temperature (°C)',
-        left: 'Cool (20°)',
-        right: 'Warm (35°)',
-        gradient: 'linear-gradient(to right, #38BDF8, #FBBF24, #F97316)',
-        note: 'Thermal mixing zone',
-      };
-    }
-    if (weatherLayer === 'rain') {
-      return {
-        title: 'Rain Probability (%)',
-        left: '0%',
-        right: '100%',
-        gradient: 'linear-gradient(to right, #93C5FD, #3B82F6, #1D4ED8)',
-        note: 'Precipitation radar contour',
-      };
-    }
-    if (weatherLayer === 'wind') {
-      return {
-        title: 'Surface Wind (km/h)',
-        left: 'Calm (0)',
-        right: 'Breezy (25)',
-        gradient: 'linear-gradient(to right, #A7F3D0, #10B981, #047857)',
-        note: 'Drift streamline NW 3.2 km/h',
-      };
-    }
-    if (weatherLayer === 'clouds') {
-      return {
-        title: 'Cloud Cover (%)',
-        left: 'Clear (0%)',
-        right: 'Overcast (100%)',
-        gradient: 'linear-gradient(to right, #CBD5E1, #94A3B8, #475569)',
-        note: 'Satellite cloud opacity',
-      };
-    }
-
-    return {
-      title: 'Layers Inactive',
-      left: 'Base Map',
-      right: 'Live Stations',
-      gradient: 'linear-gradient(to right, #94A3B8, #64748B)',
-      note: 'Tap an Environment or Weather layer to display overlays',
-    };
-  };
-
-  const legend = getLegendInfo();
 
   return (
     <div
@@ -1047,7 +1650,7 @@ export default function AirMap({
       className={`w-full transition-all duration-300 ${
         isExpanded
           ? 'fixed inset-0 z-[9999] w-screen h-screen p-3 sm:p-5 bg-black/85 backdrop-blur-md flex flex-col'
-          : `relative card overflow-hidden ${fullHeight ? 'h-full min-h-[580px] lg:min-h-[640px]' : 'h-[320px] lg:h-[340px]'} shadow-sm`
+          : `relative card overflow-hidden ${fullHeight ? 'h-full min-h-0' : 'h-[320px] lg:h-[340px]'} shadow-sm`
       } ${className}`}
     >
       {/* ── Expanded Mode Top Bar ── */}
@@ -1062,12 +1665,12 @@ export default function AirMap({
             <div>
               <div className="text-sm font-black text-white flex items-center gap-2">
                 <span>Arise Spatial Intelligence Explorer</span>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300">
+                <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300">
                   Full Map View
                 </span>
               </div>
-              <div className="text-[10px] font-bold text-slate-400">
-                Active: {activeLayersSummary} · {legend.title} · Click anywhere to inspect local air &amp; weather
+              <div className="text-[11px] font-bold text-slate-300">
+                Active: {activeLayersSummary} · Click anywhere to inspect local air &amp; weather
               </div>
             </div>
           </div>
@@ -1124,45 +1727,63 @@ export default function AirMap({
 
         {/* ── 1. Floating Structured Layer Selector (Top-Left) ── */}
         {controlsVisible && (
-        <div ref={layerDrawerRef} className="absolute top-3 left-3 z-[25] w-[calc(100%-1.5rem)] sm:w-[295px] max-w-[295px]">
-          <div className="map-solid-panel rounded-2xl shadow-xl p-3 sm:p-3.5 transition-all">
-            {/* Regional Scope Switcher: Local Delhi-NCR vs Pan-India */}
-            <div className="flex items-center gap-1.5 p-1 rounded-xl border mb-2.5" style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}>
+        <div ref={layerDrawerRef} className="absolute top-3 left-3 z-[25] w-[calc(100%-1.5rem)] sm:w-[275px] max-w-[285px]">
+          <div className="map-solid-panel rounded-2xl shadow-xl p-2.5 sm:p-3 transition-all">
+            {/* Regional Scope Switcher: Local Area vs Dynamic Country vs Globe */}
+            <div className="flex items-center gap-1 p-0.5 rounded-xl border mb-2" style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}>
               <button
                 type="button"
-                id="btn-scope-delhi"
+                id="btn-scope-local"
                 onClick={() => {
                   if (googleMapInstance.current) {
-                    googleMapInstance.current.panTo({ lat: 28.625, lng: 77.225 });
+                    smoothPanTo(activeCenterLat, activeCenterLng);
                     googleMapInstance.current.setZoom(11);
                   }
                 }}
-                className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs sm:text-[13px] font-bold transition-all ${
+                className={`flex-1 py-1 px-0.5 rounded-lg text-[10px] sm:text-[10.5px] font-bold transition-all truncate text-center cursor-pointer ${
                   currentZoom > 8
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 't2 hover:bg-[var(--surface)]'
                 }`}
-                title="Focus on local Delhi-NCR airshed"
+                title={`Focus on local area (${activeAreaLabel})`}
               >
-                📍 Delhi-NCR
+                📍 {shortLocalLabel}
               </button>
               <button
                 type="button"
                 id="btn-scope-all-india"
                 onClick={() => {
                   if (googleMapInstance.current) {
-                    googleMapInstance.current.panTo({ lat: 22.5, lng: 79.5 });
-                    googleMapInstance.current.setZoom(5);
+                    smoothPanTo(detectedCountry.lat, detectedCountry.lng);
+                    googleMapInstance.current.setZoom(detectedCountry.zoom || 5);
                   }
                 }}
-                className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs sm:text-[13px] font-bold transition-all ${
-                  currentZoom <= 8
+                className={`flex-1 py-1 px-0.5 rounded-lg text-[10px] sm:text-[10.5px] font-bold transition-all truncate text-center cursor-pointer ${
+                  currentZoom > 3 && currentZoom <= 8
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 't2 hover:bg-[var(--surface)]'
                 }`}
-                title="Zoom out to Pan-India national view"
+                title={`Focus on national view (${detectedCountry.name})`}
               >
-                🇮🇳 All India
+                {countryButtonLabel}
+              </button>
+              <button
+                type="button"
+                id="btn-scope-globe"
+                onClick={() => {
+                  if (googleMapInstance.current) {
+                    smoothPanTo(20.0, 20.0);
+                    googleMapInstance.current.setZoom(2);
+                  }
+                }}
+                className={`flex-1 py-1 px-0.5 rounded-lg text-[10px] sm:text-[10.5px] font-bold transition-all truncate text-center cursor-pointer ${
+                  currentZoom <= 3
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 't2 hover:bg-[var(--surface)]'
+                }`}
+                title="Global world overview with country pollution ranges"
+              >
+                🌍 Globe
               </button>
             </div>
 
@@ -1170,42 +1791,42 @@ export default function AirMap({
               className="flex items-center justify-between cursor-pointer select-none px-1 py-0.5"
               onClick={() => setLayerDrawerOpen(!layerDrawerOpen)}
             >
-              <div className="flex items-center gap-2 text-sm font-black t1">
+              <div className="flex items-center gap-1.5 text-xs font-black t1">
                 <span>👁️</span>
                 <span>Layers</span>
-                <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 px-2 py-0.5 rounded-full bg-indigo-500/10 uppercase">
+                <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded-full bg-indigo-500/10 uppercase">
                   {activeLayersSummary}
                 </span>
               </div>
-              <span className="text-xs font-bold t3">{layerDrawerOpen ? '▲' : '▼'}</span>
+              <span className="text-[11px] font-bold t3">{layerDrawerOpen ? '▲' : '▼'}</span>
             </div>
 
             {layerDrawerOpen && (
-              <div className="flex flex-col gap-2 pt-2.5 border-t mt-2 max-h-[calc(100vh-140px)] sm:max-h-[380px] overflow-y-auto pr-0.5" style={{ borderColor: 'var(--border)' }}>
+              <div className="flex flex-col gap-2 pt-2 border-t mt-1.5 max-h-[calc(100vh-140px)] sm:max-h-[360px] overflow-y-auto pr-0.5" style={{ borderColor: 'var(--border)' }}>
                 {/* Reset Filters Option */}
-                <div className="flex items-center justify-between px-0.5 pb-1">
+                <div className="flex items-center justify-between px-0.5 pb-0.5">
                   <span className="text-[10px] font-extrabold t3 uppercase tracking-wider">Dual Active Layers</span>
                   <button
                     type="button"
                     id="btn-reset-filters"
                     onClick={handleResetFilters}
-                    className="text-[11px] font-black text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors hover:underline cursor-pointer"
-                    title="Reset environment and weather layers to defaults (AQI active, Weather none)"
+                    className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 transition-colors hover:underline cursor-pointer"
+                    title="Reset environment and weather layers to defaults"
                   >
                     <span>↺</span>
-                    <span>Reset filters</span>
+                    <span>Reset</span>
                   </button>
                 </div>
 
                 {/* Section A: Environment Primary Layers */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] sm:text-xs font-black t3 uppercase tracking-wider">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black t3 uppercase tracking-wider">
                       Environment (Primary)
                     </span>
                     <span className="text-[10px] font-bold t3">Tap to toggle</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1">
                     {[
                       { id: 'aqi',  label: 'AQI' },
                       { id: 'pm25', label: 'PM2.5' },
@@ -1218,7 +1839,7 @@ export default function AirMap({
                           type="button"
                           id={`btn-layer-env-${p.id}`}
                           onClick={() => handleToggleEnvLayer(p.id)}
-                          className={`py-1.5 px-1.5 rounded-xl text-xs sm:text-[13px] font-black transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
+                          className={`py-1 px-1 rounded-lg text-[11px] font-black transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
                             isActive
                               ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400/40'
                               : 'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100'
@@ -1235,13 +1856,13 @@ export default function AirMap({
 
                 {/* Section B: Weather Secondary Layers */}
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] sm:text-xs font-black t3 uppercase tracking-wider">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-black t3 uppercase tracking-wider">
                       Weather (Secondary)
                     </span>
                     <span className="text-[10px] font-bold t3">Tap to toggle</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-2 gap-1">
                     {[
                       { id: 'temp',   label: '🌡️ Temp' },
                       { id: 'rain',   label: '🌧️ Rain' },
@@ -1255,7 +1876,7 @@ export default function AirMap({
                           type="button"
                           id={`btn-layer-weather-${w.id}`}
                           onClick={() => handleToggleWeatherLayer(w.id)}
-                          className={`py-1.5 px-2 rounded-xl text-xs sm:text-[12.5px] font-black transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
+                          className={`py-1 px-1.5 rounded-lg text-[10.5px] font-black transition-all text-center flex items-center justify-center gap-1 cursor-pointer ${
                             isActive
                               ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400/40'
                               : 'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-100'
@@ -1270,23 +1891,22 @@ export default function AirMap({
                   </div>
                 </div>
 
-                {/* Section C: Additive Signals / Overlays */}
-                <div className="pt-2 border-t space-y-1" style={{ borderColor: 'var(--border)' }}>
-                  <div className="text-[11px] sm:text-xs font-black t3 uppercase tracking-wider mb-1">
+                {/* Section C: Additive Signals / Overlays (Stations & Fire Signals only) */}
+                <div className="pt-1.5 border-t space-y-0.5" style={{ borderColor: 'var(--border)' }}>
+                  <div className="text-[10px] font-black t3 uppercase tracking-wider mb-0.5">
                     Signal Overlays
                   </div>
                   {[
                     { key: 'stations', label: 'Stations', icon: '📍' },
                     { key: 'fires',    label: fires.some(f => f.isDemo) ? 'Fire Signals (DEMO)' : 'Fire Signals', icon: '🔥' },
-                    { key: 'traffic',  label: 'NCR Corridors', icon: '🚗' },
                   ].map(s => (
                     <button
                       key={s.key}
                       onClick={() => toggleSignal(s.key)}
-                      className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs sm:text-[13px] font-bold transition-all text-left"
+                      className="w-full flex items-center justify-between px-2 py-1 rounded-lg text-[11px] font-bold transition-all text-left cursor-pointer"
                       style={{ background: signals[s.key] ? 'var(--surface-alt)' : 'transparent' }}
                     >
-                      <span className="flex items-center gap-2 t1">
+                      <span className="flex items-center gap-1.5 t1">
                         <span>{s.icon}</span>
                         <span>{s.label}</span>
                       </span>
@@ -1300,76 +1920,123 @@ export default function AirMap({
         </div>
         )}
 
-        {/* ── 2. Floating Search & Station Dropdown (Top-Right) ── */}
+        {/* ── 2. Floating Live Search & Station Autocomplete (Top-Right) ── */}
         {controlsVisible && (
-        <div className="absolute top-3 right-3 z-[15] hidden sm:flex items-center gap-2">
-          {/* Station & City Selector */}
-          <div
-            className="rounded-xl px-3 py-1.5 flex items-center gap-2 shadow-lg border-2 border-indigo-300 dark:border-indigo-600 transition-all"
-            style={{
-              backgroundColor: 'var(--card)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-black shadow-xs shrink-0" aria-hidden="true">
-              📍
-            </span>
-            <select
-              value={selectedStationName}
-              onChange={e => handleSelectStation(e.target.value)}
-              className="bg-transparent text-xs sm:text-[13px] font-black t1 outline-none cursor-pointer pr-1"
-              aria-label="Select Monitored Area"
+        <div className="absolute top-3 right-3 z-[25] flex items-center gap-2" ref={searchContainerRef}>
+          <div className="relative">
+            <div
+              className="rounded-2xl px-3 py-1.5 flex items-center gap-2 shadow-xl border-2 border-indigo-400/80 dark:border-indigo-500/80 transition-all backdrop-blur-md"
+              style={{
+                backgroundColor: 'var(--card)',
+                color: 'var(--text-primary)',
+              }}
             >
-              <option value="Delhi-NCR" className="bg-[var(--surface)] text-[var(--text-primary)] font-bold">
-                Delhi-NCR (All Monitored Basin)
-              </option>
-              {stations.map(s => (
-                <option key={s.id} value={s.name} className="bg-[var(--surface)] text-[var(--text-primary)] font-bold">
-                  {s.name} (AQI {s.aqi})
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => handleSelectStation(selectedStationName)}
-              className="w-7 h-7 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0 active:scale-95 transition-all"
-              title="Focus Station"
-            >
-              🔍
-            </button>
+              <button
+                type="button"
+                id="btn-search-locate"
+                onClick={handleLocateMe}
+                disabled={locating}
+                className="w-5 h-5 rounded-full bg-indigo-600 hover:bg-indigo-500 active:scale-90 text-white text-[11px] flex items-center justify-center font-black shadow-xs shrink-0 cursor-pointer transition-transform"
+                title="Locate my position (GPS)"
+                aria-label="Locate my position (GPS)"
+              >
+                📍
+              </button>
+              <input
+                id="input-map-search"
+                type="text"
+                value={searchQuery}
+                onChange={e => {
+                  setSearchQuery(e.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => {
+                  if (searchResults.length > 0 || searchQuery.length >= 2) setSearchOpen(true);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && searchResults.length > 0) {
+                    handleSelectLocation(searchResults[0]);
+                  }
+                  if (e.key === 'Escape') setSearchOpen(false);
+                }}
+                placeholder="Search street, district, city..."
+                className="bg-transparent text-xs sm:text-[13px] font-bold t1 outline-none w-48 sm:w-64 md:w-80 placeholder:text-slate-400 placeholder:font-normal"
+                aria-label="Search street, district, or city"
+              />
+              {isSearching && (
+                <span className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin shrink-0" />
+              )}
+              {searchQuery && !isSearching && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setSearchOpen(false);
+                  }}
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] t3 hover:bg-[var(--surface-alt)] cursor-pointer"
+                  title="Clear search"
+                  aria-label="Clear map search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Live Autocomplete Results Popup */}
+            {searchOpen && searchResults.length > 0 && (
+              <div
+                className="absolute top-full mt-2 right-0 w-80 sm:w-96 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 z-[5000] space-y-1 animate-in fade-in zoom-in-95 duration-150 max-h-80 overflow-y-auto"
+                style={{
+                  backgroundColor: 'var(--card)',
+                  borderColor: 'var(--border)',
+                }}
+              >
+                <div className="px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider t3 flex justify-between items-center">
+                  <span>Pan-India Live Locations</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Streets · Districts · Towns</span>
+                </div>
+                {searchResults.map((item, idx) => (
+                  <button
+                    key={item.id || idx}
+                    type="button"
+                    id={`search-result-${idx}`}
+                    onClick={() => handleSelectLocation(item)}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--surface-alt)] transition-colors text-left gap-2 cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs shrink-0 font-bold">
+                        {item.type === 'street' ? '🛣️' : item.type === 'district' ? '🏛️' : item.type === 'station' ? '📡' : '🏙️'}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-xs sm:text-[13px] font-black t1 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {item.name}
+                        </div>
+                        <div className="text-[11px] font-medium tm truncate">
+                          {item.subtitle}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[var(--surface)] border uppercase tracking-wider text-indigo-600 dark:text-indigo-400 shrink-0" style={{ borderColor: 'var(--border)' }}>
+                      {item.type || 'place'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         )}
 
-        {/* ── 3. Floating Dynamic Legend (Bottom-Center, Non-overlapping) ── */}
-        {controlsVisible && (
-        <div className={`absolute bottom-3 left-1/2 -translate-x-1/2 z-[15] pointer-events-auto transition-opacity duration-200 ${
-          layerDrawerOpen ? 'hidden md:flex' : 'flex'
-        }`}>
-          <div className="map-solid-panel rounded-2xl px-4 py-2 shadow-lg flex flex-col gap-1 min-w-[180px]">
-            <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-wider">
-              <span className="text-emerald-600 dark:text-emerald-400">{legend.left}</span>
-              <span className="text-rose-600 dark:text-rose-400">{legend.right}</span>
-            </div>
-            <div
-              className="h-1.5 rounded-full w-full shadow-inner"
-              style={{ background: legend.gradient }}
-            />
-            <div className="flex items-center justify-between text-[8.5px] font-bold t3 mt-0.5">
-              <span>{legend.title}</span>
-              <span className="text-[8px] text-indigo-600 dark:text-indigo-400 font-black">Click to inspect</span>
-            </div>
-          </div>
-        </div>
-        )}
+
 
         {/* ── 4. Floating Action Controls (Bottom-Right: Expand Map + Locate Me + Zoom + Overlay Toggle) ── */}
-        <div className="absolute bottom-3 right-3 z-[15] flex flex-col gap-1.5 items-center">
+        <div className="absolute bottom-3 right-3 z-[30] flex flex-col gap-1.5 items-center">
           {/* Toggle Map Controls / Clear Canvas Button */}
           <button
             onClick={() => setControlsVisible(!controlsVisible)}
             id="btn-toggle-map-controls"
-            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95 ${
+            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer ${
               controlsVisible
                 ? 'map-solid-control'
                 : 'bg-indigo-600 text-white shadow-indigo-500/20'
@@ -1385,35 +2052,35 @@ export default function AirMap({
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             id="btn-expand-map"
-            className="w-8 h-8 rounded-xl map-solid-control flex items-center justify-center text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95"
+            className="w-8 h-8 rounded-xl map-solid-control flex items-center justify-center text-xs font-black shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer"
             title={isExpanded ? 'Minimize Map [Esc]' : 'Expand Map'}
             aria-label="Expand Map"
           >
             {isExpanded ? '✕' : '⛶'}
           </button>
 
-          {/* Dedicated GPS Locate Me Button */}
+          {/* Dedicated GPS Locate Me Button (Prominent Floating GPS Locator) */}
           <button
             onClick={handleLocateMe}
             disabled={locating}
             id="btn-locate-me"
-            className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-md transition-all ${
+            className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer ${
               userLocation
-                ? 'bg-blue-600 text-white shadow-blue-500/30'
+                ? 'bg-blue-600 text-white shadow-blue-500/35 ring-2 ring-blue-400/40'
                 : locating
                 ? 'map-solid-control border-indigo-500 text-indigo-600 animate-pulse'
-                : 'map-solid-control hover:scale-105 active:scale-95'
+                : 'map-solid-control hover:text-indigo-600 border border-slate-300 dark:border-slate-700'
             }`}
-            title="Locate Me (Browser GPS)"
-            aria-label="Locate Me"
+            title="Locate Me (Browser GPS Location)"
+            aria-label="Locate Me with GPS"
           >
             {locating ? (
-              <span className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
             ) : (
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="15"
-                height="15"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -1451,8 +2118,62 @@ export default function AirMap({
           </div>
         </div>
 
-        {/* ── 5. Canvas Area: Google Maps Canvas ── */}
-        <div ref={mapRef} className="map-canvas-container absolute inset-0 w-full h-full z-0" />
+        {/* Floating Route Banner with Clear action */}
+        {routeGeometry && Array.isArray(routeGeometry) && routeGeometry.length > 0 && (
+          <div
+            className="absolute top-3 left-3 z-[28] map-solid-panel px-3 py-1.5 rounded-xl shadow-md flex items-center gap-2 border animate-in fade-in duration-200"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <span className="text-xs" aria-hidden="true">🛣️</span>
+            <span className="text-[11px] font-black t1">Commute Route Active</span>
+            {onClearRoute && (
+              <button
+                type="button"
+                id="btn-clear-map-route"
+                onClick={onClearRoute}
+                className="ml-1 px-1.5 py-0.5 rounded text-[11px] font-black text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                title="Clear route from map"
+              >
+                ✕ Clear
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── 5. Canvas Area: Google Maps Canvas or Offline Vector Map ── */}
+        {mapMode === 'vector' || !apiKey ? (
+          <div className="absolute inset-0 w-full h-full z-0 overflow-hidden">
+            {!isNcr && (
+              <div
+                className="absolute top-16 right-3 z-[24] max-w-[280px] p-2.5 rounded-xl border map-solid-panel text-[11px] font-semibold t2 shadow-md flex items-center gap-2"
+                role="note"
+                aria-label="Offline vector map notice"
+              >
+                <span className="text-base shrink-0" aria-hidden="true">ℹ️</span>
+                <span>Showing illustrative reference airshed (vector offline mode). Full interactive map active via Google Maps.</span>
+              </div>
+            )}
+            <DelhiNcrVectorMap
+              stations={stations}
+              fires={fires}
+              weather={weather}
+              traffic={traffic}
+              dark={dark}
+              primaryLayer={envLayer}
+              weatherLayer={weatherLayer}
+              signals={signals}
+              selectedStationName={inspectedStation?.name || selectedStationName}
+              userLocation={effectiveVectorLocation}
+              onSelectStation={(st) => {
+                setSelectedStationName(st.name);
+                setInspectedStation(st);
+                if (onLocationSelect) onLocationSelect(st.lat, st.lng, st.name);
+              }}
+            />
+          </div>
+        ) : (
+          <div ref={mapRef} className="map-canvas-container absolute inset-0 w-full h-full z-0" />
+        )}
 
         {/* ── 6. Floating Inspected Station Telemetry Card ── */}
         {inspectedStation && (
@@ -1465,7 +2186,7 @@ export default function AirMap({
                   <span className="text-xs">📍</span>
                   <h4 className="text-xs font-black t1">{inspectedStation.name}</h4>
                 </div>
-                <p className="text-[10px] font-semibold t3 mt-0.5">
+                <p className="text-[11px] font-semibold t3 mt-0.5 tabular-nums">
                   {inspectedStation.lat ? `${Number(inspectedStation.lat).toFixed(3)}°N, ${Number(inspectedStation.lng).toFixed(3)}°E` : 'Regional Grid'}
                 </p>
               </div>
@@ -1482,29 +2203,29 @@ export default function AirMap({
             <div className="flex items-baseline justify-between mt-2.5">
               <div className="flex items-baseline gap-1.5">
                 <span
-                  className="text-2xl font-black"
-                  style={{ color: AQI_COLOR(inspectedStation.aqi || 312) }}
+                  className="text-2xl font-black tabular-nums"
+                  style={{ color: inspectedStation.aqi != null ? AQI_COLOR(inspectedStation.aqi) : '#94a3b8' }}
                 >
-                  {inspectedStation.aqi || 312}
+                  {inspectedStation.aqi != null ? inspectedStation.aqi : '—'}
                 </span>
-                <span className="text-[10px] font-extrabold uppercase t3">AQI</span>
+                <span className="text-[11px] font-extrabold uppercase t3">AQI</span>
               </div>
               <span
-                className="text-[9.5px] font-black px-2 py-0.5 rounded-full uppercase"
+                className="text-[11px] font-black px-2 py-0.5 rounded-full uppercase"
                 style={{
-                  background: `${AQI_COLOR(inspectedStation.aqi || 312)}18`,
-                  color: AQI_COLOR(inspectedStation.aqi || 312),
+                  background: inspectedStation.aqi != null ? `${AQI_COLOR(inspectedStation.aqi)}18` : 'rgba(148, 163, 184, 0.15)',
+                  color: inspectedStation.aqi != null ? AQI_COLOR(inspectedStation.aqi) : '#94a3b8',
                 }}
               >
-                {(inspectedStation.aqi || 312) > 300 ? 'Very Poor' : (inspectedStation.aqi || 312) > 200 ? 'Poor' : 'Moderate'}
+                {inspectedStation.aqi != null ? (inspectedStation.aqi > 300 ? 'Very Poor' : inspectedStation.aqi > 200 ? 'Poor' : inspectedStation.aqi > 100 ? 'Moderate' : 'Good') : 'Unavailable'}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t text-[11px] font-semibold t2" style={{ borderColor: 'var(--border)' }}>
-              <div>PM2.5: <strong className="t1">{inspectedStation.pm25 || 142.5} µg/m³</strong></div>
-              <div>PM10: <strong className="t1">{inspectedStation.pm10 || 210.3} µg/m³</strong></div>
-              <div>Temp: <strong className="t1">{inspectedStation.temp || weather?.temp || 28}°C</strong></div>
-              <div>Wind: <strong className="t1">{inspectedStation.wind || weather?.windSpeed || 3.2} km/h</strong></div>
+              <div>PM2.5: <strong className="t1">{inspectedStation.pm25 != null ? `${inspectedStation.pm25} µg/m³` : '—'}</strong></div>
+              <div>PM10: <strong className="t1">{inspectedStation.pm10 != null ? `${inspectedStation.pm10} µg/m³` : '—'}</strong></div>
+              <div>Temp: <strong className="t1">{inspectedStation.temp != null ? `${inspectedStation.temp}°C` : (weather?.temp != null ? `${weather.temp}°C` : '—')}</strong></div>
+              <div>Wind: <strong className="t1">{inspectedStation.wind != null ? `${inspectedStation.wind} km/h` : (weather?.windSpeed != null ? `${weather.windSpeed} km/h` : '—')}</strong></div>
             </div>
 
             <div className="mt-3 pt-2 border-t flex flex-col gap-1.5" style={{ borderColor: 'var(--border)' }}>

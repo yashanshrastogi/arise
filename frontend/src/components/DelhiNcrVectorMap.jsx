@@ -218,7 +218,8 @@ export default function DelhiNcrVectorMap({
         {/* Monitoring Stations */}
         {signals.stations && (stations || []).map((st, idx) => {
           const pt = project(st.lat, st.lng);
-          const col = AQI_COLOR(st.aqi || 312);
+          const aqiVal = st.aqi != null ? st.aqi : null;
+          const col = aqiVal != null ? AQI_COLOR(aqiVal) : '#94a3b8';
           const isSelected = selectedStationName === st.name;
           return (
             <g
@@ -251,7 +252,7 @@ export default function DelhiNcrVectorMap({
                 fill={col}
                 fontFamily="system-ui, -apple-system, sans-serif"
               >
-                {st.aqi || 312}
+                {aqiVal != null ? aqiVal : '—'}
               </text>
               {/* Label Pill */}
               <g transform="translate(0, 24)">

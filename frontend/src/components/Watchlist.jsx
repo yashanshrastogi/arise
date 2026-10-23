@@ -1,18 +1,7 @@
 import React from 'react';
+import { getWatchlistAqiColor, getWatchlistSeverityIcon } from '../utils/aqiBands.js';
 
-const AQI_COLOR = aqi =>
-  aqi > 400 ? '#7A1B3D' :
-  aqi > 300 ? '#B42318' :
-  aqi > 200 ? '#B54708' :
-  aqi > 100 ? '#FDB022' :
-  aqi > 50  ? '#4D7C0F' : '#067647';
-
-const SEVERITY_ICON = aqi =>
-  aqi > 400 ? '⚠️' :
-  aqi > 300 ? '■' :
-  aqi > 200 ? '▲' :
-  aqi > 100 ? '●' :
-  aqi > 50  ? '●' : '✓';
+export { getWatchlistAqiColor, getWatchlistSeverityIcon };
 
 const KNOWN_COORDS = {
   'Saket': { lat: 28.524, lon: 77.206 },
@@ -25,6 +14,33 @@ const KNOWN_COORDS = {
   'Gurugram': { lat: 28.459, lon: 77.026 },
 };
 
+const DEFAULT_PRESET_PLACES = [
+  {
+    name: 'Home Hub',
+    location: 'Your primary residence',
+    lat: 28.6258,
+    lon: 77.1996,
+    aqi: 311,
+    status: 'Very Poor',
+  },
+  {
+    name: 'Work Hub',
+    location: 'Your office or workplace',
+    lat: 28.6315,
+    lon: 77.2167,
+    aqi: 285,
+    status: 'Poor',
+  },
+  {
+    name: 'School Hub',
+    location: "Your child's school",
+    lat: 28.529,
+    lon: 77.154,
+    aqi: 295,
+    status: 'Poor',
+  },
+];
+
 export default function Watchlist({
   items = [],
   isGuest = true,
@@ -32,126 +48,149 @@ export default function Watchlist({
   onOpenSaveLocations = null,
   onOpenMap: _onOpenMap = null,
 }) {
-  if (!items || items.length === 0) {
-    return (
-      <div
-        className="p-4 rounded-2xl border text-center flex flex-col items-center justify-center gap-2.5"
-        style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
-      >
-        <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center text-xl">
-          📍
-        </div>
-        <div>
-          <h4 className="text-xs font-black t1">No Saved Places Yet</h4>
-          <p className="text-[11px] font-medium t3 max-w-xs mt-1 leading-relaxed">
-            Save your Home and Work locations to personalize environmental alerts.
-          </p>
-        </div>
-        {onOpenSaveLocations && (
-          <button
-            type="button"
-            onClick={onOpenSaveLocations}
-            className="mt-1 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs transition-all touch-target"
-          >
-            Save my places
-          </button>
-        )}
-      </div>
-    );
-  }
+  const hasSavedItems = items && items.length > 0;
 
   return (
-    <div className="space-y-2 max-w-full" role="list" aria-label={isGuest ? "Sample places" : "My places"}>
-      {/* Subheader clarifying sample vs saved places */}
-      <div className="flex items-center justify-between px-1 text-xs">
-        <span className="font-bold t3">
-          {isGuest ? 'Sample places (sign in to save yours)' : 'Your saved places'}
-        </span>
-        {isGuest && onOpenSaveLocations && (
+    <div className="space-y-2 max-w-full" role="list" aria-label="My places">
+      {hasSavedItems ? (
+        <>
+          {/* Subheader for saved places */}
+          <div className="flex items-center justify-between px-1 text-xs mb-1">
+            <span className="font-extrabold t1">Your Saved Places</span>
+            {onOpenSaveLocations && !isGuest && (
+              <button
+                type="button"
+                onClick={onOpenSaveLocations}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              >
+                Manage places →
+              </button>
+            )}
+          </div>
+
+          {items.map(w => {
+            const lowerName = (w.name || '').toLowerCase();
+            const icon = lowerName.includes('home')
+              ? '🏠'
+              : lowerName.includes('school') || lowerName.includes('campus')
+              ? '🏫'
+              : lowerName.includes('parent')
+              ? '🫁'
+              : '💼';
+            const severityIcon = getWatchlistSeverityIcon(w.aqi);
+            const col = getWatchlistAqiColor(w.aqi);
+
+            // Resolve coordinates
+            const resolvedLat = w.lat != null ? Number(w.lat) : (KNOWN_COORDS[w.location] ? KNOWN_COORDS[w.location].lat : null);
+            const resolvedLon = w.lon != null ? Number(w.lon) : (KNOWN_COORDS[w.location] ? KNOWN_COORDS[w.location].lon : null);
+
+            return (
+              <div
+                key={w.name}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelect && resolvedLat != null && resolvedLon != null && onSelect(resolvedLat, resolvedLon, `${w.name} (${w.location})`)}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && onSelect && resolvedLat != null && resolvedLon != null) {
+                    e.preventDefault();
+                    onSelect(resolvedLat, resolvedLon, `${w.name} (${w.location})`);
+                  }
+                }}
+                aria-label={`Select ${w.name}: AQI ${w.aqi != null ? w.aqi : 'Unavailable'}, status ${w.status || 'Unavailable'}`}
+                className={`p-2.5 rounded-2xl border flex items-center justify-between gap-3 transition-all ${
+                  onSelect ? 'cursor-pointer hover:border-indigo-400/50 hover:bg-[var(--surface-alt)] hover:shadow-xs active:scale-[0.99] touch-target' : ''
+                }`}
+                style={{
+                  background: 'var(--surface-alt)',
+                  borderColor: 'var(--border)',
+                }}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-sm flex-shrink-0 shadow-2xs"
+                    style={{ background: `${col}18`, color: col }}
+                    aria-hidden="true"
+                  >
+                    {icon}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs sm:text-sm font-black t1 leading-tight truncate">
+                      {w.name}
+                    </div>
+                    <div className="text-[11px] font-semibold tm truncate mt-0.5">
+                      {w.location}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="text-right">
+                    <div className="text-sm sm:text-base font-black flex items-center gap-1 justify-end tabular-nums" style={{ color: col }}>
+                      <span aria-hidden="true" className="text-xs">{severityIcon}</span>
+                      <span>{w.aqi != null ? w.aqi : '—'}</span>
+                    </div>
+                    <span
+                      className="inline-block text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight"
+                      style={{ background: `${col}18`, color: col }}
+                    >
+                      {w.status || (w.aqi != null ? 'Good' : 'Unavailable')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      ) : isGuest ? (
+        /* Guest prompt to save places by signing in normally */
+        <div
+          className="p-4 rounded-2xl border text-center space-y-2.5 my-1"
+          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+        >
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center text-lg">
+            📍
+          </div>
+          <div>
+            <div className="text-xs sm:text-sm font-black t1">Save your places by signing in</div>
+            <p className="text-[11px] font-semibold tm mt-0.5 leading-relaxed">
+              Sign in to save and monitor live air quality for your Home, Work, and School locations.
+            </p>
+          </div>
           <button
             type="button"
-            onClick={onOpenSaveLocations}
-            className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-          >
-            Save my places →
-          </button>
-        )}
-      </div>
-
-      {items.map(w => {
-        const lowerName = (w.name || '').toLowerCase();
-        const icon = lowerName.includes('home')
-          ? '🏠'
-          : lowerName.includes('school') || lowerName.includes('campus')
-          ? '🏫'
-          : lowerName.includes('parent')
-          ? '🫁'
-          : '💼';
-        const severityIcon = SEVERITY_ICON(w.aqi);
-        const col = AQI_COLOR(w.aqi);
-
-        // Resolve coordinates
-        const resolvedLat = w.lat || (KNOWN_COORDS[w.location] ? KNOWN_COORDS[w.location].lat : 28.6139);
-        const resolvedLon = w.lon || (KNOWN_COORDS[w.location] ? KNOWN_COORDS[w.location].lon : 77.2090);
-
-        return (
-          <div
-            key={w.name}
-            role="button"
-            tabIndex={0}
-            onClick={() => onSelect && onSelect(resolvedLat, resolvedLon, `${w.name} (${w.location})`)}
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && onSelect) {
-                e.preventDefault();
-                onSelect(resolvedLat, resolvedLon, `${w.name} (${w.location})`);
-              }
+            id="btn-watchlist-guest-signin"
+            onClick={() => {
+              if (typeof window !== 'undefined') window.location.hash = '#/login';
             }}
-            aria-label={`Select ${w.name}: AQI ${w.aqi}, status ${w.status}`}
-            className={`card p-3 flex items-center justify-between gap-3 transition-all ${
-              onSelect ? 'cursor-pointer hover:border-indigo-400/50 hover:shadow-xs active:scale-[0.99] touch-target' : ''
-            }`}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-xs active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1.5"
           >
-            <div className="flex items-center gap-3 min-w-0">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0 shadow-2xs"
-                style={{ background: `${col}18`, color: col }}
-                aria-hidden="true"
-              >
-                {icon}
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-black t1 leading-tight truncate">
-                  {w.name} <span className="font-semibold tm text-xs">({w.location})</span>
-                </div>
-                <div className="text-xs font-semibold t3 mt-0.5 flex items-center gap-1.5">
-                  {w.lat && w.lon ? (
-                    <span>{w.lat.toFixed(2)}°, {w.lon.toFixed(2)}°</span>
-                  ) : (
-                    <span>Delhi-NCR</span>
-                  )}
-                  <span>•</span>
-                  <span>{isGuest ? 'Sample' : (w.updated || 'Saved')}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="text-right">
-                <div className="text-base font-black flex items-center gap-1 justify-end" style={{ color: col }}>
-                  <span aria-hidden="true" className="text-xs">{severityIcon}</span>
-                  <span>{w.aqi}</span>
-                </div>
-                <span
-                  className="inline-block text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-tight"
-                  style={{ background: `${col}18`, color: col }}
-                >
-                  {w.status}
-                </span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+            <span>Sign In</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+      ) : (
+        /* Authenticated but no places configured yet */
+        <div
+          className="p-4 rounded-2xl border text-center space-y-2 my-1"
+          style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+        >
+          <div className="text-xs sm:text-sm font-black t1">No places saved yet</div>
+          <p className="text-[11px] font-semibold tm leading-relaxed">
+            Configure your Home, Work, or School in Profile Settings to monitor live air quality here.
+          </p>
+          {onOpenSaveLocations && (
+            <button
+              type="button"
+              onClick={onOpenSaveLocations}
+              className="px-3.5 py-1.5 rounded-xl border text-xs font-bold hover:bg-[var(--surface)] transition-all cursor-pointer"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              Configure Places
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+

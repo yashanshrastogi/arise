@@ -1,0 +1,164 @@
+{
+  "provenance": {
+    "standard": "CPCB National Air Quality Index (NAQI) — Final Report CUPS/82/2014-15 (IIT Kanpur & CPCB)",
+    "verification_scope": "arithmetic_benchmark_only",
+    "verification_note": "This fixture is a deterministically calibrated synthetic arithmetic benchmark constructed according to CPCB NAQI Report CUPS/82/2014-15 Table 4.1. While station metadata (station_id 5586, Sirifort, coordinates) references the Delhi CAAQMS station identity on OpenAQ, the specific readings and timestamps are synthetic benchmark inputs designed to exercise each formula and unit conversion. It verifies mathematical correctness and sub-index derivation; it does not independently prove historical sensor authenticity.",
+    "station_id": "5586",
+    "station_name": "Sirifort, Delhi - CPCB",
+    "source_provider": "OpenAQ v3 / CPCB CAAQMS",
+    "coordinates": {
+      "latitude": 28.5504,
+      "longitude": 77.2159
+    },
+    "reference_timestamp_utc": "2026-10-19T06:00:00Z",
+    "reference_conditions": "25°C, 1 atm (Indian NTP, molar volume 24.45 L/mol)",
+    "averaging_periods_regulatory": {
+      "pm10": "24h",
+      "pm25": "24h",
+      "no2": "24h",
+      "so2": "24h",
+      "co": "8h",
+      "o3": "8h"
+    },
+    "averaging_coverage": {
+      "PM10": {
+        "trusted_provider": "CPCB_CAAQMS",
+        "pollutant": "PM10",
+        "window_hours": 24,
+        "distinct_monitored_hours": 24.0,
+        "monitored_hours": 24.0,
+        "coverage_percentage": 100.0,
+        "cpcb_min_hours_required": 16.0,
+        "reference_end_time": "2026-10-19T06:00:00Z",
+        "provenance_signature": "0ced059e2eb1d2a6fab26127f14e2689685bc22c92ccf683da456fd6532da8ac"
+      },
+      "PM2.5": {
+        "trusted_provider": "CPCB_CAAQMS",
+        "pollutant": "PM2.5",
+        "window_hours": 24,
+        "distinct_monitored_hours": 24.0,
+        "monitored_hours": 24.0,
+        "coverage_percentage": 100.0,
+        "cpcb_min_hours_required": 16.0,
+        "reference_end_time": "2026-10-19T06:00:00Z",
+        "provenance_signature": "337818a68a7118b333acde2df80842bbfa713d5375abe0546271b2d2c9ee6882"
+      },
+      "NO2": {
+        "trusted_provider": "CPCB_CAAQMS",
+        "pollutant": "NO2",
+        "window_hours": 24,
+        "distinct_monitored_hours": 24.0,
+        "monitored_hours": 24.0,
+        "coverage_percentage": 100.0,
+        "cpcb_min_hours_required": 16.0,
+        "reference_end_time": "2026-10-19T06:00:00Z",
+        "provenance_signature": "ad092d2541deca987a2ac51d37f82ccd5691b1586611adb889e9828bbf469177"
+      },
+      "SO2": {
+        "trusted_provider": "CPCB_CAAQMS",
+        "pollutant": "SO2",
+        "window_hours": 24,
+        "distinct_monitored_hours": 24.0,
+        "monitored_hours": 24.0,
+        "coverage_percentage": 100.0,
+        "cpcb_min_hours_required": 16.0,
+        "reference_end_time": "2026-10-19T06:00:00Z",
+        "provenance_signature": "d88a9313a8034570356ee559fc62f0557e9148bb0cfda1aeb3dc70c152a6a332"
+      },
+      "CO": {
+        "trusted_provider": "CPCB_CAAQMS",
+        "pollutant": "CO",
+        "window_hours": 8,
+        "distinct_monitored_hours": 8.0,
+        "monitored_hours": 8.0,
+        "coverage_percentage": 100.0,
+        "cpcb_min_hours_required": 6.0,
+        "reference_end_time": "2026-10-19T06:00:00Z",
+        "provenance_signature": "15f1a81995b57337ab4eead96c686392cbe120bcb71fbb50b960abbdb83957e2"
+      },
+      "O3": {
+        "trusted_provider": "CPCB_CAAQMS",
+        "pollutant": "O3",
+        "window_hours": 8,
+        "distinct_monitored_hours": 8.0,
+        "monitored_hours": 8.0,
+        "coverage_percentage": 100.0,
+        "cpcb_min_hours_required": 6.0,
+        "reference_end_time": "2026-10-19T06:00:00Z",
+        "provenance_signature": "69bcecb915cfedafb750c83fd3078dd7bb4fa00630e1580e208f10987f57869a"
+      }
+    }
+  },
+  "raw_sensor_readings": [
+    {
+      "parameter": "pm10",
+      "raw_value": 318.0,
+      "raw_unit": "µg/m³",
+      "normalized_value": 318.0,
+      "normalized_unit": "µg/m³",
+      "breakpoint_band": "Poor (250-350 µg/m³ -> AQI 201-300)",
+      "official_formula": "((300 - 201) / (350 - 250)) * (318.0 - 250.0) + 201",
+      "expected_sub_index": 268
+    },
+    {
+      "parameter": "pm25",
+      "raw_value": 72.88,
+      "raw_unit": "µg/m³",
+      "normalized_value": 72.88,
+      "normalized_unit": "µg/m³",
+      "breakpoint_band": "Moderate (60-90 µg/m³ -> AQI 101-200)",
+      "official_formula": "((200 - 101) / (90 - 60)) * (72.88 - 60.0) + 101",
+      "expected_sub_index": 144
+    },
+    {
+      "parameter": "no2",
+      "raw_value": 30.81,
+      "raw_unit": "ppb",
+      "conversion_factor": 1.88,
+      "normalized_value": 57.92,
+      "normalized_unit": "µg/m³",
+      "breakpoint_band": "Satisfactory (40-80 µg/m³ -> AQI 51-100)",
+      "official_formula": "((100 - 51) / (80 - 40)) * (57.92 - 40.0) + 51",
+      "expected_sub_index": 73
+    },
+    {
+      "parameter": "so2",
+      "raw_value": 44.76,
+      "raw_unit": "ppb",
+      "conversion_factor": 2.62,
+      "normalized_value": 117.27,
+      "normalized_unit": "µg/m³",
+      "breakpoint_band": "Moderate (80-380 µg/m³ -> AQI 101-200)",
+      "official_formula": "((200 - 101) / (380 - 80)) * (117.27 - 80.0) + 101",
+      "expected_sub_index": 113
+    },
+    {
+      "parameter": "co",
+      "raw_value": 2.19,
+      "raw_unit": "mg/m³",
+      "normalized_value": 2.19,
+      "normalized_unit": "mg/m³",
+      "breakpoint_band": "Moderate (2.0-10.0 mg/m³ -> AQI 101-200)",
+      "official_formula": "((200 - 101) / (10.0 - 2.0)) * (2.19 - 2.0) + 101",
+      "expected_sub_index": 103
+    },
+    {
+      "parameter": "o3",
+      "raw_value": 15.95,
+      "raw_unit": "µg/m³",
+      "normalized_value": 15.95,
+      "normalized_unit": "µg/m³",
+      "breakpoint_band": "Good (0-50 µg/m³ -> AQI 0-50)",
+      "official_formula": "((50 - 0) / (50 - 0)) * (15.95 - 0.0) + 0",
+      "expected_sub_index": 16
+    }
+  ],
+  "expected_overall": {
+    "aqi": 268,
+    "dominant_pollutant": "PM10",
+    "category": "Poor",
+    "color": "#F28C28",
+    "is_cpcb_compliant": true,
+    "pollutants_monitored": 6
+  }
+}

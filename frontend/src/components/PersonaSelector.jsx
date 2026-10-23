@@ -1,12 +1,7 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { ALL_PERSONAS, resolveVisiblePersonas, togglePinnedPersona } from '../utils/personaState.js';
 
-export const ALL_PERSONAS = [
-  { id: 'General Public', key: 'me', label: 'Me', icon: '👤', description: 'General adult daily recommendation' },
-  { id: 'Children & Schools', key: 'child', label: 'Child', icon: '🎒', description: 'Vulnerable respiratory tract & sports guidance' },
-  { id: 'Elderly & Respiratory', key: 'parent', label: 'Parent', icon: '🫁', description: 'Senior & asthma health precautions' },
-  { id: 'Work & Outdoor Labor', key: 'work', label: 'Work', icon: '💼', description: 'Commuter & outdoor worker respiratory protection' },
-  { id: 'School Administration', key: 'school', label: 'School', icon: '🏫', description: 'Campus outdoor sports & morning assembly protocol' },
-];
+export { ALL_PERSONAS, resolveVisiblePersonas };
 
 export default function PersonaSelector({
   currentPersona = 'General Public',
@@ -14,35 +9,44 @@ export default function PersonaSelector({
   isAuthenticated = false,
   userProfile = null,
   onOpenCustomize = null,
+  onPinToggle = null,
 }) {
   // Determine visible personas:
-  // By default: show ONLY 'Me' section.
-  // Other profiles (Child, Parent, Work, School) appear when added by the user (persisted in userProfile or localStorage).
-  let visiblePersonas = [ALL_PERSONAS[0]];
+  // In Guest mode: ONLY show "Me". Do not show Child, Parent, Work, School by default.
+  // When Authenticated: Show "Me" + only the additional personas the user has configured/enabled in their profile.
+  const visiblePersonas = useMemo(() => {
+    return resolveVisiblePersonas({ isAuthenticated, userProfile });
+  }, [isAuthenticated, userProfile?.configured_personas, userProfile?.pinned_personas]);
 
-  if (userProfile?.configured_personas && Array.isArray(userProfile.configured_personas)) {
-    const configuredSet = new Set(userProfile.configured_personas.map(p => p.toLowerCase()));
-    const hasCustom = ALL_PERSONAS.slice(1).some(p =>
-      configuredSet.has(p.id.toLowerCase()) ||
-      configuredSet.has(p.key.toLowerCase()) ||
-      configuredSet.has(p.label.toLowerCase())
-    );
-    if (hasCustom) {
-      visiblePersonas = ALL_PERSONAS.filter(p =>
-        p.id === 'General Public' ||
-        configuredSet.has(p.id.toLowerCase()) ||
-        configuredSet.has(p.key.toLowerCase()) ||
-        configuredSet.has(p.label.toLowerCase())
-      );
+  // Ensure currentPersona remains valid among visiblePersonas
+  useEffect(() => {
+    if (visiblePersonas.length > 0 && !visiblePersonas.some(p => p.id === currentPersona)) {
+      if (typeof onSelectPersona === 'function') {
+        onSelectPersona('General Public');
+      }
     }
-  }
+  }, [visiblePersonas, currentPersona, onSelectPersona]);
 
   const handleAddClick = () => {
+    if (!isAuthenticated) {
+      if (typeof window !== 'undefined') {
+        window.location.hash = '#/login';
+      }
+      return;
+    }
     if (onOpenCustomize) {
       onOpenCustomize();
     } else if (typeof window !== 'undefined') {
-      window.location.hash = '#/signup';
+      window.location.hash = '#/login';
     }
+  };
+
+  const handlePinClick = (personaId, e) => {
+    e.stopPropagation();
+    if (!isAuthenticated || !onPinToggle) return;
+    const currentPinned = userProfile?.pinned_personas || ['General Public'];
+    const nextPinned = togglePinnedPersona(personaId, currentPinned);
+    onPinToggle(nextPinned);
   };
 
   return (
@@ -64,37 +68,57 @@ export default function PersonaSelector({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap max-w-full">
         {/* Active Profile Segmented Buttons */}
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--surface-alt)] border" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-[var(--surface-alt)] border max-w-full" style={{ borderColor: 'var(--border)' }}>
           {visiblePersonas.map((p) => {
             const isSelected = currentPersona === p.id || (p.id === 'General Public' && !currentPersona);
 
             return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => onSelectPersona(p.id)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 touch-target ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-500'
-                    : 't2 hover:t1 hover:bg-[var(--surface)]'
-                }`}
-                aria-pressed={isSelected}
-                title={p.description}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-xs leading-none shrink-0 ${
+              <div key={p.id} className="relative group flex items-center">
+                <button
+                  type="button"
+                  onClick={() => onSelectPersona(p.id)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 touch-target ${
                     isSelected
-                      ? 'bg-white/25 text-white ring-1 ring-white/50 shadow-xs'
-                      : 'bg-indigo-100/70 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+                      ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-500'
+                      : 't2 hover:t1 hover:bg-[var(--surface)]'
                   }`}
+                  aria-pressed={isSelected}
+                  title={p.description}
                 >
-                  {p.icon}
-                </span>
-                <span>{p.label}</span>
-              </button>
+                  <span
+                    aria-hidden="true"
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-xs leading-none shrink-0 ${
+                      isSelected
+                        ? 'bg-white/25 text-white ring-1 ring-white/50 shadow-xs'
+                        : 'bg-indigo-100/70 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+                    }`}
+                  >
+                    {p.icon}
+                  </span>
+                  <span>{p.label}</span>
+                  {p.isPinned && (
+                    <span className="text-[9px] leading-none opacity-70" aria-label="Pinned" title="Pinned profile">📌</span>
+                  )}
+                </button>
+                {/* Pin toggle — visible on hover for authenticated users with multiple personas */}
+                {isAuthenticated && onPinToggle && visiblePersonas.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => handlePinClick(p.id, e)}
+                    className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-[8px] leading-none flex items-center justify-center border transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 z-10 cursor-pointer ${
+                      p.isPinned
+                        ? 'bg-amber-100 dark:bg-amber-900/60 border-amber-400/50 text-amber-600 dark:text-amber-300'
+                        : 'bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:text-amber-600 dark:hover:text-amber-300'
+                    }`}
+                    aria-label={p.isPinned ? `Unpin ${p.label}` : `Pin ${p.label}`}
+                    title={p.isPinned ? `Unpin ${p.label}` : `Pin ${p.label} to dashboard`}
+                  >
+                    📌
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>

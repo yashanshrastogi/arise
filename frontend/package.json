@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test": "node --test src/auth/authRedirect.test.js src/utils/guardrails.test.js src/utils/timeContext.test.js",
+    "test": "node --test src/api/client.test.js src/api/conversations_memories.test.js src/auth/authRedirect.test.js src/components/PersonaSelector.test.js src/components/VerdictHero.test.js src/components/AskAriseLayout.test.js src/components/Phase1TrustUsability.test.js src/components/Phase2ContentLayout.test.js src/components/Phase3VisualDesign.test.js src/components/Phase4AccessibilityReliability.test.js src/components/PinAndMapImprovements.test.js src/components/AirMapPerformanceAndDrilldown.test.js src/components/ProfileLocationAutocomplete.test.js src/utils/advisoryUtils.test.js src/utils/guardrails.test.js src/utils/locationState.test.js src/utils/geoUtils.test.js src/utils/timeContext.test.js src/utils/unavailableRendering.test.js src/utils/speechUtils.test.js src/utils/footerData.test.js src/utils/addressInputState.test.js src/utils/userUtils.test.js src/utils/crossTabSync.test.js src/components/CrossTabConsistency.test.js src/utils/themeUtils.test.js src/utils/shareUtils.test.js",
     "preview": "vite preview"
   },
   "engines": {

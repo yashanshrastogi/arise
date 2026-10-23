@@ -244,6 +244,54 @@ class TestAwsServerlessPipeline(unittest.TestCase):
         self.assertEqual(entry_stale.status, "stale")
         self.assertEqual(entry_stale.value.get("aqi"), 312)
 
+    def test_dynamodb_fetch_lock_conditional_delete_fencing(self):
+        """
+        Verify that AwsDynamoCacheRepository.release_fetch_lock enforces token fencing
+        via DynamoDB conditional delete, preventing a stale token from deleting a newer worker's lock.
+        """
+        cache = AwsDynamoCacheRepository(table_name="mock-table", region_name="us-east-1")
+        mock_table = MagicMock()
+        cache._table = mock_table
+
+        lock_key = "weather:cell:28.6200:77.2000"
+
+        # 1. Release with valid owner token -> succeeds with ConditionExpression
+        mock_table.delete_item.return_value = {}
+        res_valid = cache.release_fetch_lock(lock_key, token="active_token_123")
+        self.assertTrue(res_valid)
+        mock_table.delete_item.assert_called_with(
+            Key={"pk": f"lock:{lock_key}"},
+            ConditionExpression="owner_token = :token",
+            ExpressionAttributeValues={":token": "active_token_123"},
+        )
+
+        # 2. Release with stale/mismatched owner token -> ConditionalCheckFailedException in DynamoDB
+        mock_table.delete_item.side_effect = Exception("ConditionalCheckFailedException: The conditional request failed")
+        res_stale = cache.release_fetch_lock(lock_key, token="stale_token_old")
+        self.assertFalse(res_stale, "Conditional delete failure must return False and not delete newer worker's lock")
+
+    def test_sam_template_and_config_schedule_state(self):
+        """
+        Verify that infra/template.yaml parameterizes IngestionScheduleState defaulting to ENABLED,
+        and infra/samconfig.toml sets IngestionScheduleState='DISABLED' for staging.
+        """
+        import os
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        template_path = os.path.join(repo_root, "infra", "template.yaml")
+        samconfig_path = os.path.join(repo_root, "infra", "samconfig.toml")
+
+        with open(template_path, "r", encoding="utf-8") as f:
+            template_content = f.read()
+
+        self.assertIn("IngestionScheduleState:", template_content)
+        self.assertIn("State: !Ref IngestionScheduleState", template_content)
+
+        with open(samconfig_path, "r", encoding="utf-8") as f:
+            samconfig_content = f.read()
+
+        self.assertIn('[staging.deploy.parameters]', samconfig_content)
+        self.assertIn('"IngestionScheduleState=\\"DISABLED\\""', samconfig_content)
+
 
 if __name__ == "__main__":
     unittest.main()

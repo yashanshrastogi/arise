@@ -8,8 +8,8 @@ env_service = EnvironmentService()
 
 @router.get("/verdict")
 async def get_verdict(
-    lat: float = Query(default=28.6139, ge=-90.0, le=90.0),
-    lon: float = Query(default=77.2090, ge=-180.0, le=180.0),
+    lat: float = Query(..., ge=-90.0, le=90.0, description="Latitude between -90 and 90"),
+    lon: float = Query(..., ge=-180.0, le=180.0, description="Longitude between -180 and 180"),
     persona: str = Query(default="General Public"),
     demo: bool = Query(default=False)
 ):

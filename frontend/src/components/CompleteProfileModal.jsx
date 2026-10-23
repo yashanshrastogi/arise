@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { bootstrapUserProfile } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import AddressInput from './AddressInput';
+import { reverseGeocodeDetailed, forwardGeocode } from '../utils/geoUtils';
 
 export default function CompleteProfileModal({ onProfileCompleted, onProfileSaved }) {
   const { user, accessToken } = useAuth();
@@ -21,11 +23,12 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
   const [workLon, setWorkLon] = useState('');
 
   const [locatingPrefix, setLocatingPrefix] = useState(null);
+  const [activeDropdownPrefix, setActiveDropdownPrefix] = useState(null);
   const [locationStatus, setLocationStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // "Use my current location" with browser permission request and user review
+  // "Use my current location" with automatic reverse geocoding to full address
   const handleUseCurrentLocation = (prefix) => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
@@ -33,23 +36,37 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
     }
     setError('');
     setLocatingPrefix(prefix);
-    setLocationStatus(`Requesting browser permission for ${prefix} location...`);
+    setLocationStatus(`Detecting your precise current location...`);
 
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = Number(pos.coords.latitude.toFixed(4));
-        const lon = Number(pos.coords.longitude.toFixed(4));
-        if (prefix === 'home') {
-          setHomeLat(String(lat));
-          setHomeLon(String(lon));
-          if (!homeAddress) setHomeAddress(`${lat}°N, ${lon}°E (Current Area)`);
-        } else {
-          setWorkLat(String(lat));
-          setWorkLon(String(lon));
-          if (!workAddress) setWorkAddress(`${lat}°N, ${lon}°E (Current Area)`);
+      async (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(5));
+        const lon = Number(pos.coords.longitude.toFixed(5));
+        try {
+          const detailed = await reverseGeocodeDetailed(lat, lon);
+          const fullAddress = detailed?.formattedAddress || `${lat}°N, ${lon}°E`;
+          if (prefix === 'home') {
+            setHomeLat(String(lat));
+            setHomeLon(String(lon));
+            setHomeAddress(fullAddress);
+          } else {
+            setWorkLat(String(lat));
+            setWorkLon(String(lon));
+            setWorkAddress(fullAddress);
+          }
+          setLocationStatus(`Location detected & pinned: ${detailed?.formattedLocation || fullAddress}`);
+        } catch {
+          if (prefix === 'home') {
+            setHomeLat(String(lat));
+            setHomeLon(String(lon));
+          } else {
+            setWorkLat(String(lat));
+            setWorkLon(String(lon));
+          }
+          setLocationStatus(`Coordinates pinned (${lat}, ${lon}).`);
+        } finally {
+          setLocatingPrefix(null);
         }
-        setLocatingPrefix(null);
-        setLocationStatus(`Coordinates obtained (${lat}, ${lon}). You can review and edit below.`);
       },
       (err) => {
         setLocatingPrefix(null);
@@ -77,21 +94,50 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
         alerts_enabled: alertsEnabled,
       };
 
-      if (homeAddress.trim() || homeLat.trim() || homeLon.trim()) {
+      // Resolve coordinates in background if address was typed manually
+      let finalHomeLat = homeLat;
+      let finalHomeLon = homeLon;
+      let finalHomeAddress = homeAddress.trim();
+      if (finalHomeAddress && (!finalHomeLat || !finalHomeLon)) {
+        try {
+          const geo = await forwardGeocode(finalHomeAddress);
+          if (geo && geo.lat != null && geo.lon != null) {
+            finalHomeLat = String(geo.lat);
+            finalHomeLon = String(geo.lon);
+            if (geo.formattedAddress) finalHomeAddress = geo.formattedAddress;
+          }
+        } catch {}
+      }
+
+      let finalWorkLat = workLat;
+      let finalWorkLon = workLon;
+      let finalWorkAddress = workAddress.trim();
+      if (finalWorkAddress && (!finalWorkLat || !finalWorkLon)) {
+        try {
+          const geo = await forwardGeocode(finalWorkAddress);
+          if (geo && geo.lat != null && geo.lon != null) {
+            finalWorkLat = String(geo.lat);
+            finalWorkLon = String(geo.lon);
+            if (geo.formattedAddress) finalWorkAddress = geo.formattedAddress;
+          }
+        } catch {}
+      }
+
+      if (finalHomeAddress || finalHomeLat || finalHomeLon) {
         payload.home_location = {
           label: 'Home',
-          address: homeAddress.trim() || 'Home Location',
-          latitude: homeLat ? Number(homeLat) : undefined,
-          longitude: homeLon ? Number(homeLon) : undefined,
+          address: finalHomeAddress || 'Home Location',
+          latitude: finalHomeLat ? Number(finalHomeLat) : undefined,
+          longitude: finalHomeLon ? Number(finalHomeLon) : undefined,
         };
       }
 
-      if (workAddress.trim() || workLat.trim() || workLon.trim()) {
+      if (finalWorkAddress || finalWorkLat || finalWorkLon) {
         payload.work_location = {
           label: 'Work',
-          address: workAddress.trim() || 'Work Location',
-          latitude: workLat ? Number(workLat) : undefined,
-          longitude: workLon ? Number(workLon) : undefined,
+          address: finalWorkAddress || 'Work Location',
+          latitude: finalWorkLat ? Number(finalWorkLat) : undefined,
+          longitude: finalWorkLon ? Number(finalWorkLon) : undefined,
         };
       }
 
@@ -131,7 +177,7 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xl font-black t1">Welcome to Arise</span>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
+            <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20">
               Profile Setup
             </span>
           </div>
@@ -176,7 +222,7 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
                 <span>✓</span> Verified by Cognito
               </span>
             </div>
-            <p className="text-[10px] tm mt-1">
+            <p className="text-[11px] tm mt-1">
               Sourced directly from your authenticated AWS Cognito session. Browser cannot alter verified email.
             </p>
           </div>
@@ -187,7 +233,7 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
               <label className="block text-xs font-semibold t1">
                 Who do you check air quality for?
               </label>
-              <span className="text-[10px] tm">Select all that apply</span>
+              <span className="text-[11px] tm">Select all that apply</span>
             </div>
             <p className="text-[11px] tm mb-2.5">
               Choose which personas appear in your daily dashboard check. You can stay with just Me, or add Child, Parent, Work, or School.
@@ -244,7 +290,12 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
           )}
 
           {/* Home Location */}
-          <div className="p-4 rounded-2xl border space-y-3" style={{ borderColor: 'var(--border)' }}>
+          <div
+            className={`p-4 rounded-2xl border space-y-3 transition-all duration-150 ${
+              activeDropdownPrefix === 'home' ? 'relative z-30 shadow-md ring-1 ring-indigo-500/20' : 'relative z-10'
+            }`}
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold t1">Home Location (Optional)</span>
               <button
@@ -258,38 +309,38 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
                 <span>{locatingPrefix === 'home' ? 'Detecting…' : 'Use my current location'}</span>
               </button>
             </div>
-            <input
-              type="text"
+            <AddressInput
+              id="input-complete-profile-home"
+              label="Address or area"
               value={homeAddress}
-              onChange={(e) => setHomeAddress(e.target.value)}
-              placeholder="e.g. Saket, South Delhi"
-              className="w-full px-3 py-2 rounded-xl border text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+              onChange={(val) => {
+                setHomeAddress(val);
+                if (!val.trim()) {
+                  setHomeLat('');
+                  setHomeLon('');
+                }
+              }}
+              onSelectLocation={(item) => {
+                setHomeAddress(item.formattedAddress || item.subtitle || item.name);
+                setHomeLat(String(item.lat));
+                setHomeLon(String(item.lon));
+                setLocationStatus(`Home location pinned: ${item.name}`);
+              }}
+              onDropdownOpenChange={(open) => setActiveDropdownPrefix(open ? 'home' : null)}
+              hasCoords={Boolean(homeLat && homeLon)}
+              coordLat={homeLat}
+              coordLon={homeLon}
+              placeholder="e.g. 350 Fifth Avenue, New York"
             />
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <input
-                type="number"
-                step="any"
-                value={homeLat}
-                onChange={(e) => setHomeLat(e.target.value)}
-                placeholder="Latitude (e.g. 28.52)"
-                className="px-3 py-2 rounded-xl border outline-none"
-                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
-              />
-              <input
-                type="number"
-                step="any"
-                value={homeLon}
-                onChange={(e) => setHomeLon(e.target.value)}
-                placeholder="Longitude (e.g. 77.21)"
-                className="px-3 py-2 rounded-xl border outline-none"
-                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
-              />
-            </div>
           </div>
 
           {/* Work Location */}
-          <div className="p-4 rounded-2xl border space-y-3" style={{ borderColor: 'var(--border)' }}>
+          <div
+            className={`p-4 rounded-2xl border space-y-3 transition-all duration-150 ${
+              activeDropdownPrefix === 'work' ? 'relative z-30 shadow-md ring-1 ring-indigo-500/20' : 'relative z-10'
+            }`}
+            style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold t1">Work or School Location (Optional)</span>
               <button
@@ -303,46 +354,31 @@ export default function CompleteProfileModal({ onProfileCompleted, onProfileSave
                 <span>{locatingPrefix === 'work' ? 'Detecting…' : 'Use my current location'}</span>
               </button>
             </div>
-            <input
-              type="text"
+            <AddressInput
+              id="input-complete-profile-work"
+              label="Address or area"
               value={workAddress}
-              onChange={(e) => setWorkAddress(e.target.value)}
-              placeholder="e.g. Cyber City, Gurugram"
-              className="w-full px-3 py-2 rounded-xl border text-xs outline-none focus:ring-2 focus:ring-indigo-500"
-              style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+              onChange={(val) => {
+                setWorkAddress(val);
+                if (!val.trim()) {
+                  setWorkLat('');
+                  setWorkLon('');
+                }
+              }}
+              onSelectLocation={(item) => {
+                setWorkAddress(item.formattedAddress || item.subtitle || item.name);
+                setWorkLat(String(item.lat));
+                setWorkLon(String(item.lon));
+                setLocationStatus(`Work location pinned: ${item.name}`);
+              }}
+              onDropdownOpenChange={(open) => setActiveDropdownPrefix(open ? 'work' : null)}
+              hasCoords={Boolean(workLat && workLon)}
+              coordLat={workLat}
+              coordLon={workLon}
+              placeholder="e.g. Pari Chowk, Greater Noida"
             />
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <input
-                type="number"
-                step="any"
-                value={workLat}
-                onChange={(e) => setWorkLat(e.target.value)}
-                placeholder="Latitude (e.g. 28.49)"
-                className="px-3 py-2 rounded-xl border outline-none"
-                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
-              />
-              <input
-                type="number"
-                step="any"
-                value={workLon}
-                onChange={(e) => setWorkLon(e.target.value)}
-                placeholder="Longitude (e.g. 77.09)"
-                className="px-3 py-2 rounded-xl border outline-none"
-                style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
-              />
-            </div>
           </div>
 
-          {/* Alerts checkbox */}
-          <label className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer" style={{ borderColor: 'var(--border)' }}>
-            <input
-              type="checkbox"
-              checked={alertsEnabled}
-              onChange={(e) => setAlertsEnabled(e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-xs font-semibold t1">Enable air quality advisory alerts</span>
-          </label>
 
           {error && (
             <p role="alert" className="text-xs text-red-600 bg-red-50 dark:bg-red-950/40 p-3 rounded-xl border border-red-500/20">

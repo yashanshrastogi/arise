@@ -60,6 +60,17 @@ Parameters:
       - gemini
     Description: LLM provider for Ask Arise ('rule-based', 'bedrock', or 'gemini').
 
+  BedrockModelId:
+    Type: String
+    Default: "us.amazon.nova-lite-v1:0"
+    Description: Bedrock foundation model or inference profile ID for Ask Arise AI.
+
+  OpenWeatherApiKey:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional OpenWeather API key for secondary weather fallback.
+
   GeminiSecretId:
     Type: String
     Default: "arise/gemini-api-key"
@@ -69,6 +80,14 @@ Parameters:
     Type: String
     Default: "gemini-3.5-flash-lite"
     Description: Gemini model identifier for Ask Arise AI ('gemini-3.5-flash-lite').
+
+  IngestionScheduleState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+    Description: EventBridge Scheduler state for background telemetry ingestion ('ENABLED' or 'DISABLED').
 
 Resources:
   # ==============================================================
@@ -159,7 +178,8 @@ Resources:
           FIRMS_MAP_KEY: !Ref FirmsMapKey
           CORS_ORIGINS: !Ref CorsOrigins
           LLM_PROVIDER: !Ref LlmProvider
-          BEDROCK_MODEL_ID: us.amazon.nova-lite-v1:0
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          OPENWEATHER_API_KEY: !Ref OpenWeatherApiKey
           GEMINI_SECRET_ID: !Ref GeminiSecretId
           GEMINI_MODEL_ID: !Ref GeminiModelId
       Policies:
@@ -172,7 +192,10 @@ Resources:
               Effect: Allow
               Action:
                 - bedrock:InvokeModel
-              Resource: "arn:aws:bedrock:*::foundation-model/*"
+                - bedrock:InvokeModelWithResponseStream
+              Resource:
+                - "arn:aws:bedrock:*::foundation-model/*"
+                - "arn:aws:bedrock:*:*:inference-profile/*"
             - Sid: SecretsManagerReadGeminiKey
               Effect: Allow
               Action:
@@ -246,7 +269,7 @@ Resources:
       ScheduleExpression: "rate(30 minutes)"
       FlexibleTimeWindow:
         Mode: "OFF"
-      State: ENABLED
+      State: !Ref IngestionScheduleState
       Target:
         Arn: !GetAtt IngestionFunction.Arn
         RoleArn: !GetAtt SchedulerRole.Arn

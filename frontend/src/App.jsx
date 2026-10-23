@@ -1,34 +1,110 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import mockData from './mockData.json';
 import mockDataModerate from './mockDataModerate.json';
-import { fetchEnvironment, getUserProfile } from './api/client';
-import AirMap from './components/AirMap';
-import AqiGauge from './components/AqiGauge';
+import { fetchEnvironment, getUserProfile, updateUserProfile } from './api/client';
 import WeatherCard from './components/WeatherCard';
-import ForecastChart from './components/ForecastChart';
 import AirFlowCard from './components/AirFlowCard';
 import SchoolCard from './components/SchoolCard';
 import MobilityCard from './components/MobilityCard';
+import CommuteRouteCard from './components/CommuteRouteCard';
 import PollutantCards from './components/PollutantCards';
-import AskArise from './components/AskArise';
 import Watchlist from './components/Watchlist';
 import UserProfileMenu from './components/UserProfileMenu';
-import LoginPage from './components/LoginPage';
-import SignUpPage from './components/SignUpPage';
-import CompleteProfileModal from './components/CompleteProfileModal';
-import ProfileSettingsModal from './components/ProfileSettingsModal';
-import TechnicalGlossaryModal from './components/TechnicalGlossaryModal';
 import VerdictHero from './components/VerdictHero';
 import PersonaSelector from './components/PersonaSelector';
 import AskBar from './components/AskBar';
 import DataStatusPopover from './components/DataStatusPopover';
+import InfoTooltip from './components/InfoTooltip';
+import Footer from './components/Footer';
+
+// Lazy-loaded non-critical boundaries & heavy libraries
+const AirMap = lazy(() => import('./components/AirMap'));
+const ForecastChart = lazy(() => import('./components/ForecastChart'));
+const AskArise = lazy(() => import('./components/AskArise'));
+const LoginPage = lazy(() => import('./components/LoginPage'));
+const SignUpPage = lazy(() => import('./components/SignUpPage'));
+const CompleteProfileModal = lazy(() => import('./components/CompleteProfileModal'));
+const ProfileSettingsModal = lazy(() => import('./components/ProfileSettingsModal'));
+const TechnicalGlossaryModal = lazy(() => import('./components/TechnicalGlossaryModal'));
+
+function ForecastChartSkeleton() {
+  return (
+    <div
+      className="card p-6 rounded-2xl border flex flex-col justify-between min-h-[562px] animate-pulse"
+      style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <div>
+          <div className="h-5 w-48 bg-slate-200 dark:bg-slate-800 rounded"></div>
+          <div className="h-3 w-36 bg-slate-100 dark:bg-slate-800/60 rounded mt-2"></div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-40 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+          <div className="h-7 w-24 bg-slate-200 dark:bg-slate-800 rounded-xl"></div>
+        </div>
+      </div>
+      <div className="w-full h-[260px] sm:h-[300px] my-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl flex items-center justify-center text-xs font-semibold tm">
+        Loading 24-hour atmospheric trajectory...
+      </div>
+      <div className="mt-3 pt-3 border-t flex flex-col gap-2" style={{ borderColor: 'var(--border)' }}>
+        <div className="h-3 w-44 bg-slate-200 dark:bg-slate-800 rounded"></div>
+        <div className="h-7 w-full bg-slate-100 dark:bg-slate-800/60 rounded-lg"></div>
+      </div>
+      <div className="mt-3 pt-3 border-t flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+        <div className="h-4 w-64 bg-slate-200 dark:bg-slate-800 rounded"></div>
+        <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded"></div>
+      </div>
+    </div>
+  );
+}
+
+function MapSkeleton() {
+  return (
+    <div
+      className="w-full h-full rounded-2xl border flex flex-col items-center justify-center animate-pulse"
+      style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}
+    >
+      <div className="text-3xl mb-2" aria-hidden="true">🗺️</div>
+      <div className="text-sm font-bold t1">Loading Pan-India Atmospheric Map...</div>
+      <div className="text-xs font-semibold tm mt-1">Initializing geospatial monitors &amp; telemetry</div>
+    </div>
+  );
+}
+
+function AskSkeleton() {
+  return (
+    <div className="w-full h-full min-h-[480px] rounded-2xl border p-6 flex flex-col items-center justify-center animate-pulse" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+      <div className="text-3xl mb-2" aria-hidden="true">✨</div>
+      <div className="text-sm font-bold t1">Loading Ask Arise...</div>
+      <div className="text-xs font-semibold tm mt-1">Checking local air quality and weather conditions</div>
+    </div>
+  );
+}
+
+function AuthSkeleton() {
+  return (
+    <div className="card max-w-md w-full p-8 rounded-3xl border shadow-2xl flex flex-col items-center justify-center animate-pulse" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+      <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 mb-4"></div>
+      <div className="h-5 w-36 bg-slate-200 dark:bg-slate-800 rounded mb-2"></div>
+      <div className="h-3 w-56 bg-slate-100 dark:bg-slate-800 rounded"></div>
+    </div>
+  );
+}
 import { useAuth } from './auth/AuthContext';
-import { reverseGeocode } from './utils/geoUtils';
+import { reverseGeocode, forwardGeocode } from './utils/geoUtils';
 import { formatKolkataTime, formatKolkataDate, formatKolkataShortDate, synchronizeForecastTimeline } from './utils/timeContext';
+import { resolveInitialLocation, isInDelhiNcr, MAJOR_INDIAN_CITIES, resolvePersonaLocation } from './utils/locationState';
+import {
+  getSavedTheme,
+  resolveEffectiveTheme,
+  saveTheme,
+  applyThemeToDocument,
+  cycleTheme,
+  listenToSystemTheme,
+} from './utils/themeUtils';
 
 /**
- * Arise — Delhi-NCR Air Intelligence
- * "Can I go out?" test refactor.
+ * Arise — Global Environmental & Weather Intelligence
  * Clean, accessible, progressive disclosure architecture.
  */
 
@@ -54,59 +130,260 @@ export default function App() {
   const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
 
-  const [persona, setPersona] = useState('General Public');
+  const [persona, setPersona] = useState(() => {
+    try {
+      const cached = localStorage.getItem('arise_user_profile');
+      if (cached) {
+        const p = JSON.parse(cached);
+        if (p?.pinned_personas && p.pinned_personas.length > 0) {
+          return p.pinned_personas[0];
+        }
+        if (p?.persona) return p.persona;
+      }
+    } catch {}
+    return 'General Public';
+  });
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [healthTipsOpen, setHealthTipsOpen] = useState(false);
-  const [dark, setDark] = useState(false);
+  const [themeMode, setThemeMode] = useState(() => getSavedTheme());
+  const [dark, setDark] = useState(() => resolveEffectiveTheme(getSavedTheme()));
   const [largeText, setLargeText] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
-  const [selectedCoords, setSelectedCoords] = useState({
-    lat: 28.6139,
-    lon: 77.2090,
-    name: 'Mandir Marg, New Delhi',
-    city: 'New Delhi',
-    district: 'Central Delhi',
-    region: 'Delhi-NCR',
-  });
+  const [selectedCoords, setSelectedCoords] = useState(() => resolveInitialLocation(userProfile));
   const [envData, setEnvData] = useState(null);
   const [loadingEnv, setLoadingEnv] = useState(false);
+  const [activeRouteGeometry, setActiveRouteGeometry] = useState(null);
+  const [activeRouteWeatherPoints, setActiveRouteWeatherPoints] = useState(null);
+  const [activeRoutePollutionPoints, setActiveRoutePollutionPoints] = useState(null);
 
-  // Automatic device geolocation & reverse-geocoding resolution on startup
-  useEffect(() => {
-    if (typeof window === 'undefined' || !navigator.geolocation) return;
+  // Handle persona switching and dynamically load the corresponding saved profile location
+  const handlePersonaChange = useCallback(async (newPersona, profileOverride = null) => {
+    setPersona(newPersona);
+    const profile = profileOverride !== null ? profileOverride : userProfile;
+    if (!profile) return;
 
-    let isMounted = true;
+    const targetLoc = resolvePersonaLocation(newPersona, profile);
+
+    if (targetLoc) {
+      const lat = targetLoc.latitude;
+      const lon = targetLoc.longitude;
+
+      if (lat != null && lon != null && !isNaN(Number(lat)) && !isNaN(Number(lon))) {
+        const nextCoord = {
+          lat: Number(lat),
+          lon: Number(lon),
+          name: targetLoc.label
+            ? (targetLoc.address ? `${targetLoc.label} · ${targetLoc.address}` : targetLoc.label)
+            : (targetLoc.address || 'Saved Location'),
+          city: targetLoc.city || '',
+          district: targetLoc.district || '',
+          region: targetLoc.region || (isInDelhiNcr(lat, lon) ? 'Delhi-NCR' : 'India'),
+          source: `profile_${newPersona.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        };
+        setSelectedCoords(nextCoord);
+        try {
+          localStorage.setItem('arise_selected_location', JSON.stringify(nextCoord));
+        } catch {}
+      } else if (targetLoc.address) {
+        try {
+          const geo = await forwardGeocode(targetLoc.address);
+          if (geo && geo.lat != null && geo.lon != null) {
+            const nextCoord = {
+              lat: geo.lat,
+              lon: geo.lon,
+              name: targetLoc.label
+                ? `${targetLoc.label} · ${geo.formattedAddress || targetLoc.address}`
+                : (geo.formattedAddress || targetLoc.address),
+              city: geo.city || targetLoc.city || '',
+              district: geo.district || targetLoc.district || '',
+              region: geo.region || targetLoc.region || (isInDelhiNcr(geo.lat, geo.lon) ? 'Delhi-NCR' : 'India'),
+              source: `profile_${newPersona.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+            };
+            setSelectedCoords(nextCoord);
+            try {
+              localStorage.setItem('arise_selected_location', JSON.stringify(nextCoord));
+            } catch {}
+          }
+        } catch (err) {
+          console.warn('Unable to geocode target profile address on persona change:', err);
+        }
+      }
+    }
+  }, [userProfile]);
+
+  // Handle pin/unpin toggle from PersonaSelector. Persists to localStorage immediately;
+  // optionally syncs to cloud profile if authenticated.
+  const handlePinToggle = useCallback((nextPinned) => {
+    setUserProfile((prev) => {
+      const updated = { ...prev, pinned_personas: nextPinned };
+      try {
+        localStorage.setItem('arise_user_profile', JSON.stringify(updated));
+      } catch {}
+      // Fire-and-forget cloud sync for authenticated users
+      if (accessToken) {
+        updateUserProfile(accessToken, { pinned_personas: nextPinned }).catch((err) => {
+          console.warn('Pinned personas cloud sync skipped:', err.message);
+        });
+      }
+      return updated;
+    });
+  }, [accessToken]);
+
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationDetectionMessage, setLocationDetectionMessage] = useState(null);
+
+  // High-accuracy device geolocation resolution
+  const handleDetectCurrentLocation = useCallback((isSilent = false) => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      if (!isSilent) {
+        setLocationDetectionMessage({
+          type: 'error',
+          text: 'Geolocation is not supported by your browser.',
+        });
+        setTimeout(() => setLocationDetectionMessage(null), 5000);
+      }
+      return;
+    }
+
+    if (!isSilent) {
+      setIsDetectingLocation(true);
+      setLocationDetectionMessage({
+        type: 'info',
+        text: 'Acquiring high-accuracy GPS coordinates…',
+      });
+    }
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        if (!isMounted) return;
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
+        const accuracy = position.coords.accuracy ? Math.round(position.coords.accuracy) : null;
+
         try {
           const geo = await reverseGeocode(lat, lon);
-          if (isMounted && geo) {
-            setSelectedCoords({
-              lat,
-              lon,
-              name: geo.formattedLocation || `${geo.city || 'My Location'}`,
-              city: geo.city || '',
-              district: geo.district || '',
-              region: geo.region || 'Delhi-NCR',
+          const isNcr = isInDelhiNcr(lat, lon);
+          const locationName = geo?.formattedLocation || geo?.stationName || (geo?.city ? `${geo.city}` : `GPS (${lat.toFixed(4)}, ${lon.toFixed(4)})`);
+
+          const nextLocation = {
+            lat,
+            lon,
+            name: locationName,
+            city: geo?.city || (isNcr ? 'NCR' : ''),
+            district: geo?.district || '',
+            region: geo?.region || (isNcr ? 'National Capital Region' : 'Global'),
+            source: 'device',
+            accuracy,
+            updatedAt: new Date().toISOString(),
+          };
+
+          setSelectedCoords(nextLocation);
+          try {
+            localStorage.setItem('arise_selected_location', JSON.stringify(nextLocation));
+            localStorage.setItem('arise_last_detected_location', JSON.stringify(nextLocation));
+          } catch {}
+
+          if (!isSilent) {
+            setLocationDetectionMessage({
+              type: 'success',
+              text: `Updated to ${locationName}${accuracy ? ` (±${accuracy}m)` : ''}`,
             });
+            setTimeout(() => setLocationDetectionMessage(null), 4000);
           }
-        } catch {
-          if (isMounted) {
-            setSelectedCoords(prev => ({ ...prev, lat, lon }));
+        } catch (err) {
+          console.warn('Reverse geocode failed on location detect:', err);
+          const isNcr = isInDelhiNcr(lat, lon);
+          const fallbackName = `Current Location (${lat.toFixed(3)}, ${lon.toFixed(3)})`;
+          const nextLocation = {
+            lat,
+            lon,
+            name: fallbackName,
+            city: isNcr ? 'NCR' : '',
+            district: '',
+            region: isNcr ? 'National Capital Region' : 'Global',
+            source: 'device',
+            accuracy,
+            updatedAt: new Date().toISOString(),
+          };
+          setSelectedCoords(nextLocation);
+          try {
+            localStorage.setItem('arise_selected_location', JSON.stringify(nextLocation));
+          } catch {}
+          if (!isSilent) {
+            setLocationDetectionMessage({
+              type: 'success',
+              text: `GPS coordinates locked (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
+            });
+            setTimeout(() => setLocationDetectionMessage(null), 4000);
           }
+        } finally {
+          setIsDetectingLocation(false);
         }
       },
       (err) => {
-        console.info('Auto-geolocation permission:', err?.message || 'not granted');
+        setIsDetectingLocation(false);
+        if (!isSilent) {
+          let errText = 'Location access permission was denied or unavailable.';
+          if (err.code === 1) {
+            errText = 'Location permission denied. Please allow location access in your browser.';
+          } else if (err.code === 2) {
+            errText = 'GPS position unavailable. Check your device location settings.';
+          } else if (err.code === 3) {
+            errText = 'Location request timed out. Please try tapping Update Location again.';
+          }
+          setLocationDetectionMessage({
+            type: 'error',
+            text: errText,
+          });
+          setTimeout(() => setLocationDetectionMessage(null), 6000);
+        } else {
+          console.info('Background geolocation check:', err?.message || 'unavailable');
+        }
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 }
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
     );
-
-    return () => { isMounted = false; };
   }, []);
+
+  // Automatic device geolocation resolution on startup & background periodic refresh
+  useEffect(() => {
+    if (typeof window === 'undefined' || !navigator.geolocation) return;
+
+    // Check if user has an explicit custom saved non-default location
+    let shouldCheckOnStartup = true;
+    try {
+      const saved = localStorage.getItem('arise_selected_location');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only skip if the user explicitly chose a custom place (not default fallback or device)
+        if (parsed.source && parsed.source !== 'default' && parsed.source !== 'device') {
+          shouldCheckOnStartup = false;
+        }
+      }
+    } catch {}
+
+    if (shouldCheckOnStartup) {
+      handleDetectCurrentLocation(true);
+    }
+
+    // Regularly run automatic background location detection (every 5 minutes)
+    const intervalTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        handleDetectCurrentLocation(true);
+      }
+    }, 300000);
+
+    // Re-check when user focuses or returns to the tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleDetectCurrentLocation(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [handleDetectCurrentLocation]);
 
   // Live formatted Day, Date, Time (updating every second)
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
@@ -119,10 +396,29 @@ export default function App() {
   const liveTime = formatKolkataTime(currentDateTime);
   const shortDayDate = formatKolkataShortDate(currentDateTime);
 
-  // Dark mode class sync
+  // System theme synchronization & mode change
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-  }, [dark]);
+    const isDark = resolveEffectiveTheme(themeMode);
+    setDark(isDark);
+    applyThemeToDocument(isDark);
+
+    if (themeMode === 'system') {
+      const cleanup = listenToSystemTheme((matchesDark) => {
+        setDark(matchesDark);
+        applyThemeToDocument(matchesDark);
+      });
+      return cleanup;
+    }
+  }, [themeMode]);
+
+  const handleThemeToggle = () => {
+    const nextMode = cycleTheme(themeMode, dark);
+    setThemeMode(nextMode);
+    saveTheme(nextMode);
+    const nextIsDark = resolveEffectiveTheme(nextMode);
+    setDark(nextIsDark);
+    applyThemeToDocument(nextIsDark);
+  };
 
   // A+ Font Size Toggle sync (sets root font-size to 125%)
   useEffect(() => {
@@ -162,10 +458,16 @@ export default function App() {
       const clean = raw.replace(/^#\/?/, '').toLowerCase().trim();
       if (clean === 'login') {
         setCurrentView('login');
+        setProfileSettingsOpen(false);
       } else if (clean === 'signup') {
         setCurrentView('signup');
+        setProfileSettingsOpen(false);
+      } else if (clean === 'profile' || clean === 'settings') {
+        setCurrentView('dashboard');
+        setProfileSettingsOpen(true);
       } else {
         setCurrentView('dashboard');
+        setProfileSettingsOpen(false);
         if (clean === 'map') {
           setActiveTab('map');
         } else if (clean === 'ask') {
@@ -187,6 +489,9 @@ export default function App() {
     setActiveTab(tabId);
     if (currentView !== 'dashboard') {
       setCurrentView('dashboard');
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
     }
     const targetHash = `#/${tabId}`;
     if (window.location.hash !== targetHash) {
@@ -229,8 +534,11 @@ const KNOWN_COORDS = {
               localStorage.setItem('arise_user_profile', JSON.stringify(profile));
             } catch {}
             setNeedsProfileCompletion(false);
-            if (profile.persona) {
-              setPersona(profile.persona);
+            const priorityPersona = (profile.pinned_personas && profile.pinned_personas.length > 0)
+              ? profile.pinned_personas[0]
+              : profile.persona;
+            if (priorityPersona) {
+              handlePersonaChange(priorityPersona, profile);
             }
           } else {
             setNeedsProfileCompletion(true);
@@ -242,12 +550,16 @@ const KNOWN_COORDS = {
     } else {
       setUserProfile(null);
       setNeedsProfileCompletion(false);
+      try {
+        localStorage.removeItem('arise_user_profile');
+      } catch {}
     }
     return () => { active = false; };
   }, [isAuthenticated, accessToken]);
 
-  // Fetch telemetry from live API
+  // Fetch telemetry from live API with request cancellation on location change
   useEffect(() => {
+    const controller = new AbortController();
     let active = true;
     async function loadData() {
       setLoadingEnv(true);
@@ -255,8 +567,10 @@ const KNOWN_COORDS = {
         const payload = await fetchEnvironment({
           lat: selectedCoords.lat,
           lon: selectedCoords.lon,
+          location_name: selectedCoords.name || selectedCoords.city,
           persona,
           demo: demoMode,
+          signal: controller.signal,
         });
         if (active && payload) {
           setEnvData(payload);
@@ -265,31 +579,66 @@ const KNOWN_COORDS = {
             setSelectedCoords(prev => ({ ...prev, name: payload.location }));
           }
         }
-      } catch {
-        // Fall back gracefully
+      } catch (err) {
+        if (err?.name !== 'AbortError') {
+          // Fall back gracefully
+        }
       } finally {
         if (active) setLoadingEnv(false);
       }
     }
     loadData();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [selectedCoords.lat, selectedCoords.lon, persona, demoMode]);
 
-  // Merge live backend data with fallback state
+  // Synchronize document title dynamically with active location (strictly location-neutral / global-first)
+  useEffect(() => {
+    let loc = selectedCoords?.city || selectedCoords?.district || selectedCoords?.name || selectedCoords?.region;
+    // Strip or sanitize any Delhi keyword to honor global-first positioning
+    if (loc && typeof loc === 'string') {
+      const sanitized = loc.replace(/\b(new\s+)?delhi(-ncr)?\b/gi, '').replace(/,\s*,/g, ',').trim().replace(/^,\s*|,\s*$/g, '');
+      if (sanitized && !sanitized.includes('°') && sanitized !== 'Device Location' && sanitized !== 'Selected Area' && sanitized !== 'NCR' && sanitized !== 'National Capital Region') {
+        document.title = `Arise · Air Quality & Weather in ${sanitized}`;
+        return;
+      }
+    }
+    document.title = 'Arise · Global Environmental & Weather Intelligence';
+  }, [selectedCoords?.city, selectedCoords?.district, selectedCoords?.name, selectedCoords?.region]);
+
+  // Merge live backend data with fallback state without leaking Delhi stations into non-Delhi views
   const fallbackData = demoMode ? mockData : mockDataModerate;
-  const rawD = envData ? { ...fallbackData, ...envData } : fallbackData;
+  const isSelectedNcr = isInDelhiNcr(selectedCoords.lat, selectedCoords.lon);
+  const rawD = envData ? {
+    ...fallbackData,
+    ...envData,
+    stations: envData.stations !== undefined ? envData.stations : (isSelectedNcr ? fallbackData.stations : []),
+  } : (isSelectedNcr ? fallbackData : { ...fallbackData, stations: [] });
   const hasLiveFires = Boolean(rawD?.fires?.some(f => !f.isDemo && f.source === 'NASA-FIRMS'));
 
-  // Synchronize forecast timeline and recommendations with current Asia/Kolkata clock
+  // Synchronize forecast timeline and recommendations with local location clock
+  const timelineAqi = (rawD?.aqi != null && !Number.isNaN(Number(rawD.aqi))) ? Number(rawD.aqi) : null;
+  const targetTz = rawD?.weather?.local_timezone || rawD?.local_timezone || 'Asia/Kolkata';
   const synchronizedTimeline = useMemo(() => {
-    return synchronizeForecastTimeline(rawD?.forecast || [], rawD?.aqi || 312, currentDateTime);
-  }, [rawD?.forecast, rawD?.aqi, currentDateTime]);
+    return synchronizeForecastTimeline(rawD?.forecast || [], timelineAqi, currentDateTime, targetTz);
+  }, [rawD?.forecast, timelineAqi, currentDateTime, targetTz]);
 
   const d = useMemo(() => {
     return {
       ...rawD,
       forecast: synchronizedTimeline.synchronizedForecast,
-      bestWindow: synchronizedTimeline.hasRealBestWindow ? synchronizedTimeline.bestWindowStr : rawD.bestWindow,
+      bestWindow: synchronizedTimeline.hasRealBestWindow
+        ? synchronizedTimeline.bestWindowStr
+        : (synchronizedTimeline.hasModelWindow ? synchronizedTimeline.modelWindowStr : rawD.bestWindow),
+      bestWindowDetails: {
+        ...(rawD.bestWindowDetails || {}),
+        window_str: synchronizedTimeline.hasRealBestWindow
+          ? synchronizedTimeline.bestWindowStr
+          : (synchronizedTimeline.hasModelWindow ? synchronizedTimeline.modelWindowStr : 'No recommended outdoor window'),
+        status: synchronizedTimeline.windowStatus,
+      },
     };
   }, [rawD, synchronizedTimeline]);
 
@@ -297,7 +646,7 @@ const KNOWN_COORDS = {
   const personalizedWatchlist = useMemo(() => {
     const list = [];
 
-    const resolveCoords = (loc, fallbackLat = 28.6139, fallbackLon = 77.2090) => {
+    const resolveCoords = (loc) => {
       let lat = loc?.latitude != null && !Number.isNaN(Number(loc.latitude)) ? Number(loc.latitude) : null;
       let lon = loc?.longitude != null && !Number.isNaN(Number(loc.longitude)) ? Number(loc.longitude) : null;
       if (lat == null || lon == null) {
@@ -306,74 +655,119 @@ const KNOWN_COORDS = {
         if (matched) {
           lat = matched[1].lat;
           lon = matched[1].lon;
-        } else {
-          lat = fallbackLat;
-          lon = fallbackLon;
+        } else if (selectedCoords?.lat != null && selectedCoords?.lon != null) {
+          lat = selectedCoords.lat;
+          lon = selectedCoords.lon;
         }
       }
       return { lat, lon };
     };
 
+    const currentAqi = d?.aqi != null ? d.aqi : null;
+    const currentStatus = d?.status || (currentAqi != null
+      ? (currentAqi > 300 ? 'Very Poor' : (currentAqi > 200 ? 'Poor' : (currentAqi > 100 ? 'Moderate' : 'Good')))
+      : 'Unavailable');
+
     if (userProfile?.home_location && (userProfile.home_location.address || userProfile.home_location.latitude != null)) {
-      const { lat, lon } = resolveCoords(userProfile.home_location, 28.6845, 77.2618);
-      list.push({
-        name: userProfile.home_location.label || 'Home',
-        location: userProfile.home_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
-        lat,
-        lon,
-        aqi: d?.aqi || 329,
-        status: d?.status || 'Very Poor',
-        updated: 'Personal Location',
-      });
+      const { lat, lon } = resolveCoords(userProfile.home_location);
+      if (lat != null && lon != null) {
+        list.push({
+          name: userProfile.home_location.label || 'Home',
+          location: userProfile.home_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
+          lat,
+          lon,
+          aqi: currentAqi,
+          status: currentStatus,
+          updated: 'Personal Location',
+        });
+      }
     }
 
     if (userProfile?.school_location && (userProfile.school_location.address || userProfile.school_location.latitude != null)) {
-      const { lat, lon } = resolveCoords(userProfile.school_location, 28.529, 77.154);
-      list.push({
-        name: userProfile.school_location.label || 'School',
-        location: userProfile.school_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
-        lat,
-        lon,
-        aqi: Math.min(500, Math.round((d?.aqi || 329) * 1.02)),
-        status: d?.status || 'Very Poor',
-        updated: 'Saved',
-      });
+      const { lat, lon } = resolveCoords(userProfile.school_location);
+      if (lat != null && lon != null) {
+        list.push({
+          name: userProfile.school_location.label || 'School',
+          location: userProfile.school_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
+          lat,
+          lon,
+          aqi: currentAqi,
+          status: currentStatus,
+          updated: 'Saved',
+        });
+      }
     }
 
     if (userProfile?.work_location && (userProfile.work_location.address || userProfile.work_location.latitude != null)) {
-      const { lat, lon } = resolveCoords(userProfile.work_location, 28.631, 77.219);
-      list.push({
-        name: userProfile.work_location.label || 'Work',
-        location: userProfile.work_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
-        lat,
-        lon,
-        aqi: Math.max(50, Math.round((d?.aqi || 329) * 0.95)),
-        status: d?.status || 'Very Poor',
-        updated: 'Saved',
-      });
+      const { lat, lon } = resolveCoords(userProfile.work_location);
+      if (lat != null && lon != null) {
+        list.push({
+          name: userProfile.work_location.label || 'Work',
+          location: userProfile.work_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
+          lat,
+          lon,
+          aqi: currentAqi,
+          status: currentStatus,
+          updated: 'Saved',
+        });
+      }
     }
 
     if (userProfile?.parent_location && (userProfile.parent_location.address || userProfile.parent_location.latitude != null)) {
-      const { lat, lon } = resolveCoords(userProfile.parent_location, 28.572, 77.355);
-      list.push({
-        name: userProfile.parent_location.label || "Parent's Home",
-        location: userProfile.parent_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
-        lat,
-        lon,
-        aqi: Math.round((d?.aqi || 329) * 0.98),
-        status: d?.status || 'Very Poor',
-        updated: 'Saved',
-      });
+      const { lat, lon } = resolveCoords(userProfile.parent_location);
+      if (lat != null && lon != null) {
+        list.push({
+          name: userProfile.parent_location.label || "Parent's Home",
+          location: userProfile.parent_location.address || `${lat.toFixed(2)}°N, ${lon.toFixed(2)}°E`,
+          lat,
+          lon,
+          aqi: currentAqi,
+          status: currentStatus,
+          updated: 'Family',
+        });
+      }
     }
 
-    // If user has saved locations, display their saved locations!
-    if (list.length > 0) {
+    // Only return saved personal locations for authenticated users; never show fake saved places for guests
+    if (isAuthenticated && list.length > 0) {
       return list;
     }
 
-    // Otherwise show default sample places
-    return d?.watchlist || [];
-  }, [userProfile, d?.watchlist, d?.aqi, d?.status]);
+    return [];
+  }, [isAuthenticated, userProfile, d?.aqi, d?.status]);
+
+  const commuteCoords = useMemo(() => {
+    const resolveCoords = (loc) => {
+      let lat = loc?.latitude != null && !Number.isNaN(Number(loc.latitude)) ? Number(loc.latitude) : null;
+      let lon = loc?.longitude != null && !Number.isNaN(Number(loc.longitude)) ? Number(loc.longitude) : null;
+      if (lat == null || lon == null) {
+        const text = `${loc?.address || ''} ${loc?.label || ''}`.toLowerCase();
+        const matched = Object.entries(KNOWN_COORDS).find(([k]) => text.includes(k));
+        if (matched) {
+          lat = matched[1].lat;
+          lon = matched[1].lon;
+        }
+      }
+      return { lat, lon };
+    };
+
+    if (userProfile?.home_location && userProfile?.work_location) {
+      const home = resolveCoords(userProfile.home_location);
+      const work = resolveCoords(userProfile.work_location);
+      if (home.lat != null && home.lon != null && work.lat != null && work.lon != null) {
+        return {
+          originLat: home.lat,
+          originLon: home.lon,
+          originLabel: userProfile.home_location.label || 'Home',
+          destLat: work.lat,
+          destLon: work.lon,
+          destinationLabel: userProfile.work_location.label || 'Work',
+        };
+      }
+    }
+
+    return null;
+  }, [userProfile?.home_location, userProfile?.work_location]);
 
   const handleCloseAuth = () => {
     setCurrentView('dashboard');
@@ -391,7 +785,7 @@ const KNOWN_COORDS = {
     <div className="min-h-screen flex flex-col transition-colors duration-180" style={{ background: 'var(--bg)' }}>
       {/* ═══════════════ SLIM ADAPTIVE HEADER (64px) ═══════════════ */}
       <header
-        className="sticky top-0 z-[2000] px-3.5 sm:px-6 h-16 border-b backdrop-blur-md transition-colors flex items-center"
+        className="sticky top-0 z-[2000] px-3.5 sm:px-6 h-16 shrink-0 border-b backdrop-blur-md transition-colors flex items-center"
         style={{
           borderColor: 'var(--border)',
           background: dark ? 'rgba(19, 26, 46, 0.92)' : 'rgba(255, 255, 255, 0.92)',
@@ -417,7 +811,7 @@ const KNOWN_COORDS = {
               <span className="text-xl font-black tracking-tight t1 leading-tight">
                 Arise
               </span>
-              <h1 className="text-[11px] font-bold tm hidden sm:block -mt-0.5">
+              <h1 className="text-[11px] font-bold tm sr-only sm:not-sr-only sm:block -mt-0.5">
                 Is the air safe today?
               </h1>
             </div>
@@ -439,6 +833,7 @@ const KNOWN_COORDS = {
                   role="tab"
                   id={`tab-${tab.id}`}
                   aria-selected={isActive}
+                  aria-controls={`tabpanel-${tab.id}`}
                   onClick={() => handleTabChange(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all touch-target ${
                     isActive
@@ -473,6 +868,7 @@ const KNOWN_COORDS = {
               type="button"
               onClick={() => setLargeText(!largeText)}
               aria-pressed={largeText}
+              aria-label="Toggle larger text size"
               className={`px-2.5 py-1 rounded-xl text-xs font-black border transition-colors touch-target ${
                 largeText
                   ? 'bg-indigo-600 text-white'
@@ -484,13 +880,18 @@ const KNOWN_COORDS = {
               A+
             </button>
 
-            {/* Dark Mode Toggle */}
+            {/* Theme Toggle (System / Light / Dark) */}
             <button
               id="btn-theme-toggle"
               type="button"
-              onClick={() => setDark(!dark)}
-              aria-label="Toggle Theme"
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold border transition-colors hover:bg-[var(--surface-alt)] touch-target"
+              onClick={handleThemeToggle}
+              aria-label={`Theme: ${themeMode} (${dark ? 'Dark' : 'Light'})`}
+              title={
+                themeMode === 'system'
+                  ? `Theme: System (Auto · ${dark ? 'Dark' : 'Light'} active) — Click to cycle`
+                  : `Theme: ${themeMode === 'dark' ? 'Dark' : 'Light'} (Manual) — Click to cycle`
+              }
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold border transition-colors hover:bg-[var(--surface-alt)] touch-target cursor-pointer"
               style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
             >
               {dark ? '☀️' : '🌙'}
@@ -498,6 +899,7 @@ const KNOWN_COORDS = {
 
             {/* User Profile Menu */}
             <UserProfileMenu
+              userProfile={userProfile}
               onNavigateAuth={(v) => {
                 setCurrentView(v);
                 window.location.hash = '#/' + v;
@@ -510,17 +912,24 @@ const KNOWN_COORDS = {
       </header>
 
       {/* ═══════════════ MAIN CONTENT ═══════════════ */}
-      <main className="flex-1 w-full px-3.5 sm:px-6 py-4 sm:py-6 pb-24 md:pb-8 flex flex-col items-center">
+      <main
+        className={`flex-1 w-full flex flex-col min-h-0 ${
+          activeTab === 'ask'
+            ? 'p-2 sm:p-3 md:p-3.5 pb-20 md:pb-8'
+            : 'px-3.5 sm:px-6 py-4 sm:py-6 pb-24 md:pb-8 items-center'
+        }`}
+      >
         {/* ── TAB 1: TODAY (Core "Can I go out?" Intelligence) ── */}
         {activeTab === 'today' && (
-          <div className="w-full responsive-container space-y-5 sm:space-y-6">
+          <div role="tabpanel" id="tabpanel-today" aria-labelledby="tab-today" className="w-full responsive-container space-y-5 sm:space-y-6">
             {/* Persona Selector ("Who are you checking for?") */}
             <PersonaSelector
               currentPersona={persona}
-              onSelectPersona={(p) => setPersona(p)}
+              onSelectPersona={(p) => handlePersonaChange(p)}
               isAuthenticated={isAuthenticated}
               userProfile={userProfile}
               onOpenCustomize={() => setProfileSettingsOpen(true)}
+              onPinToggle={handlePinToggle}
             />
 
             {/* Primary Severity & Weather Row */}
@@ -532,6 +941,8 @@ const KNOWN_COORDS = {
                   city={selectedCoords.city}
                   district={selectedCoords.district}
                   region={selectedCoords.region}
+                  lat={selectedCoords.lat}
+                  lon={selectedCoords.lon}
                   forecast={d.forecast}
                   recheckAt={d.recheckAt}
                   persona={persona}
@@ -539,6 +950,11 @@ const KNOWN_COORDS = {
                   onOpenAdvisory={() => setHealthTipsOpen(true)}
                   onOpenMap={() => handleTabChange('map')}
                   liveDateTime={{ dayDate, liveTime, shortDayDate }}
+                  bestWindowDetails={d.bestWindowDetails}
+                  locationSource={selectedCoords.source || (selectedCoords.name?.includes('Mandir Marg') ? 'default' : 'manual')}
+                  onDetectLocation={() => handleDetectCurrentLocation(false)}
+                  isDetectingLocation={isDetectingLocation}
+                  detectionMessage={locationDetectionMessage}
                 />
               </div>
               <div className="md:col-span-6 lg:col-span-4 flex flex-col">
@@ -549,7 +965,7 @@ const KNOWN_COORDS = {
                   speed={d.weather?.windSpeed != null ? String(d.weather.windSpeed) : (demoMode ? "3.2" : "8.5")}
                   unit="km/h"
                   direction={d.weather?.windDirection || (demoMode ? "NW" : "WNW")}
-                  degrees={d.weather?.windDegrees || (demoMode ? 315 : 290)}
+                  degrees={d.weather?.windDegrees != null ? d.weather.windDegrees : (demoMode ? 315 : 290)}
                 />
               </div>
             </div>
@@ -564,18 +980,23 @@ const KNOWN_COORDS = {
             />
 
             {/* Forecast Horizon Chart */}
-            <ForecastChart
-              data={d.forecast}
-              data7Day={d.forecast7Day}
-              currentAqi={d.aqi}
-              location={selectedCoords.city || selectedCoords.district || selectedCoords.region || 'Delhi-NCR'}
-            />
+            <Suspense fallback={<ForecastChartSkeleton />}>
+              <ForecastChart
+                data={d.forecast}
+                data7Day={d.forecast7Day}
+                currentAqi={d.aqi}
+                location={selectedCoords.city || selectedCoords.district || selectedCoords.name || selectedCoords.region || 'Your Location'}
+              />
+            </Suspense>
 
             {/* School Safety & Travel Corridors */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
               <SchoolCard data={d.school} />
               <MobilityCard corridors={d.traffic?.corridors} onOpenMap={() => handleTabChange('map')} />
-              <div className="card p-5 flex flex-col justify-between" style={{ background: 'var(--card)' }}>
+              <div
+                className="card p-5 sm:p-6 flex flex-col justify-between rounded-2xl border shadow-sm"
+                style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
+              >
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -591,14 +1012,20 @@ const KNOWN_COORDS = {
                       try {
                         meta = await reverseGeocode(lat, lon);
                       } catch {}
-                      setSelectedCoords({
+                      const isNcr = isInDelhiNcr(lat, lon);
+                      const newLoc = {
                         lat,
                         lon,
                         name,
                         city: meta?.city || '',
                         district: meta?.district || '',
-                        region: meta?.region || name || 'Delhi-NCR',
-                      });
+                        region: meta?.region || name || (isNcr ? 'National Capital Region' : 'Global'),
+                        source: 'saved',
+                      };
+                      try {
+                        localStorage.setItem('arise_selected_location', JSON.stringify(newLoc));
+                      } catch {}
+                      setSelectedCoords(newLoc);
                     }}
                     onOpenSaveLocations={() => {
                       setProfileSettingsOpen(true);
@@ -606,19 +1033,49 @@ const KNOWN_COORDS = {
                   />
                 </div>
                 {/* Quick Alert Setting */}
-                <div className="mt-4 p-3.5 rounded-2xl border" style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}>
+                <div className="mt-3 p-3.5 rounded-2xl border" style={{ background: 'var(--surface-alt)', borderColor: 'var(--border)' }}>
                   <div className="flex items-center justify-between text-xs sm:text-sm font-black t1 mb-1">
-                    <span>Severe Air Alert Threshold</span>
+                    <span className="flex items-center gap-1.5">
+                      <span>Severe Air Alert Threshold</span>
+                      <InfoTooltip
+                        title="Severe Air Alert Threshold (AQI > 300)"
+                        explanation="Alert threshold triggered when AQI exceeds 300. At this level, air pollution causes acute respiratory irritation even in healthy adults. Wearing N95 masks outdoors and sealing indoor spaces is strongly recommended."
+                      />
+                    </span>
                     <span className="text-indigo-600 dark:text-indigo-400 font-black">AQI &gt; 300</span>
                   </div>
                   <p className="text-xs font-medium tm leading-relaxed">
                     {userProfile?.alerts_enabled
                       ? 'Personal alerts enabled for saved locations.'
-                      : `Alerts coming soon for critical ${selectedCoords.city || selectedCoords.district || 'Delhi-NCR'} air zones.`}
+                      : `Alerts active for critical ${selectedCoords.city || selectedCoords.district || selectedCoords.region || 'local'} air zones.`}
                   </p>
                 </div>
               </div>
             </div>
+
+            {/* Commute Route Card */}
+            <CommuteRouteCard
+              originLat={commuteCoords?.originLat}
+              originLon={commuteCoords?.originLon}
+              destLat={commuteCoords?.destLat}
+              destLon={commuteCoords?.destLon}
+              originLabel={commuteCoords?.originLabel || 'Home'}
+              destinationLabel={commuteCoords?.destinationLabel || 'Work'}
+              isRouteActive={!!activeRouteGeometry}
+              onShowOnMap={(geometry, bbox, weatherPoints, pollutionPoints) => {
+                setActiveRouteGeometry(geometry);
+                setActiveRouteWeatherPoints(weatherPoints || null);
+                setActiveRoutePollutionPoints(pollutionPoints || null);
+                handleTabChange('map');
+              }}
+              onClearFromMap={() => {
+                setActiveRouteGeometry(null);
+                setActiveRouteWeatherPoints(null);
+                setActiveRoutePollutionPoints(null);
+              }}
+              onOpenMap={() => handleTabChange('map')}
+              onConfigureLocations={() => setProfileSettingsOpen(true)}
+            />
 
             {/* Pollutant Cards */}
             <PollutantCards pollutants={d.pollutants} />
@@ -626,12 +1083,12 @@ const KNOWN_COORDS = {
             {/* Meta & Navigation Utility Strip */}
             <div className="pt-4 border-t flex flex-wrap items-center justify-between gap-3 text-xs" style={{ borderColor: 'var(--border)' }}>
               <div className="flex items-center gap-2.5">
-                <DataStatusPopover hasLiveFires={hasLiveFires} />
+                <DataStatusPopover hasLiveFires={hasLiveFires} placement="top" align="left" />
                 <button
                   type="button"
                   id="btn-open-glossary"
                   onClick={() => setGlossaryOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border t2 hover:t1 hover:bg-[var(--surface-alt)] transition-colors font-bold touch-target shadow-2xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border t2 hover:t1 hover:bg-[var(--surface-alt)] transition-colors font-bold touch-target shadow-2xs cursor-pointer"
                   style={{ background: 'var(--card)', borderColor: 'var(--border)' }}
                 >
                   <span aria-hidden="true">📖</span>
@@ -639,12 +1096,15 @@ const KNOWN_COORDS = {
                 </button>
               </div>
             </div>
+
+            {/* Global Professional Footer */}
+            <Footer onNavigate={handleTabChange} onOpenGlossary={() => setGlossaryOpen(true)} />
           </div>
         )}
 
-        {/* ── TAB 2: MAP (Full Delhi-NCR Interactive Map) ── */}
+        {/* ── TAB 2: MAP (Interactive Air Quality & Telemetry Map) ── */}
         {activeTab === 'map' && (
-          <div className="w-full responsive-container space-y-4">
+          <div role="tabpanel" id="tabpanel-map" aria-labelledby="tab-map" className="w-full responsive-container space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-black t1">Air Quality &amp; Fire Map</h2>
@@ -660,54 +1120,93 @@ const KNOWN_COORDS = {
                   <span>←</span>
                   <span>Back to Today</span>
                 </button>
-                <DataStatusPopover hasLiveFires={hasLiveFires} />
+                <DataStatusPopover hasLiveFires={hasLiveFires} placement="bottom" align="right" />
               </div>
             </div>
             <div className="w-full h-[clamp(420px,calc(100dvh-13rem),780px)] rounded-2xl overflow-hidden card" style={{ background: 'var(--card)' }}>
-              <AirMap
-                stations={d.stations}
-                fires={d.fires}
-                weather={d.weather}
-                traffic={d.traffic}
-                nationalHubs={d.nationalHubs}
-                dark={dark}
-                fullHeight={true}
-                onLocationSelect={(lat, lon, name, meta) => {
-                  setSelectedCoords({
-                    lat,
-                    lon,
-                    name: name || 'Selected Area',
-                    city: meta?.city || '',
-                    district: meta?.district || '',
-                    region: meta?.region || name || 'Delhi-NCR',
-                  });
-                }}
-                onSwitchToToday={() => handleTabChange('today')}
-              />
+              <Suspense fallback={<MapSkeleton />}>
+                <AirMap
+                  stations={d.stations}
+                  fires={d.fires}
+                  weather={d.weather}
+                  traffic={d.traffic}
+                  nationalHubs={d.nationalHubs}
+                  dark={dark}
+                  center={selectedCoords}
+                  selectedCoords={selectedCoords}
+                  routeGeometry={activeRouteGeometry}
+                  routeWeatherPoints={activeRouteWeatherPoints}
+                  routePollutionPoints={activeRoutePollutionPoints}
+                  onClearRoute={() => {
+                    setActiveRouteGeometry(null);
+                    setActiveRouteWeatherPoints(null);
+                    setActiveRoutePollutionPoints(null);
+                  }}
+                  fullHeight={true}
+                  onLocationSelect={(lat, lon, name, meta) => {
+                    const isNcr = isInDelhiNcr(lat, lon);
+                    const newLoc = {
+                      lat,
+                      lon,
+                      name: name || 'Selected Area',
+                      city: meta?.city || '',
+                      district: meta?.district || '',
+                      region: meta?.region || name || (isNcr ? 'National Capital Region' : 'Global'),
+                      source: 'map_select',
+                    };
+                    try {
+                      localStorage.setItem('arise_selected_location', JSON.stringify(newLoc));
+                    } catch {}
+                    setSelectedCoords(newLoc);
+                  }}
+                  onSwitchToToday={() => handleTabChange('today')}
+                />
+              </Suspense>
             </div>
+
+            {/* Global Professional Footer */}
+            <Footer onNavigate={handleTabChange} onOpenGlossary={() => setGlossaryOpen(true)} />
           </div>
         )}
 
         {/* ── TAB 3: ASK (Ask Arise Dedicated Interface) ── */}
         {activeTab === 'ask' && (
-          <div className="w-full max-w-[1000px] xl:max-w-[1100px] h-[clamp(480px,calc(100dvh-12rem),800px)] flex flex-col">
-            <AskArise
-              lat={selectedCoords.lat}
-              lon={selectedCoords.lon}
-              demo={demoMode}
-              persona={persona}
-            />
+          <div role="tabpanel" id="tabpanel-ask" aria-labelledby="tab-ask" className="w-full flex flex-col flex-1 min-h-0">
+            <div className="w-full h-[clamp(540px,calc(100dvh-5.5rem),900px)] xl:h-[calc(100dvh-5.5rem)] flex flex-col shrink-0">
+              <Suspense fallback={<AskSkeleton />}>
+                <AskArise
+                  lat={selectedCoords.lat}
+                  lon={selectedCoords.lon}
+                  demo={demoMode}
+                  persona={persona}
+                  locationName={selectedCoords.city || selectedCoords.district || selectedCoords.name || selectedCoords.region || 'Your Location'}
+                  userProfile={userProfile}
+                  environmentalContext={{
+                    aqi: d?.aqi,
+                    category: d?.status || d?.verdict?.category,
+                    verdict: d?.verdict,
+                    dominant_pollutant: d?.dominantPollutant || 'PM2.5',
+                    weather: d?.weather ? `${d.weather.temp}°C, ${d.weather.condition}, wind ${d.weather.windSpeed} km/h ${d.weather.windDirection}` : null,
+                    best_window: d?.bestWindow,
+                    school_directive: d?.school?.action ? `${d.school.action}: ${d.school.action === 'CANCEL' ? 'Indoor only' : 'Limit outdoor sports'}` : null,
+                  }}
+                />
+              </Suspense>
+            </div>
+
+            {/* Global Professional Footer */}
+            <Footer onNavigate={handleTabChange} onOpenGlossary={() => setGlossaryOpen(true)} />
           </div>
         )}
 
         {/* ── TAB 4: MORE (School, Travel & My Places) ── */}
         {activeTab === 'more' && (
-          <div className="w-full responsive-container space-y-5 sm:space-y-6">
+          <div role="tabpanel" id="tabpanel-more" aria-labelledby="tab-more" className="w-full responsive-container space-y-5 sm:space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b" style={{ borderColor: 'var(--border)' }}>
               <div>
                 <h2 className="text-xl sm:text-2xl font-black t1">Regional Life, School &amp; Travel Guides</h2>
                 <p className="text-xs sm:text-sm font-semibold tm mt-1">
-                  School sports advisories, saved family monitors, and arterial NCR smog corridors.
+                  School sports advisories, personal saved monitors, and live arterial mobility corridors.
                 </p>
               </div>
             </div>
@@ -739,7 +1238,7 @@ const KNOWN_COORDS = {
                         name,
                         city: meta?.city || '',
                         district: meta?.district || '',
-                        region: meta?.region || name || 'Delhi-NCR',
+                        region: meta?.region || name || (isInDelhiNcr(lat, lon) ? 'National Capital Region' : 'Global'),
                       });
                       handleTabChange('today');
                     }}
@@ -752,6 +1251,9 @@ const KNOWN_COORDS = {
               </div>
               <MobilityCard corridors={d.traffic?.corridors} onOpenMap={() => handleTabChange('map')} />
             </div>
+
+            {/* Global Professional Footer */}
+            <Footer onNavigate={handleTabChange} onOpenGlossary={() => setGlossaryOpen(true)} />
           </div>
         )}
       </main>
@@ -775,6 +1277,7 @@ const KNOWN_COORDS = {
               role="tab"
               id={`mobile-tab-${tab.id}`}
               aria-selected={isActive}
+              aria-controls={`tabpanel-${tab.id}`}
               onClick={() => handleTabChange(tab.id)}
               className={`flex-1 flex flex-col items-center justify-center py-1.5 px-2 rounded-xl text-[11px] font-black transition-all touch-target select-none ${
                 isActive
@@ -792,6 +1295,9 @@ const KNOWN_COORDS = {
       {/* ═══════════════ HEALTH TIPS / ADVISORY MODAL ═══════════════ */}
       {healthTipsOpen && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="advisory-modal-title"
           className="fixed inset-0 z-[3000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setHealthTipsOpen(false)}
         >
@@ -803,12 +1309,14 @@ const KNOWN_COORDS = {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-2xl" aria-hidden="true">🫁</span>
-                <h3 className="text-lg font-black t1">Health &amp; Action Advisory</h3>
+                <h3 id="advisory-modal-title" className="text-lg font-black t1">Health &amp; Action Advisory</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setHealthTipsOpen(false)}
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold t3 hover:bg-[var(--surface-alt)] touch-target"
+                aria-label="Close health advisory modal"
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold t3 hover:bg-[var(--surface-alt)] touch-target border"
+                style={{ borderColor: 'var(--border)' }}
               >
                 ✕
               </button>
@@ -852,41 +1360,58 @@ const KNOWN_COORDS = {
 
       {/* ═══════════════ TECHNICAL GLOSSARY MODAL ═══════════════ */}
       {glossaryOpen && (
-        <TechnicalGlossaryModal
-          isOpen={glossaryOpen}
-          onClose={() => setGlossaryOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <TechnicalGlossaryModal
+            isOpen={glossaryOpen}
+            onClose={() => setGlossaryOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* ═══════════════ MANDATORY PROFILE COMPLETION MODAL ═══════════════ */}
       {needsProfileCompletion && (
-        <CompleteProfileModal
-          onProfileSaved={(p) => {
-            setUserProfile(p);
-            if (p?.persona) setPersona(p.persona);
-            setNeedsProfileCompletion(false);
-          }}
-          onProfileCompleted={(p) => {
-            setUserProfile(p);
-            if (p?.persona) setPersona(p.persona);
-            setNeedsProfileCompletion(false);
-          }}
-        />
+        <Suspense fallback={null}>
+          <CompleteProfileModal
+            onProfileSaved={(p) => {
+              setUserProfile(p);
+              handlePersonaChange(p?.persona || persona, p);
+              setNeedsProfileCompletion(false);
+            }}
+            onProfileCompleted={(p) => {
+              setUserProfile(p);
+              handlePersonaChange(p?.persona || persona, p);
+              setNeedsProfileCompletion(false);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* ═══════════════ PROFILE SETTINGS & PERSONAS MODAL ═══════════════ */}
       {profileSettingsOpen && (
-        <ProfileSettingsModal
-          onClose={() => setProfileSettingsOpen(false)}
-          onProfileSaved={(p) => {
-            setUserProfile(p);
-            try {
-              localStorage.setItem('arise_user_profile', JSON.stringify(p));
-            } catch {}
-            if (p.persona) setPersona(p.persona);
-            setProfileSettingsOpen(false);
-          }}
-        />
+        <Suspense fallback={null}>
+          <ProfileSettingsModal
+            onClose={() => {
+              setProfileSettingsOpen(false);
+              if (window.location.hash === '#/profile' || window.location.hash === '#/settings') {
+                window.location.hash = '#/' + activeTab;
+              }
+            }}
+            onProfileSaved={(p) => {
+              setUserProfile(p);
+              try {
+                localStorage.setItem('arise_user_profile', JSON.stringify(p));
+              } catch {}
+              const priorityPersona = (p?.pinned_personas && p.pinned_personas.length > 0)
+                ? p.pinned_personas[0]
+                : (p?.persona || persona);
+              handlePersonaChange(priorityPersona, p);
+              setProfileSettingsOpen(false);
+              if (window.location.hash === '#/profile' || window.location.hash === '#/settings') {
+                window.location.hash = '#/' + activeTab;
+              }
+            }}
+          />
+        </Suspense>
       )}
 
       {/* ═══════════════ TRANSLUCENT AUTH OVERLAY (LOGIN / SIGNUP) ═══════════════ */}
@@ -902,25 +1427,27 @@ const KNOWN_COORDS = {
             }
           }}
         >
-          {currentView === 'login' ? (
-            <LoginPage
-              onNavigateSignUp={() => {
-                setCurrentView('signup');
-                window.location.hash = '#/signup';
-              }}
-              onContinueGuest={handleCloseAuth}
-              onBack={handleCloseAuth}
-            />
-          ) : (
-            <SignUpPage
-              onNavigateLogin={() => {
-                setCurrentView('login');
-                window.location.hash = '#/login';
-              }}
-              onContinueGuest={handleCloseAuth}
-              onBack={handleCloseAuth}
-            />
-          )}
+          <Suspense fallback={<AuthSkeleton />}>
+            {currentView === 'login' ? (
+              <LoginPage
+                onNavigateSignUp={() => {
+                  setCurrentView('signup');
+                  window.location.hash = '#/signup';
+                }}
+                onContinueGuest={handleCloseAuth}
+                onBack={handleCloseAuth}
+              />
+            ) : (
+              <SignUpPage
+                onNavigateLogin={() => {
+                  setCurrentView('login');
+                  window.location.hash = '#/login';
+                }}
+                onContinueGuest={handleCloseAuth}
+                onBack={handleCloseAuth}
+              />
+            )}
+          </Suspense>
         </div>
       )}
     </div>

@@ -11,6 +11,17 @@ export default function LoginPage({ onNavigateSignUp, onContinueGuest, onBack })
 
   const handleBack = onBack || onContinueGuest;
 
+  // Support Escape key to close modal
+  React.useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape' && handleBack) {
+        handleBack();
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleBack]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
@@ -119,14 +130,14 @@ export default function LoginPage({ onNavigateSignUp, onContinueGuest, onBack })
       {/* Divider */}
       <div className="flex items-center my-4 text-xs relative z-10">
         <div className="flex-1 border-t" style={{ borderColor: 'var(--border)' }} />
-        <span className="px-3 uppercase tracking-wider font-extrabold text-[10px] tm">or with Cognito credentials</span>
+        <span className="px-3 uppercase tracking-wider font-extrabold text-[11px] tm">or with Cognito credentials</span>
         <div className="flex-1 border-t" style={{ borderColor: 'var(--border)' }} />
       </div>
 
       {/* Email & Password Form */}
       <form onSubmit={handleSubmit} className="space-y-3.5 relative z-10">
         <div>
-          <label className="block text-xs font-bold t1 mb-1">Email Address</label>
+          <label htmlFor="input-login-email" className="block text-xs font-bold t1 mb-1">Email Address</label>
           <input
             id="input-login-email"
             type="email"
@@ -144,7 +155,7 @@ export default function LoginPage({ onNavigateSignUp, onContinueGuest, onBack })
         </div>
 
         <div>
-          <label className="block text-xs font-bold t1 mb-1">Password</label>
+          <label htmlFor="input-login-password" className="block text-xs font-bold t1 mb-1">Password</label>
           <div className="relative">
             <input
               id="input-login-password"
@@ -163,6 +174,7 @@ export default function LoginPage({ onNavigateSignUp, onContinueGuest, onBack })
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? 'Hide password' : 'Show password as plain text'}
               className="absolute right-3 top-2.5 text-xs font-semibold tm hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
             >
               {showPassword ? 'Hide' : 'Show'}

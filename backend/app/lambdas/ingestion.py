@@ -13,11 +13,10 @@ import os
 backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
-
 from aws_lambda_powertools import Logger
 from app.core.config import get_settings
 from app.services.environment import EnvironmentService
-from app.cache.repository import get_cache_repository
+from app.cache.repository import get_cache_repository, get_geographic_cell
 
 settings = get_settings()
 logger = Logger(service="arise-ingestion")
@@ -33,7 +32,8 @@ async def run_ingestion_pipeline(lat: float = 28.6139, lon: float = 77.2090):
     snapshot = await env_service.get_environmental_snapshot(lat=lat, lon=lon, force_demo=False)
     
     # 2. Store pre-computed unified snapshot in cache with deterministic spatial key
-    cache_key = f"env:{round(lat, 2)}:{round(lon, 2)}"
+    _, _, cell_key = get_geographic_cell(lat, lon, settings.WEATHER_GRID_RESOLUTION_DEG)
+    cache_key = cell_key.replace("weather:cell:", "env:cell:")
     cache.set(
         key=cache_key,
         value=snapshot.model_dump(),
@@ -68,8 +68,11 @@ def handler(event, context):
         lat = float(event.get("lat", 28.6139)) if isinstance(event, dict) else 28.6139
         lon = float(event.get("lon", 77.2090)) if isinstance(event, dict) else 77.2090
         
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("Closed")
+        except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             

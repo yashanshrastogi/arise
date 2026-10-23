@@ -1,5 +1,5 @@
 {
-  "location": "Delhi-NCR",
+  "location": "National Capital Region",
   "updated": "10:02 AM, 8 Oct 2026",
   "aqi": 128,
   "status": "Moderate",
@@ -37,24 +37,26 @@
     "corridors": [
       {
         "id": "c1",
-        "name": "Delhi → Noida (DND Flyway)",
+        "name": "Trans-River Corridor (DND Flyway)",
         "status": "Moderate",
         "delay": "+7 min",
         "normalTime": "24 min",
         "currentTime": "31 min",
         "visibility": "5.0 km",
-        "smogImpact": "Clear sightlines on Yamuna bridge",
+        "airBand": "Minor Delay (+7 min)",
+        "environmentalImpact": "Clear sightlines on Yamuna bridge",
         "recommendation": "Typical transit window. Normal driving conditions."
       },
       {
         "id": "c2",
-        "name": "Delhi → Gurugram (NH-48)",
+        "name": "Capital Arterial (NH-48)",
         "status": "Moderate",
         "delay": "+6 min",
         "normalTime": "35 min",
         "currentTime": "41 min",
         "visibility": "5.5 km",
-        "smogImpact": "Minor dust haze near Mahipalpur",
+        "airBand": "Minor Delay (+6 min)",
+        "environmentalImpact": "Minor dust haze near Mahipalpur",
         "recommendation": "Smooth transit. Follow standard commute schedule."
       },
       {
@@ -65,7 +67,8 @@
         "normalTime": "18 min",
         "currentTime": "20 min",
         "visibility": "6.0 km",
-        "smogImpact": "Good visibility across arterial corridor",
+        "airBand": "Smooth Flow (+2 min)",
+        "environmentalImpact": "Good visibility across arterial corridor",
         "recommendation": "On time. No transit restrictions."
       }
     ]
@@ -105,11 +108,17 @@
     { "day": "Wed",   "aqi": 118, "temp": 27, "rainProb": 10, "windSpeed": 8.2,  "status": "Moderate",     "condition": "Sunny" }
   ],
   "stations": [
-    { "id": 1, "name": "ITO",           "lat": 28.6289, "lng": 77.2412, "aqi": 128, "pm25": 48.2, "pm10": 115.0, "temp": 29, "rain": 5, "wind": 8.5 },
-    { "id": 2, "name": "RK Puram",      "lat": 28.5635, "lng": 77.1724, "aqi": 118, "pm25": 42.0, "pm10": 105.0, "temp": 30, "rain": 5, "wind": 9.0 },
-    { "id": 3, "name": "Anand Vihar",   "lat": 28.6469, "lng": 77.3164, "aqi": 142, "pm25": 56.0, "pm10": 130.0, "temp": 29, "rain": 5, "wind": 7.8 },
-    { "id": 4, "name": "Punjabi Bagh",  "lat": 28.6683, "lng": 77.1308, "aqi": 132, "pm25": 50.0, "pm10": 120.0, "temp": 29, "rain": 5, "wind": 8.2 },
-    { "id": 5, "name": "Dwarka",        "lat": 28.5921, "lng": 77.0460, "aqi": 115, "pm25": 39.0, "pm10": 98.0,  "temp": 30, "rain": 10, "wind": 9.5 }
+    { "id": 1, "name": "ITO", "lat": 28.6289, "lng": 77.2412, "aqi": 128, "pm25": 48.2, "pm10": 115.0, "temp": 29, "rain": 5, "wind": 8.5, "source": "DEMO" },
+    { "id": 2, "name": "RK Puram", "lat": 28.5635, "lng": 77.1724, "aqi": 118, "pm25": 42.0, "pm10": 105.0, "temp": 30, "rain": 5, "wind": 9.0, "source": "DEMO" },
+    { "id": 3, "name": "Anand Vihar", "lat": 28.6469, "lng": 77.3164, "aqi": 142, "pm25": 56.0, "pm10": 130.0, "temp": 29, "rain": 5, "wind": 7.8, "source": "DEMO" },
+    { "id": 4, "name": "Punjabi Bagh", "lat": 28.6683, "lng": 77.1308, "aqi": 132, "pm25": 50.0, "pm10": 120.0, "temp": 29, "rain": 5, "wind": 8.2, "source": "DEMO" },
+    { "id": 5, "name": "Dwarka", "lat": 28.5921, "lng": 77.0460, "aqi": 115, "pm25": 39.0, "pm10": 98.0, "temp": 30, "rain": 10, "wind": 9.5, "source": "DEMO" },
+    { "id": 6, "name": "Sanjay Nagar, Ghaziabad", "lat": 28.6853, "lng": 77.4538, "aqi": 138, "pm25": 54.0, "pm10": 125.0, "temp": 29, "rain": 5, "wind": 8.0, "source": "DEMO" },
+    { "id": 7, "name": "Vasundhara, Ghaziabad", "lat": 28.6603, "lng": 77.3573, "aqi": 130, "pm25": 49.0, "pm10": 118.0, "temp": 29, "rain": 5, "wind": 8.5, "source": "DEMO" },
+    { "id": 8, "name": "Indirapuram, Ghaziabad", "lat": 28.6416, "lng": 77.3712, "aqi": 125, "pm25": 46.5, "pm10": 112.0, "temp": 29, "rain": 5, "wind": 8.8, "source": "DEMO" },
+    { "id": 9, "name": "Loni, Ghaziabad", "lat": 28.7511, "lng": 77.2882, "aqi": 145, "pm25": 58.0, "pm10": 135.0, "temp": 28, "rain": 5, "wind": 7.5, "source": "DEMO" },
+    { "id": 10, "name": "Sector 62, Noida", "lat": 28.6276, "lng": 77.3653, "aqi": 122, "pm25": 45.0, "pm10": 110.0, "temp": 30, "rain": 5, "wind": 9.0, "source": "DEMO" },
+    { "id": 11, "name": "Vikas Sadan, Gurugram", "lat": 28.4595, "lng": 77.0266, "aqi": 112, "pm25": 38.0, "pm10": 98.0, "temp": 30, "rain": 10, "wind": 9.5, "source": "DEMO" }
   ],
   "fires": [
     { "id": 102, "lat": 29.81, "lng": 76.48, "intensity": "low" }
@@ -131,7 +140,7 @@
       "question": "Is it safe to exercise outdoors?",
       "verdict": "BE SMART",
       "text": "AQI is at 128 (Moderate). General population can engage in outdoor activities. Individuals sensitive to particulate matter should reduce high-intensity prolonged exertion. The best outdoor window is 11 AM – 4 PM.",
-      "sources": ["CPCB Delhi", "Arise Forecast"],
+      "sources": ["CPCB Ground Network", "Arise Forecast"],
       "timestamp": "10:15 AM"
     }
   ]

@@ -30,7 +30,7 @@ function renderInlineMarkdown(text) {
       return (
         <strong
           key={idx}
-          className="font-black text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 mx-0.5 rounded-md bg-indigo-500/10 dark:bg-indigo-400/15 border border-indigo-400/20 inline-block my-0.5"
+          className="font-bold text-[var(--text-primary)]"
         >
           {token.slice(2, -2)}
         </strong>

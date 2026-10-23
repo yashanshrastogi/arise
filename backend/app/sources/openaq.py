@@ -60,7 +60,7 @@ class OpenAQProvider(BaseAirQualityProvider):
             if s_id is not None:
                 sensor_meta[s_id] = {
                     "param": p.get("name", "").upper(),
-                    "unit": p.get("units", "µg/m³")
+                    "unit": p.get("units")
                 }
 
         pollutants: Dict[str, AirMeasurement] = {}
@@ -80,38 +80,93 @@ class OpenAQProvider(BaseAirQualityProvider):
                     if p_name and val is not None and val >= 0:
                         try:
                             raw_val = float(val)
-                            unit_raw = meta.get("unit", "µg/m³").strip().lower()
+                            unit_raw_meta = meta.get("unit")
+                            if not unit_raw_meta or not str(unit_raw_meta).strip():
+                                logger.warning(
+                                    f"Rejecting {p_name} observation for sensor {s_id}: missing unit metadata"
+                                )
+                                continue
+                            unit_raw = str(unit_raw_meta).strip().lower()
 
                             # Unit Normalizations according to CPCB NAAQS Reference:
-                            # NO2, SO2, O3, PM2.5, PM10 require µg/m³; CO requires mg/m³.
-                            # Standard reference at 25°C, 1 atm (Indian CPCB standard)
+                            # NO2, SO2, O3, PM2.5, PM10, NH3 require µg/m³; CO requires mg/m³.
+                            # Standard reference at 25°C, 1 atm (CPCB NAQI CUPS/82/2014-15):
+                            # V_m = 24.45 L/mol
+                            # NO2: MW = 46.01 g/mol -> 1 ppb = 1.88 µg/m³, 1 ppm = 1880 µg/m³
+                            # SO2: MW = 64.07 g/mol -> 1 ppb = 2.62 µg/m³, 1 ppm = 2620 µg/m³
+                            # O3:  MW = 48.00 g/mol -> 1 ppb = 1.96 µg/m³, 1 ppm = 1960 µg/m³
+                            # CO:  MW = 28.01 g/mol -> 1 ppm = 1.15 mg/m³
                             if p_name == "NO2":
                                 if "ppb" in unit_raw:
                                     raw_val = round(raw_val * 1.88, 2)
                                 elif "ppm" in unit_raw:
                                     raw_val = round(raw_val * 1880.0, 2)
+                                elif unit_raw in ("µg/m³", "ug/m3", "ug/m^3", "µg/m^3"):
+                                    raw_val = round(raw_val, 2)
+                                else:
+                                    logger.warning(f"Rejecting NO2 observation with ambiguous unit '{unit_raw}'")
+                                    continue
                                 unit_str = "µg/m³"
                             elif p_name == "SO2":
                                 if "ppb" in unit_raw:
                                     raw_val = round(raw_val * 2.62, 2)
                                 elif "ppm" in unit_raw:
                                     raw_val = round(raw_val * 2620.0, 2)
+                                elif unit_raw in ("µg/m³", "ug/m3", "ug/m^3", "µg/m^3"):
+                                    raw_val = round(raw_val, 2)
+                                else:
+                                    logger.warning(f"Rejecting SO2 observation with ambiguous unit '{unit_raw}'")
+                                    continue
                                 unit_str = "µg/m³"
                             elif p_name == "O3":
                                 if "ppb" in unit_raw:
                                     raw_val = round(raw_val * 1.96, 2)
                                 elif "ppm" in unit_raw:
                                     raw_val = round(raw_val * 1960.0, 2)
+                                elif unit_raw in ("µg/m³", "ug/m3", "ug/m^3", "µg/m^3"):
+                                    raw_val = round(raw_val, 2)
+                                else:
+                                    logger.warning(f"Rejecting O3 observation with ambiguous unit '{unit_raw}'")
+                                    continue
                                 unit_str = "µg/m³"
                             elif p_name == "CO":
-                                if unit_raw in ("µg/m³", "ug/m3") or raw_val > 50.0:
+                                # CO requires mg/m³. Strictly reject ambiguous unit metadata;
+                                # NEVER infer unit from concentration magnitude.
+                                if unit_raw in ("µg/m³", "ug/m3", "ug/m^3", "µg/m^3"):
                                     raw_val = round(raw_val / 1000.0, 2)
+                                    unit_str = "mg/m³"
+                                elif unit_raw in ("mg/m³", "mg/m3", "mg/m^3"):
+                                    raw_val = round(raw_val, 2)
+                                    unit_str = "mg/m³"
                                 elif unit_raw == "ppm":
                                     raw_val = round(raw_val * 1.15, 2)
-                                # In Indian CAAQMS OpenAQ feeds, CO values 0.1-30 are already mg/m³
-                                unit_str = "mg/m³"
+                                    unit_str = "mg/m³"
+                                else:
+                                    logger.warning(f"Rejecting CO observation with ambiguous unit '{unit_raw}'")
+                                    continue
+                            elif p_name in ("PM2.5", "PM10"):
+                                if unit_raw in ("µg/m³", "ug/m3", "ug/m^3", "µg/m^3"):
+                                    raw_val = round(raw_val, 2)
+                                    unit_str = "µg/m³"
+                                else:
+                                    logger.warning(f"Rejecting {p_name} observation with ambiguous unit '{unit_raw}'")
+                                    continue
+                            elif p_name == "NH3":
+                                if unit_raw in ("µg/m³", "ug/m3", "ug/m^3", "µg/m^3"):
+                                    raw_val = round(raw_val, 2)
+                                    unit_str = "µg/m³"
+                                else:
+                                    logger.warning(f"Rejecting NH3 observation with ambiguous unit '{unit_raw}'")
+                                    continue
+                            elif p_name in ("PB", "LEAD"):
+                                if unit_raw in ("µg/m³", "ug/m3", "ug/m^3", "µg/m^3"):
+                                    raw_val = round(raw_val, 2)
+                                    unit_str = "µg/m³"
+                                else:
+                                    logger.warning(f"Rejecting Pb observation with ambiguous unit '{unit_raw}'")
+                                    continue
                             else:
-                                unit_str = "µg/m³"
+                                continue
 
                             # Plausibility checks (reject impossible sensor glitches)
                             if p_name == "PM2.5" and (raw_val < 0 or raw_val > 1000.0):
@@ -121,6 +176,10 @@ class OpenAQProvider(BaseAirQualityProvider):
                             if p_name == "CO" and (raw_val < 0 or raw_val > 50.0):
                                 continue
                             if p_name in ("NO2", "SO2", "O3") and (raw_val < 0 or raw_val > 1000.0):
+                                continue
+                            if p_name == "NH3" and (raw_val < 0 or raw_val > 2500.0):
+                                continue
+                            if p_name in ("PB", "LEAD") and (raw_val < 0 or raw_val > 50.0):
                                 continue
 
                             ts_to_use = obs_time or now_iso
@@ -151,8 +210,8 @@ class OpenAQProvider(BaseAirQualityProvider):
 
         if pollutants:
             latest_ts = max((m.timestamp for m in pollutants.values()), default=now_iso)
-            # Compute station AQI and individual pollutant sub-indices
-            st_aqi_res = calculate_aqi({k: m.value for k, m in pollutants.items()})
+            # Compute station AQI and individual pollutant sub-indices (indicative real-time telemetry)
+            st_aqi_res = calculate_aqi({k: m.value for k, m in pollutants.items()}, has_verified_averaging=False)
             for k, m in pollutants.items():
                 m.aqi_sub_index = st_aqi_res.sub_indices.get(k)
 

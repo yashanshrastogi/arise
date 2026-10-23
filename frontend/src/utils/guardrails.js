@@ -26,8 +26,11 @@ const ENVIRONMENTAL_REGEX = new RegExp(
   'exercise\\w*|workout\\w*|gym|cycle\\w*|cycling|bike|biking|commute\\w*|transit|play\\w*|playground|park|' +
   'safe|safety|hazard\\w*|risk\\w*|' +
   // Sensitive demographics & health symptoms
-  'kid\\w*|child\\w*|baby|babies|toddler\\w*|school\\w*|student\\w*|sports|elderly|senior\\w*|' +
+  'health\\w*|kid\\w*|child\\w*|baby|babies|toddler\\w*|school\\w*|student\\w*|sports|elderly|senior\\w*|' +
   'parent\\w*|grandparent\\w*|asthma|respiratory|breath\\w*|lung\\w*|cough\\w*|throat|allergy|allergies|inhaler|' +
+  // Personal memories, health facts, and profile context
+  'memory|memories|health fact\\w*|remember|health condition\\w*|sensitivities|sensitivity|' +
+  'preference\\w*|saved fact\\w*|my profile|' +
   // Protective actions & protocols
   'mask\\w*|n95|kn95|ffp2|purifier\\w*|hepa|filter\\w*|filtration|window\\w*|balcony|indoor\\w*|recirculat\\w*|' +
   // Satellite fire anomalies & agricultural burning
