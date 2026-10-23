@@ -728,7 +728,11 @@ All checks verified directly in WSL2 Ubuntu environment (`~/arise`):
   - **Production Build:** Vite built cleanly in 341ms (15 assets).
   - **Visual Verification (Puppeteer):** Full-page desktop and mobile screenshots captured across Guest and Authenticated states; verified zero horizontal overflow across 320px and 390px viewports.
   - **Live AWS Production Smoke Test:**
+    - Stack: `arise-production` in `us-east-1` (Account `982534366244`)
+    - Stack Status: `UPDATE_COMPLETE`
     - `GET /health` -> 200 OK (`healthy`, `version: 2.0.0`, `mode: aws`, `llm_provider: gemini`)
-    - `GET /environment?lat=28.6139&lon=77.2090` -> 200 OK (`status: Very Poor`, `aqi: 311`, `verdict: STAY IN`, `temp: 28.6`)
-    - `POST /chat` -> 200 OK (Returns grounded temperature, headline, and structured why/do advisories)
-  - **Release Boundaries:** No git commits, git pushes, secret changes, or cloud permission alterations.
+    - `GET /environment?lat=28.6139&lon=77.2090` -> 200 OK (`status: Very Poor`, `aqi: 311`, `verdict: STAY IN`, `temp: 22.0`)
+    - `POST /chat` -> 200 OK (`verdict: STAY_IN`, `headline: Avoid outdoor jogging today — air quality is Very Poor (AQI 311)`)
+  - **Release Status: PASSED, COMMITTED & PUSHED:**
+    - Commit `ecb14c4` pushed to `origin/main` on GitHub (`71d299f..ecb14c4`).
+    - 0 blockers remaining. Working tree clean. All automated test suites green.
